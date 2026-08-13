@@ -222,10 +222,14 @@ function buildCard(rec, c) {
   };
   let pressTimer = 0;
   lbl.onpointerdown = () => {
-    if (!editing || lbl.dataset.renaming) return;
-    pressTimer = setTimeout(() => startRename(key, lbl), 600);
+    if (!editing || lbl.dataset.renaming || pressTimer) return;
+    pressTimer = setTimeout(() => {
+      pressTimer = 0;
+      if (!editing || lbl.dataset.renaming) return;
+      startRename(key, lbl);
+    }, 600);
   };
-  lbl.onpointerup = lbl.onpointerleave = lbl.onpointercancel = () => clearTimeout(pressTimer);
+  lbl.onpointerup = lbl.onpointerleave = lbl.onpointercancel = () => { clearTimeout(pressTimer); pressTimer = 0; };
 
   card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, ca);
   return card;

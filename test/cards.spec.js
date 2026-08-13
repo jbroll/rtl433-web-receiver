@@ -250,6 +250,33 @@ test("a double-click inside the open rename input doesn't reset it", async ({ pa
   await expect(page.locator(CARD + " .lbl input")).toHaveValue("Roof station");
 });
 
+test("a long-press timer that outlives its rename doesn't reopen it", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+
+  const box = await page.locator(CARD + " .nm").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+
+  // Open a rename without going through this pointer's up event, e.g. a
+  // second pointer double-clicking while the first is still held.
+  await page.evaluate(key => {
+    document.querySelector(`.card[data-key="${key}"] .lbl`)
+      .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  }, "Acurite-5n1/396");
+  await page.evaluate(() => {
+    const input = document.querySelector(".lbl input");
+    input.focus();
+    input.value = "Roof station";
+  });
+
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+
+  await expect(page.locator(CARD + " .lbl input")).toHaveCount(1);
+  await expect(page.locator(CARD + " .lbl input")).toHaveValue("Roof station");
+});
+
 test("Forget layouts clears stored state and rebuilds defaults", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
