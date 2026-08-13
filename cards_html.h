@@ -245,8 +245,6 @@ function buildCard(rec, c) {
     if (ev.target.closest("button") || ev.target.closest("input")) return;
     beginDrag(ev, card, ev.target.closest(".val"));
   };
-  card.onpointermove = ev => dragMove(ev, card);
-  card.onpointerup = card.onpointercancel = ev => endDrag(ev, card);
 
   card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, ca);
   return card;
@@ -367,7 +365,7 @@ function moveValue(key, field, beforeField) {
 // The drop takes the slot of the sibling whose midpoint is nearest the pointer,
 // so one dragged from before that sibling lands after it. Returns the node to
 // insert before, null to append, or the dragged node itself for no move.
-function dropBefore(nodes, from, x, y) {
+function dropSlot(nodes, from, x, y) {
   let best = from, far = Infinity;
   nodes.forEach((n, i) => {
     const r = n.getBoundingClientRect();
@@ -382,20 +380,20 @@ function beginDrag(ev, card, val) {
   dragging = {
     key: card.dataset.key, field: val ? val.dataset.f : null,
     x0: ev.clientX, y0: ev.clientY, moved: false, node: val || card,
-    ghost: null, pointerId: ev.pointerId,
+    ghost: null, pointerId: ev.pointerId, card: card,
   };
 }
 
-function dragMove(ev, card) {
+function dragMove(ev) {
   const d = dragging;
-  if (!d) return;
+  if (!d || ev.pointerId !== d.pointerId) return;
   if (!d.moved) {
     if (Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0) < CLICK_SLOP) return;
     d.moved = true;
     // Capture only once it is a real drag: a captured pointer sends the click
     // to the card, and a value's click is how it toggles.
-    card.setPointerCapture(d.pointerId);
-    card.cancelPress();
+    d.card.setPointerCapture(d.pointerId);
+    d.card.cancelPress();
     d.ghost = el("div", "ghostcard", d.field ? splitUnit(d.field).name : cardLabel(d.key));
     document.body.append(d.ghost);
     d.node.classList.add("lifting");
@@ -404,24 +402,32 @@ function dragMove(ev, card) {
   d.ghost.style.top = ev.clientY + 12 + "px";
 }
 
-function endDrag(ev, card) {
+function endDrag(ev) {
   const d = dragging;
+  if (!d || ev.pointerId !== d.pointerId) return;
   dragging = null;
-  card.cancelPress();
-  if (!d) return;
+  d.card.cancelPress();
   dragMoved = d.moved;
   if (d.ghost) d.ghost.remove();
   d.node.classList.remove("lifting");
   if (!d.moved) return;
-  const nodes = d.field ? [...card.querySelectorAll(".val")]
+  const nodes = d.field ? [...d.card.querySelectorAll(".val")]
                         : [...document.querySelectorAll("#cards .card")];
-  const before = dropBefore(nodes, nodes.indexOf(d.node), ev.clientX, ev.clientY);
+  const before = dropSlot(nodes, nodes.indexOf(d.node), ev.clientX, ev.clientY);
   if (before !== d.node) {
     if (d.field) moveValue(d.key, d.field, before ? before.dataset.f : null);
     else moveCard(d.key, before ? before.dataset.key : null);
   }
   renderCards();
 }
+
+// On the document, not the card: capture is only taken once the gesture crosses
+// the slop, so before that a pointer leaving the card would strand the drag and
+// renderCards() would stay suppressed forever. Registered once, since
+// renderCards() replaces every card element on every tick.
+document.addEventListener("pointermove", dragMove);
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
 
 renderCards();
 </script>

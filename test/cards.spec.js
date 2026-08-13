@@ -344,6 +344,51 @@ test("cards are inert outside edit mode", async ({ page }) => {
   expect(keys).toEqual(["Acurite-5n1/396", "Oregon-THN132N/23"]);
 });
 
+test("a press released off the card ends the drag and rendering resumes", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+
+  const box = await page.locator(CARD).boundingBox();
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 4, box.y + box.height / 2, { steps: 4 });
+  await page.mouse.up();
+
+  expect(await page.evaluate(() => dragging)).toBeNull();
+  server.emit(OREGON);
+  await expect(page.locator('.card[data-key="Oregon-THN132N/23"]')).toHaveCount(1);
+});
+
+test("a card dropped past a midpoint takes that card's slot", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await edit(page);
+  const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+
+  const a = await page.locator(CARD + " .lbl").boundingBox();
+  const b = await page.locator('.card[data-key="Oregon-THN132N/23"]').boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width * 0.85, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  expect(await keys()).toEqual(["Oregon-THN132N/23", "Acurite-5n1/396", "Fineoffset-WH2/174"]);
+});
+
+test("a card dropped past the last card lands at the end", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await edit(page);
+  const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+
+  const a = await page.locator(CARD + " .lbl").boundingBox();
+  const b = await page.locator('.card[data-key="Fineoffset-WH2/174"]').boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width + 30, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  expect(await keys()).toEqual(["Oregon-THN132N/23", "Fineoffset-WH2/174", "Acurite-5n1/396"]);
+});
+
 test("a live signal does not re-render mid-drag", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
