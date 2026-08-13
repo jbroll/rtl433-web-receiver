@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { startServer } = require("./harness");
-const { ACURITE, OREGON } = require("./fixtures");
+const { ACURITE, OREGON, THERMO } = require("./fixtures");
 
 let server;
 
@@ -291,4 +291,74 @@ test("Forget layouts clears stored state and rebuilds defaults", async ({ page }
   await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
   await expect(page.locator(CARD)).toHaveClass(/\bsq\b/);
   await expect(page.locator("#cards .card")).toHaveCount(2);
+});
+
+async function dragTo(page, from, to) {
+  const a = await page.locator(from).boundingBox();
+  const b = await page.locator(to).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
+}
+
+test("dragging a card reorders the grid and persists", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await edit(page);
+  const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+  expect(await keys()).toEqual(["Acurite-5n1/396", "Oregon-THN132N/23", "Fineoffset-WH2/174"]);
+
+  await dragTo(page, CARD + " .lbl", '.card[data-key="Fineoffset-WH2/174"]');
+  expect(await keys()).toEqual(["Oregon-THN132N/23", "Fineoffset-WH2/174", "Acurite-5n1/396"]);
+
+  await page.reload();
+  await page.click("#tab-cards");
+  expect(await keys()).toEqual(["Oregon-THN132N/23", "Fineoffset-WH2/174", "Acurite-5n1/396"]);
+});
+
+test("dragging a value reorders within its card only", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  const OTHER = '.card[data-key="Oregon-THN132N/23"]';
+  const fields = sel => page.locator(sel + " .val").evaluateAll(n => n.map(v => v.dataset.f));
+  const before = await fields(CARD);
+  const otherBefore = await fields(OTHER);
+  expect(otherBefore.length).toBeGreaterThan(0);
+
+  await dragTo(page, CARD + ' .val[data-f="temperature_F"]', CARD + ' .val[data-f="wind_avg_mi_h"]');
+  const after = await fields(CARD);
+  expect(after).not.toEqual(before);
+  expect(after.slice().sort()).toEqual(before.slice().sort());
+
+  expect(await fields(OTHER)).toEqual(otherBefore);
+  const stored = (await cardState(page)).cards;
+  expect(stored["Oregon-THN132N/23"].valueOrder).toEqual(otherBefore);
+  expect(stored["Acurite-5n1/396"].hiddenValues).toEqual(["battery_ok"]);
+});
+
+test("cards are inert outside edit mode", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await page.click("#tab-cards");
+  await dragTo(page, CARD + " .lbl", '.card[data-key="Oregon-THN132N/23"]');
+  const keys = await page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+  expect(keys).toEqual(["Acurite-5n1/396", "Oregon-THN132N/23"]);
+});
+
+test("a live signal does not re-render mid-drag", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  const box = await page.locator(CARD + " .lbl").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 40, { steps: 5 });
+  await expect(page.locator(".ghostcard")).toHaveCount(1);
+  await expect(page.locator(CARD)).toHaveClass(/lifting/);
+  server.emit(OREGON);
+  await page.waitForTimeout(200);
+  await expect(page.locator(".ghostcard")).toHaveCount(1);
+  // A re-render would rebuild the card and lose the class the drag put on it.
+  await expect(page.locator(CARD)).toHaveClass(/lifting/);
+  await page.mouse.up();
+  await expect(page.locator(".ghostcard")).toHaveCount(0);
+  await expect(page.locator(CARD)).not.toHaveClass(/lifting/);
 });

@@ -55,6 +55,10 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
 #view-cards.editing .card .cx, #view-cards.editing .card .ca { display:block; }
 .card .lbl input { font:inherit; font-size:.75rem; width:9rem; background:Canvas; color:inherit;
                    border:1px solid var(--line); }
+.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
+             border:1px solid var(--line); border-radius:.7rem; background:Canvas;
+             padding:.3rem .6rem; font-size:.8rem; }
+.card.lifting { opacity:.35; }
 </style>
 <script>
 const CARDS_KEY = "rtl433.cards.v1";
@@ -200,7 +204,7 @@ function buildCard(rec, c) {
     fv.style.fontSize = font;
     if (parts.unit) fv.append(el("span", "u", parts.unit));
     v.append(fv);
-    v.onclick = () => { if (editing) toggleValue(key, f); };
+    v.onclick = () => { if (editing && !dragMoved) toggleValue(key, f); };
     body.append(v);
   }
 
@@ -221,15 +225,28 @@ function buildCard(rec, c) {
     startRename(key, lbl);
   };
   let pressTimer = 0;
+  // A drag takes pointer capture, after which lbl never sees the pointerup that
+  // would clear this timer, so the drag clears it instead.
+  card.cancelPress = () => { clearTimeout(pressTimer); pressTimer = 0; };
   lbl.onpointerdown = () => {
     if (!editing || lbl.dataset.renaming || pressTimer) return;
     pressTimer = setTimeout(() => {
       pressTimer = 0;
       if (!editing || lbl.dataset.renaming) return;
+      // A press held still this long is a rename, so drop the drag it started.
+      if (dragging && dragging.key === key) dragging = null;
       startRename(key, lbl);
     }, 600);
   };
-  lbl.onpointerup = lbl.onpointerleave = lbl.onpointercancel = () => { clearTimeout(pressTimer); pressTimer = 0; };
+  lbl.onpointerup = lbl.onpointercancel = card.cancelPress;
+
+  card.onpointerdown = ev => {
+    if (!editing || ev.button !== 0) return;
+    if (ev.target.closest("button") || ev.target.closest("input")) return;
+    beginDrag(ev, card, ev.target.closest(".val"));
+  };
+  card.onpointermove = ev => dragMove(ev, card);
+  card.onpointerup = card.onpointercancel = ev => endDrag(ev, card);
 
   card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, ca);
   return card;
@@ -238,6 +255,7 @@ function buildCard(rec, c) {
 renderCards = function () {
   const grid = document.getElementById("cards");
   if (!grid) return;
+  if (dragging) return;
   const seeded = new Map();
   for (const rec of devices.values()) seeded.set(rec.key, ensureCard(rec.key, rec.merged));
   const keys = orderedKeys();
@@ -319,6 +337,91 @@ document.getElementById("edit-cards").onclick = () => {
 document.getElementById("forget-cards").onclick = () => {
   if (confirm("Forget every saved card layout in this browser?")) forgetLayouts();
 };
+
+const CLICK_SLOP = 6;
+let dragging = null;
+let dragMoved = false;
+
+function moveCard(key, beforeKey) {
+  const order = cardState.order;
+  const from = order.indexOf(key);
+  if (from < 0) return;
+  order.splice(from, 1);
+  const to = beforeKey === null ? order.length : order.indexOf(beforeKey);
+  order.splice(to < 0 ? order.length : to, 0, key);
+  saveCardState();
+}
+
+function moveValue(key, field, beforeField) {
+  const c = cardState.cards[key];
+  if (!c) return;
+  const order = c.valueOrder;
+  const from = order.indexOf(field);
+  if (from < 0) return;
+  order.splice(from, 1);
+  const to = beforeField === null ? order.length : order.indexOf(beforeField);
+  order.splice(to < 0 ? order.length : to, 0, field);
+  saveCardState();
+}
+
+// The drop takes the slot of the sibling whose midpoint is nearest the pointer,
+// so one dragged from before that sibling lands after it. Returns the node to
+// insert before, null to append, or the dragged node itself for no move.
+function dropBefore(nodes, from, x, y) {
+  let best = from, far = Infinity;
+  nodes.forEach((n, i) => {
+    const r = n.getBoundingClientRect();
+    const d = Math.hypot(x - r.left - r.width / 2, y - r.top - r.height / 2);
+    if (d < far) { far = d; best = i; }
+  });
+  return nodes[best > from ? best + 1 : best] || null;
+}
+
+function beginDrag(ev, card, val) {
+  dragMoved = false;
+  dragging = {
+    key: card.dataset.key, field: val ? val.dataset.f : null,
+    x0: ev.clientX, y0: ev.clientY, moved: false, node: val || card,
+    ghost: null, pointerId: ev.pointerId,
+  };
+}
+
+function dragMove(ev, card) {
+  const d = dragging;
+  if (!d) return;
+  if (!d.moved) {
+    if (Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0) < CLICK_SLOP) return;
+    d.moved = true;
+    // Capture only once it is a real drag: a captured pointer sends the click
+    // to the card, and a value's click is how it toggles.
+    card.setPointerCapture(d.pointerId);
+    card.cancelPress();
+    d.ghost = el("div", "ghostcard", d.field ? splitUnit(d.field).name : cardLabel(d.key));
+    document.body.append(d.ghost);
+    d.node.classList.add("lifting");
+  }
+  d.ghost.style.left = ev.clientX + 12 + "px";
+  d.ghost.style.top = ev.clientY + 12 + "px";
+}
+
+function endDrag(ev, card) {
+  const d = dragging;
+  dragging = null;
+  card.cancelPress();
+  if (!d) return;
+  dragMoved = d.moved;
+  if (d.ghost) d.ghost.remove();
+  d.node.classList.remove("lifting");
+  if (!d.moved) return;
+  const nodes = d.field ? [...card.querySelectorAll(".val")]
+                        : [...document.querySelectorAll("#cards .card")];
+  const before = dropBefore(nodes, nodes.indexOf(d.node), ev.clientX, ev.clientY);
+  if (before !== d.node) {
+    if (d.field) moveValue(d.key, d.field, before ? before.dataset.f : null);
+    else moveCard(d.key, before ? before.dataset.key : null);
+  }
+  renderCards();
+}
 
 renderCards();
 </script>
