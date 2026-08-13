@@ -1,0 +1,4 @@
+.pio
+.env
+compile_commands.json
+.vscode
