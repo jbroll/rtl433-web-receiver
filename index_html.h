@@ -34,6 +34,7 @@ section[hidden] { display:none; }
   <nav>
     <button id="tab-devices" aria-selected="true">Devices</button>
     <button id="tab-log" aria-selected="false">Log</button>
+    <button id="tab-cards" aria-selected="false">Cards</button>
   </nav>
   <span id="status">connecting</span>
 </header>
@@ -52,6 +53,8 @@ const devices = new Map();
 let logRows = [];
 let offset = 0;
 let refreshSeq = 0;
+// CARDS_HTML is streamed after this script and reassigns this.
+let renderCards = () => {};
 
 function parse(raw) { try { return JSON.parse(raw); } catch (e) { return null; } }
 
@@ -92,6 +95,7 @@ function upsert(rec, flash) {
   else if (prev) rec.flashUntil = prev.flashUntil;
   trim();
   renderDevices();
+  renderCards();
 }
 
 function renderDevices() {
@@ -174,6 +178,7 @@ async function refresh() {
   if (logRows.length > LOG_MAX) logRows.length = LOG_MAX;
   renderDevices();
   renderLog();
+  renderCards();
 }
 
 function connect() {
@@ -201,19 +206,17 @@ function connect() {
   });
 }
 
-document.getElementById("tab-devices").onclick = () => showTab("devices");
-document.getElementById("tab-log").onclick = () => showTab("log");
+const TABS = ["devices", "log", "cards"];
+for (const n of TABS) document.getElementById("tab-" + n).onclick = () => showTab(n);
 function showTab(name) {
-  for (const n of ["devices", "log"]) {
+  for (const n of TABS) {
     document.getElementById("tab-" + n).setAttribute("aria-selected", String(n === name));
     document.getElementById("view-" + n).hidden = n !== name;
   }
 }
 
-setInterval(renderDevices, 1000);
+setInterval(() => { renderDevices(); renderCards(); }, 1000);
 refresh();
 connect();
 </script>
-</body>
-</html>
 )rawliteral";

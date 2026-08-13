@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <lwip/sockets.h>
 
+#include "cards_html.h"
 #include "index_html.h"
 #include "signal_store.h"
 
@@ -199,6 +200,16 @@ void writeJsonString(Print& out, const char* s) {
   out.print('"');
 }
 
+static void streamProgmem(Print& out, const char* text) {
+  size_t total = strlen_P(text);
+  char   buf[256];
+  for (size_t off = 0; off < total; off += sizeof(buf)) {
+    size_t n = min(sizeof(buf), total - off);
+    memcpy_P(buf, text + off, n);
+    out.write(reinterpret_cast<const uint8_t*>(buf), n);
+  }
+}
+
 static void handleRoot() {
   WiFiClient client = _server.client();
   _server.setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -206,13 +217,8 @@ static void handleRoot() {
   _server.send(200, "text/html", "");
 
   ChunkedResponse out(_server, client);
-  size_t          total = strlen_P(INDEX_HTML);
-  char            buf[256];
-  for (size_t off = 0; off < total; off += sizeof(buf)) {
-    size_t n = min(sizeof(buf), total - off);
-    memcpy_P(buf, INDEX_HTML + off, n);
-    out.write(reinterpret_cast<const uint8_t*>(buf), n);
-  }
+  streamProgmem(out, INDEX_HTML);
+  streamProgmem(out, CARDS_HTML);
   out.finish();
 }
 

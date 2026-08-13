@@ -21,3 +21,16 @@ test("the served page lists devices and streams live signals", async ({ page }) 
   server.emit(OREGON);
   await expect(page.locator("#devices tr")).toHaveCount(2);
 });
+
+test("the Cards tab shows an empty grid and switches views", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await expect(page.locator("#view-cards")).toBeHidden();
+
+  await page.click("#tab-cards");
+  await expect(page.locator("#view-cards")).toBeVisible();
+  await expect(page.locator("#view-devices")).toBeHidden();
+  await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
+
+  await page.click("#tab-devices");
+  await expect(page.locator("#view-cards")).toBeHidden();
+});
