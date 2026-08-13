@@ -240,6 +240,16 @@ test("renaming the label sticks, and an empty name reverts to the key", async ({
   await expect(page.locator(CARD + " .nm")).toHaveText("Acurite-5n1/396");
 });
 
+test("a double-click inside the open rename input doesn't reset it", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.dblclick(CARD + " .nm");
+  await page.fill(CARD + " .lbl input", "Roof station");
+
+  await page.dblclick(CARD + " .lbl input");
+  await expect(page.locator(CARD + " .lbl input")).toHaveValue("Roof station");
+});
+
 test("Forget layouts clears stored state and rebuilds defaults", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);

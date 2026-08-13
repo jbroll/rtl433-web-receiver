@@ -210,17 +210,24 @@ function buildCard(rec, c) {
   cx.onclick = ev => { ev.stopPropagation(); toggleCardHidden(key); };
   const ca = el("button", "ca", "▭");
   ca.onclick = ev => { ev.stopPropagation(); cycleAspect(key); };
-  card.append(cx, ca);
 
-  lbl.ondblclick = ev => { if (editing) { ev.stopPropagation(); startRename(key, lbl); } };
+  // dblclick/pointerdown stay wired to lbl for its whole lifetime, and both
+  // bubble up from the rename <input> startRename() puts inside it. Without
+  // the renaming guard, interacting with the open input (double-clicking a
+  // word, a long press to select text) would restart the rename and wipe it.
+  lbl.ondblclick = ev => {
+    if (!editing || lbl.dataset.renaming) return;
+    ev.stopPropagation();
+    startRename(key, lbl);
+  };
   let pressTimer = 0;
   lbl.onpointerdown = () => {
-    if (!editing) return;
+    if (!editing || lbl.dataset.renaming) return;
     pressTimer = setTimeout(() => startRename(key, lbl), 600);
   };
-  lbl.onpointerup = lbl.onpointerleave = () => clearTimeout(pressTimer);
+  lbl.onpointerup = lbl.onpointerleave = lbl.onpointercancel = () => clearTimeout(pressTimer);
 
-  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)));
+  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, ca);
   return card;
 }
 
@@ -273,6 +280,7 @@ function renameCard(key, name) {
 }
 
 function startRename(key, lbl) {
+  lbl.dataset.renaming = "1";
   const input = document.createElement("input");
   input.value = cardState.cards[key] && cardState.cards[key].name ? cardState.cards[key].name : "";
   lbl.replaceChildren(input);
@@ -282,6 +290,7 @@ function startRename(key, lbl) {
   const finish = commit => {
     if (done) return;
     done = true;
+    delete lbl.dataset.renaming;
     if (commit) renameCard(key, input.value); else renderCards();
   };
   input.onkeydown = ev => {
