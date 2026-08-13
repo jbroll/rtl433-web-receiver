@@ -4,6 +4,8 @@
 
 static const char CARDS_HTML[] PROGMEM = R"rawliteral(
 <section id="view-cards" hidden>
+  <button id="edit-cards" title="Edit layout">&#9998;</button>
+  <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
   <div id="cards"></div>
 </section>
 <style>
@@ -33,6 +35,26 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
   #cards { grid-template-columns:1fr; }
   .card.h, .card.wide { grid-column:span 1; }
 }
+#edit-cards { position:fixed; right:1rem; bottom:1rem; z-index:2; font:inherit;
+              width:2.4rem; height:2.4rem; border-radius:50%; cursor:pointer;
+              border:1px solid var(--line); background:Canvas; color:inherit; }
+#view-cards.editing #edit-cards { background:#8883; }
+#forget-cards { position:fixed; right:4.2rem; bottom:1rem; z-index:2; font:inherit;
+                font-size:.75rem; padding:.4rem .7rem; border-radius:1.2rem; cursor:pointer;
+                border:1px solid var(--line); background:Canvas; color:inherit; display:none; }
+#view-cards.editing #forget-cards { display:block; }
+#view-cards.editing .card { cursor:grab; touch-action:none; }
+#view-cards.editing .val { cursor:pointer; }
+.card.ghost, .val.ghost { opacity:.35; }
+.card .cx, .card .ca { position:absolute; top:.25rem; z-index:1; font:inherit; font-size:.7rem;
+                       line-height:1; padding:.15rem .3rem; background:Canvas; color:inherit;
+                       border:1px solid var(--line); border-radius:.3rem; cursor:pointer;
+                       display:none; }
+.card .cx { left:.3rem; }
+.card .ca { left:2rem; }
+#view-cards.editing .card .cx, #view-cards.editing .card .ca { display:block; }
+.card .lbl input { font:inherit; font-size:.75rem; width:9rem; background:Canvas; color:inherit;
+                   border:1px solid var(--line); }
 </style>
 <script>
 const CARDS_KEY = "rtl433.cards.v1";
@@ -166,9 +188,11 @@ function buildCard(rec, c) {
   lbl.append(el("span", "nm", cardLabel(key)), el("span", "rs", rec.rssi === undefined ? "" : String(rec.rssi)));
 
   const body = el("div", "body");
+  const shown = editing ? c.valueOrder.filter(f => rec.merged[f] !== undefined) : vis;
   const font = valueFont(cells, vis.length);
-  for (const f of vis) {
+  for (const f of shown) {
     const v = el("div", "val");
+    if (c.hiddenValues.indexOf(f) >= 0) v.classList.add("ghost");
     v.dataset.f = f;
     const parts = splitUnit(f);
     v.append(el("div", "fn", parts.name));
@@ -176,8 +200,25 @@ function buildCard(rec, c) {
     fv.style.fontSize = font;
     if (parts.unit) fv.append(el("span", "u", parts.unit));
     v.append(fv);
+    v.onclick = () => { if (editing) toggleValue(key, f); };
     body.append(v);
   }
+
+  if (cardHidden(key)) card.classList.add("ghost");
+
+  const cx = el("button", "cx", "✕");
+  cx.onclick = ev => { ev.stopPropagation(); toggleCardHidden(key); };
+  const ca = el("button", "ca", "▭");
+  ca.onclick = ev => { ev.stopPropagation(); cycleAspect(key); };
+  card.append(cx, ca);
+
+  lbl.ondblclick = ev => { if (editing) { ev.stopPropagation(); startRename(key, lbl); } };
+  let pressTimer = 0;
+  lbl.onpointerdown = () => {
+    if (!editing) return;
+    pressTimer = setTimeout(() => startRename(key, lbl), 600);
+  };
+  lbl.onpointerup = lbl.onpointerleave = () => clearTimeout(pressTimer);
 
   card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)));
   return card;
@@ -188,12 +229,82 @@ renderCards = function () {
   if (!grid) return;
   const seeded = new Map();
   for (const rec of devices.values()) seeded.set(rec.key, ensureCard(rec.key, rec.merged));
-  const cards = [];
-  for (const key of orderedKeys()) {
-    if (cardHidden(key)) continue;
-    cards.push(buildCard(devices.get(key), seeded.get(key)));
-  }
-  grid.replaceChildren(...cards);
+  const keys = orderedKeys();
+  const shownKeys = keys.filter(k => !cardHidden(k));
+  if (editing) shownKeys.push(...keys.filter(cardHidden));
+  grid.replaceChildren(...shownKeys.map(k => buildCard(devices.get(k), seeded.get(k))));
+};
+
+let editing = false;
+
+const ASPECTS = ["sq", "h", "v"];
+
+function toggleValue(key, field) {
+  const c = cardState.cards[key];
+  if (!c) return;
+  const i = c.hiddenValues.indexOf(field);
+  if (i < 0) c.hiddenValues.push(field); else c.hiddenValues.splice(i, 1);
+  saveCardState();
+  renderCards();
+}
+
+function toggleCardHidden(key) {
+  const i = cardState.hidden.indexOf(key);
+  if (i < 0) cardState.hidden.push(key); else cardState.hidden.splice(i, 1);
+  saveCardState();
+  renderCards();
+}
+
+function cycleAspect(key) {
+  const c = cardState.cards[key];
+  if (!c) return;
+  c.aspect = ASPECTS[(ASPECTS.indexOf(c.aspect) + 1) % ASPECTS.length];
+  saveCardState();
+  renderCards();
+}
+
+function renameCard(key, name) {
+  const c = cardState.cards[key];
+  if (!c) return;
+  const trimmed = name.trim();
+  if (trimmed) c.name = trimmed; else delete c.name;
+  saveCardState();
+  renderCards();
+}
+
+function startRename(key, lbl) {
+  const input = document.createElement("input");
+  input.value = cardState.cards[key] && cardState.cards[key].name ? cardState.cards[key].name : "";
+  lbl.replaceChildren(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = commit => {
+    if (done) return;
+    done = true;
+    if (commit) renameCard(key, input.value); else renderCards();
+  };
+  input.onkeydown = ev => {
+    if (ev.key === "Enter") finish(true);
+    else if (ev.key === "Escape") finish(false);
+  };
+  input.onblur = () => finish(true);
+}
+
+function forgetLayouts() {
+  try { localStorage.removeItem(CARDS_KEY); } catch (e) { storageBroken = true; }
+  cardState = blankState();
+  renderCards();
+}
+
+document.getElementById("edit-cards").onclick = () => {
+  editing = !editing;
+  document.getElementById("view-cards").classList.toggle("editing", editing);
+  renderCards();
+};
+
+document.getElementById("forget-cards").onclick = () => {
+  if (confirm("Forget every saved card layout in this browser?")) forgetLayouts();
 };
 
 renderCards();

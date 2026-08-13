@@ -158,3 +158,100 @@ test("a live update flashes the card", async ({ page }) => {
   server.emit(ACURITE);
   await expect(page.locator('.card[data-key="Acurite-5n1/396"]')).toHaveClass(/flash/);
 });
+
+const CARD = '.card[data-key="Acurite-5n1/396"]';
+
+async function edit(page) {
+  await page.click("#tab-cards");
+  await page.click("#edit-cards");
+  await expect(page.locator("#view-cards")).toHaveClass(/editing/);
+}
+
+test("edit mode toggles a value's visibility and persists it", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+
+  await page.click(CARD + ' .val[data-f="humidity"]');
+  await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveClass(/ghost/);
+  expect((await cardState(page)).cards["Acurite-5n1/396"].hiddenValues).toContain("humidity");
+
+  await page.click("#edit-cards");
+  await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveCount(0);
+
+  await page.reload();
+  await page.click("#tab-cards");
+  await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveCount(0);
+});
+
+test("hiding a value grows the rest", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  const before = await page.locator(CARD + ' .val[data-f="temperature_F"] .fv').evaluate(n => n.style.fontSize);
+  await page.click("#edit-cards");
+  await page.click(CARD + ' .val[data-f="humidity"]');
+  await page.click("#edit-cards");
+  const after = await page.locator(CARD + ' .val[data-f="temperature_F"] .fv').evaluate(n => n.style.fontSize);
+  expect(parseFloat(after)).toBeGreaterThan(parseFloat(before));
+});
+
+test("the aspect button cycles square, horizontal, vertical", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.evaluate(() => { cardState.cards["Acurite-5n1/396"].aspect = "sq"; renderCards(); });
+
+  await page.click(CARD + " .ca");
+  await expect(page.locator(CARD)).toHaveClass(/\bh\b/);
+  await page.click(CARD + " .ca");
+  await expect(page.locator(CARD)).toHaveClass(/\bv\b/);
+  await page.click(CARD + " .ca");
+  await expect(page.locator(CARD)).toHaveClass(/\bsq\b/);
+  expect((await cardState(page)).cards["Acurite-5n1/396"].aspect).toBe("sq");
+});
+
+test("hiding a card ghosts it in edit mode and drops it in normal mode", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  await page.click(CARD + " .cx");
+  await expect(page.locator(CARD)).toHaveClass(/ghost/);
+  await expect(page.locator("#cards .card").last()).toHaveAttribute("data-key", "Acurite-5n1/396");
+
+  await page.click("#edit-cards");
+  await expect(page.locator(CARD)).toHaveCount(0);
+  expect((await cardState(page)).hidden).toEqual(["Acurite-5n1/396"]);
+
+  await page.click("#edit-cards");
+  await page.click(CARD + " .cx");
+  await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
+  expect((await cardState(page)).hidden).toEqual([]);
+});
+
+test("renaming the label sticks, and an empty name reverts to the key", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.dblclick(CARD + " .nm");
+  await page.fill(CARD + " .lbl input", "Roof station");
+  await page.press(CARD + " .lbl input", "Enter");
+  await expect(page.locator(CARD + " .nm")).toHaveText("Roof station");
+  expect((await cardState(page)).cards["Acurite-5n1/396"].name).toBe("Roof station");
+
+  await page.dblclick(CARD + " .nm");
+  await page.fill(CARD + " .lbl input", "");
+  await page.press(CARD + " .lbl input", "Enter");
+  await expect(page.locator(CARD + " .nm")).toHaveText("Acurite-5n1/396");
+});
+
+test("Forget layouts clears stored state and rebuilds defaults", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  await page.click(CARD + " .cx");
+  await page.click(CARD + " .ca");
+  expect((await cardState(page)).hidden).toEqual(["Acurite-5n1/396"]);
+
+  page.once("dialog", d => d.accept());
+  await page.click("#forget-cards");
+
+  expect(await cardState(page)).toBeNull();
+  await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
+  await expect(page.locator(CARD)).toHaveClass(/\bsq\b/);
+  await expect(page.locator("#cards .card")).toHaveCount(2);
+});
