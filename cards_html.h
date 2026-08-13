@@ -20,7 +20,8 @@ const STATUS_FIELDS = new Set(["battery_ok", "battery", "battery_low", "test", "
 let cardState = { order: [], hidden: [], cards: {} };
 let storageBroken = false;
 
-function blankState() { return { order: [], hidden: [], cards: {} }; }
+// Null prototype: a stored "__proto__" key must not become a prototype link.
+function blankState() { return { order: [], hidden: [], cards: Object.create(null) }; }
 
 function loadCardState() {
   cardState = blankState();
@@ -33,7 +34,7 @@ function loadCardState() {
   cardState = {
     order: Array.isArray(s.order) ? s.order.filter(k => typeof k === "string") : [],
     hidden: Array.isArray(s.hidden) ? s.hidden.filter(k => typeof k === "string") : [],
-    cards: {},
+    cards: Object.create(null),
   };
   const cards = s.cards && typeof s.cards === "object" ? s.cards : {};
   for (const k of Object.keys(cards)) {

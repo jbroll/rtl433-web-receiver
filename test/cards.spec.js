@@ -77,3 +77,28 @@ test("corrupt storage is discarded and defaults rebuild", async ({ page }) => {
   const s = await page.evaluate(() => cardState);
   expect(s).toEqual({ order: [], hidden: [], cards: {} });
 });
+
+test("a __proto__ key in stored cards can't taint an untouched device's defaults", async ({ page }) => {
+  await open(page, [ACURITE]);
+  // Written as raw JSON text: an object literal's __proto__ key sets a
+  // prototype rather than an own property, which would defeat the test.
+  const payload = '{"order":[],"hidden":[],"cards":{"__proto__":' +
+    '{"aspect":"v","valueOrder":["bogus"],"hiddenValues":["bogus"]}}}';
+  await page.evaluate((p) => localStorage.setItem("rtl433.cards.v1", p), payload);
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("live");
+
+  const result = await page.evaluate(() => {
+    try {
+      const merged = { temperature_F: 71.2, humidity: 38, battery_ok: 1 };
+      ensureCard("toString", merged);
+      return { ok: true, card: cardState.cards["toString"] };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+  expect(result.ok).toBe(true);
+  expect(result.card.aspect).toBe("sq");
+  expect(result.card.valueOrder).toEqual(["temperature_F", "humidity", "battery_ok"]);
+  expect(result.card.hiddenValues).toEqual(["battery_ok"]);
+});
