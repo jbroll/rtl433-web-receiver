@@ -73,6 +73,15 @@ window is tens of milliseconds because the ESP32 web server handles one request
 at a time. This is the accepted cost of dropping the previous behaviour, which
 fetched the snapshot twice on every load.
 
+## The one second render tick wipes an open card rename
+
+`index_html.h:218` re-renders the cards every second to age the timestamps, and
+`renderCards()` rebuilds every card from scratch. A rename input open longer
+than that is removed mid-typing and the typed text is lost. Card dragging
+already suppresses the tick while a drag is in progress (`cards_html.h`,
+`if (dragging) return;`); a rename needs the same, or the renderer needs to
+update ages in place rather than rebuild.
+
 ## Smaller items
 
 - `WebReceiver.ino:169-171` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
