@@ -1,0 +1,11 @@
+{
+  "name": "rtl433-web-receiver-tests",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
