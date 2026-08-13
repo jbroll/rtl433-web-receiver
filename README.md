@@ -10,8 +10,8 @@ An ESP32-S3 and an SX1231/RFM69 radio module, wired as below.
 
 The library dependency is a fork,
 [jbroll/rtl_433_ESP](https://github.com/jbroll/rtl_433_ESP) branch
-`sx1231-support`, which adds SX1231/RF69 receive support. `platformio.ini`
-points at it and PlatformIO fetches it on the first build.
+`sx1231-support`, which adds SX1231/RF69 receive support upstream does not have.
+`platformio.ini` points at it and PlatformIO fetches it on the first build.
 
 ## Wiring
 
