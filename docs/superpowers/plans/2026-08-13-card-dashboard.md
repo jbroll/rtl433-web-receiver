@@ -11,10 +11,11 @@
 ## Global Constraints
 
 - No JS libraries and no build step for the page. Hand-rolled pointer events for drag (`pointerdown` / `pointermove` / `pointerup` with `setPointerCapture`).
-- No new HTTP endpoints and no firmware behaviour changes beyond streaming the second PROGMEM array.
+- No new HTTP endpoints. The only firmware behaviour changes are streaming the second PROGMEM array (Task 2) and the stale-slot sweep (Task 8).
 - One localStorage key: `rtl433.cards.v1`.
 - Value order never moves between cards.
-- Storage entries are never pruned. Devices or fields absent from storage get defaults and are appended.
+- Storage entries are never pruned automatically. Devices or fields absent from storage get defaults and are appended. The only way to drop layout state is the Forget layouts button.
+- A device slot ages out after `DEVICE_STALE_HOURS`, default 72. `0` disables the sweep and restores capacity-only eviction.
 - Corrupt or unparseable JSON is discarded and defaults rebuild. If localStorage throws, state lives in memory for the session.
 - Writes happen on each completed edit action, never during a drag.
 - Re-rendering is suppressed while a drag is in progress.
@@ -33,6 +34,8 @@
 | `cards_html.h` (create) | `CARDS_HTML` PROGMEM array: the `<section id="view-cards">` markup, all card CSS, all card script, and the closing `</body></html>`. |
 | `index_html.h` (modify) | Gains the Cards nav button and a `renderCards` no-op hook; loses its closing `</body></html>`; `showTab` iterates a `TABS` list. |
 | `web_ui.cpp` (modify) | `handleRoot()` streams both arrays through one `ChunkedResponse`. |
+| `signal_store.h` / `signal_store.cpp` (modify) | `sweepStale(now, staleMs)` frees slots not heard from within the window; self-test covers it. |
+| `WebReceiver.ino`, `platformio.ini` (modify) | Call the sweep from `loop()`; declare `DEVICE_STALE_HOURS`. |
 | `test/harness.js` (create) | Extracts the PROGMEM literals, serves the assembled page plus a mock `/api/state` and `/events`, exposes `emit()` for driving live signals from a test. |
 | `test/fixtures.js` (create) | Sample rtl_433 payloads shared by tests. |
 | `test/cards.spec.js` (create) | Playwright tests for the Cards view. |
@@ -836,7 +839,9 @@ git commit -m "Render each device as a card"
 - Produces:
   - `let editing = false;` and `#edit-cards` toggle button in `#view-cards`.
   - `toggleValue(key, field)`, `toggleCardHidden(key)`, `cycleAspect(key)`, `renameCard(key, name)` — each mutates `cardState`, calls `saveCardState()`, then `renderCards()`.
+  - `forgetLayouts()` — clears the storage key and resets `cardState` to blank, so every card rebuilds from defaults. This is the only thing that removes layout state; nothing prunes it on a timer.
   - In edit mode each card also carries `button.cx` (hide), `button.ca` (aspect); hidden values render as `div.val.ghost`, hidden cards as `div.card.ghost` at the end of the grid.
+  - `#forget-cards` button, visible only in edit mode.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -923,6 +928,22 @@ test("renaming the label sticks, and an empty name reverts to the key", async ({
   await page.press(CARD + " .lbl input", "Enter");
   await expect(page.locator(CARD + " .nm")).toHaveText("Acurite-5n1/396");
 });
+
+test("Forget layouts clears stored state and rebuilds defaults", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  await page.click(CARD + " .cx");
+  await page.click(CARD + " .ca");
+  expect((await cardState(page)).hidden).toEqual(["Acurite-5n1/396"]);
+
+  page.once("dialog", d => d.accept());
+  await page.click("#forget-cards");
+
+  expect(await cardState(page)).toBeNull();
+  await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
+  await expect(page.locator(CARD)).toHaveClass(/\bsq\b/);
+  await expect(page.locator("#cards .card")).toHaveCount(2);
+});
 ```
 
 - [ ] **Step 2: Run to verify they fail**
@@ -937,6 +958,7 @@ Replace the `<section id="view-cards">` block in `cards_html.h`:
 ```html
 <section id="view-cards" hidden>
   <button id="edit-cards" title="Edit layout">&#9998;</button>
+  <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
   <div id="cards"></div>
 </section>
 ```
@@ -950,6 +972,10 @@ Append to the `cards_html.h` `<style>` block:
               width:2.4rem; height:2.4rem; border-radius:50%; cursor:pointer;
               border:1px solid var(--line); background:Canvas; color:inherit; }
 #view-cards.editing #edit-cards { background:#8883; }
+#forget-cards { position:fixed; right:4.2rem; bottom:1rem; z-index:2; font:inherit;
+                font-size:.75rem; padding:.4rem .7rem; border-radius:1.2rem; cursor:pointer;
+                border:1px solid var(--line); background:Canvas; color:inherit; display:none; }
+#view-cards.editing #forget-cards { display:block; }
 #view-cards.editing .card { cursor:grab; touch-action:none; }
 #view-cards.editing .val { cursor:pointer; }
 .card.ghost, .val.ghost { opacity:.35; }
@@ -1025,10 +1051,20 @@ function startRename(key, lbl) {
   input.onblur = () => finish(true);
 }
 
+function forgetLayouts() {
+  try { localStorage.removeItem(CARDS_KEY); } catch (e) { storageBroken = true; }
+  cardState = blankState();
+  renderCards();
+}
+
 document.getElementById("edit-cards").onclick = () => {
   editing = !editing;
   document.getElementById("view-cards").classList.toggle("editing", editing);
   renderCards();
+};
+
+document.getElementById("forget-cards").onclick = () => {
+  if (confirm("Forget every saved card layout in this browser?")) forgetLayouts();
 };
 ```
 
@@ -1092,13 +1128,13 @@ renderCards = function () {
 - [ ] **Step 8: Run the tests**
 
 Run: `npx playwright test`
-Expected: PASS, 14 tests.
+Expected: PASS, 15 tests.
 
 - [ ] **Step 9: Commit**
 
 ```bash
 git add cards_html.h test/cards.spec.js
-git commit -m "Add card edit mode: visibility, hide, aspect, rename"
+git commit -m "Add card edit mode: visibility, hide, aspect, rename, forget"
 ```
 
 ---
@@ -1328,7 +1364,7 @@ Add as the first line of `renderCards`'s body, after the `grid` lookup:
 - [ ] **Step 7: Run the tests**
 
 Run: `npx playwright test`
-Expected: PASS, 18 tests.
+Expected: PASS, 19 tests.
 
 - [ ] **Step 8: Commit**
 
@@ -1366,7 +1402,7 @@ Expected: the two Flash byte counts differ by under 15 KB. If the delta is large
 - [ ] **Step 2: Run the whole suite once more**
 
 Run: `npx playwright test`
-Expected: PASS, 18 tests.
+Expected: PASS, 19 tests.
 
 - [ ] **Step 3: Verify against a real board or FAKE_SIGNALS**
 
@@ -1439,7 +1475,174 @@ git add README.md docs/backlog.md
 git commit -m "Document the Cards tab and the page tests"
 ```
 
-- [ ] **Step 7: Delete the working documents**
+---
+
+### Task 8: Age out device slots that stop transmitting
+
+**Files:**
+- Modify: `signal_store.h:29-40`, `signal_store.cpp`, `WebReceiver.ino`, `platformio.ini`, `README.md`, `docs/backlog.md`
+- Test: `signal_store::selfTest()` in `signal_store.cpp`
+
+**Model:** `sonnet` — firmware change with rollover-sensitive arithmetic and a self-test seam.
+
+**Interfaces:**
+- Consumes: nothing from the card work; this is independent of Tasks 1–7.
+- Produces:
+  - `void signal_store::sweepStale(unsigned long now, unsigned long staleMs);` — frees every used slot whose `lastSeen` is more than `staleMs` behind `now`. A `staleMs` of `0` does nothing. Taking `now` as a parameter rather than reading `millis()` is what makes the self-test able to drive it.
+  - `DEVICE_STALE_HOURS` build flag, default 72, declared in `platformio.ini`.
+
+**Why 72 hours:** every weather sensor in the rtl_433 set transmits every 16–60 seconds, so any threshold above a few minutes is generous for them. The long-period devices are TPMS, which is silent while a car is parked, and event-driven contacts, remotes, and fobs, which may have no heartbeat at all. 72 hours clears a genuinely dead sensor while surviving a car parked over a weekend.
+
+- [ ] **Step 1: Write the failing self-test checks**
+
+In `signal_store.cpp`, inside `selfTest()`, append before its final `return ok;`:
+
+```cpp
+  reset();
+  record("{\"model\":\"Stale\",\"id\":1,\"temperature_C\":1}", -50);
+  record("{\"model\":\"Fresh\",\"id\":2,\"temperature_C\":2}", -50);
+  ok &= check("both devices present before sweep", deviceCount() == 2);
+
+  // Both slots share a lastSeen from this run's millis(), so age them by
+  // sweeping from a point far enough ahead that only a longer window spares
+  // them; a zero window must spare both.
+  unsigned long base = _devices[0].lastSeen;
+  sweepStale(base + 1000, 0);
+  ok &= check("a zero window sweeps nothing", deviceCount() == 2);
+  sweepStale(base + 1000, 60000);
+  ok &= check("a fresh device survives the sweep", deviceCount() == 2);
+  sweepStale(base + 120000, 60000);
+  ok &= check("a stale device is swept", deviceCount() == 0);
+
+  reset();
+  record("{\"model\":\"Wrap\",\"id\":3,\"temperature_C\":3}", -50);
+  unsigned long wrapBase = _devices[0].lastSeen;
+  ok &= check("unsigned subtraction survives a millis rollover",
+              (unsigned long)(wrapBase - 10) - wrapBase > 60000);
+  sweepStale(wrapBase + 1, 60000);
+  ok &= check("a device seen just now survives near rollover", deviceCount() == 1);
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+```bash
+sed -i "s|^;  '-DFAKE_SIGNALS=true'|  '-DFAKE_SIGNALS=true'|" platformio.ini
+pio run -e esp32s3-generic 2>&1 | tail -20
+```
+
+Expected: FAIL to compile — `'sweepStale' was not declared in this scope`.
+
+- [ ] **Step 3: Declare the sweep**
+
+In `signal_store.h`, add to the `signal_store` namespace block, after `const SignalEvent& event(uint8_t i);`:
+
+```cpp
+void sweepStale(unsigned long now, unsigned long staleMs);
+```
+
+- [ ] **Step 4: Implement the sweep**
+
+In `signal_store.cpp`, add beside the other public functions:
+
+```cpp
+// now is a parameter rather than a millis() call so the self-test can drive
+// the clock. Unsigned subtraction makes the comparison rollover-correct as
+// long as the sweep runs more often than millis() wraps.
+void sweepStale(unsigned long now, unsigned long staleMs) {
+  if (staleMs == 0) {
+    return;
+  }
+  for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
+    if (_devices[i].used && (unsigned long)(now - _devices[i].lastSeen) > staleMs) {
+      _devices[i].used = false;
+      _seq[i] = 0;
+    }
+  }
+}
+```
+
+Read the file first: if `deviceCount()` or `device(i)` builds an ordered index from `_seq` and `used`, freeing a slot this way is enough. If either caches an order across calls, invalidate that cache here too, and say so in your report.
+
+- [ ] **Step 5: Call it from the sketch**
+
+In `WebReceiver.ino`, add near the other build-flag defaults:
+
+```cpp
+#ifndef DEVICE_STALE_HOURS
+#define DEVICE_STALE_HOURS 72
+#endif
+```
+
+In `loop()`, beside the other periodic work, add:
+
+```cpp
+  static unsigned long lastSweep = 0;
+  if (millis() - lastSweep >= 60000) {
+    lastSweep = millis();
+    signal_store::sweepStale(millis(), (unsigned long)DEVICE_STALE_HOURS * 3600000UL);
+  }
+```
+
+A one-minute sweep interval is far more often than `millis()` wraps, which is what keeps the unsigned comparison honest.
+
+- [ ] **Step 6: Declare the flag in `platformio.ini`**
+
+Add to `build_flags`, after the `MINIMUM_SIGNAL_DURATION` line:
+
+```ini
+  '-DDEVICE_STALE_HOURS=72'        ; free a slot unheard this long; 0 disables
+```
+
+- [ ] **Step 7: Run the self-test**
+
+```bash
+pio run -e esp32s3-generic 2>&1 | tail -5
+```
+
+Expected: SUCCESS. If a board is attached, `pio run -t upload && pio device monitor` and confirm every self-test line reports PASS, including the five new checks. If no board is attached, say so in your report.
+
+Then restore the flag:
+
+```bash
+sed -i "s|^  '-DFAKE_SIGNALS=true'|;  '-DFAKE_SIGNALS=true'|" platformio.ini
+git diff --stat platformio.ini
+```
+
+Expected: `platformio.ini` shows only the `DEVICE_STALE_HOURS` addition.
+
+- [ ] **Step 8: Run the page tests**
+
+Run: `npx playwright test`
+Expected: PASS, 19 tests. This task does not touch the page, so any failure here is a regression.
+
+- [ ] **Step 9: Document it**
+
+In `README.md`, replace the first bullet of "Limits":
+
+```markdown
+- 24 devices tracked; a new decode evicts the least recently seen device once
+  the table is full, and a slot unheard from for `DEVICE_STALE_HOURS` (72 by
+  default, `0` to disable) is freed on its own. Weather sensors transmit every
+  16–60 seconds, so the default only clears a genuinely dead one. Raise it if
+  you receive TPMS, which is silent while a car is parked, or door contacts and
+  remotes, which transmit only when triggered.
+```
+
+In the Cards section added in Task 7, replace the last sentence with:
+
+```markdown
+Layouts are never dropped on their own, so a sensor that goes quiet and returns
+keeps its card. Forget layouts, in edit mode, clears them all.
+```
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add signal_store.h signal_store.cpp WebReceiver.ino platformio.ini README.md
+git commit -m "Free device slots unheard from for DEVICE_STALE_HOURS"
+```
+
+- [ ] **Step 11: Delete the working documents**
 
 ```bash
 git rm docs/superpowers/specs/2026-08-13-card-dashboard-design.md \
@@ -1451,6 +1654,6 @@ git commit -m "Remove the card dashboard spec and plan"
 
 ## Self-Review
 
-**Spec coverage:** Placement and serving → Task 2. Data flow (second renderer, suppressed render, flash) → Tasks 2, 4, 6. Card anatomy and font sizing → Task 4. Grid and aspect, narrow screens → Tasks 4, 5. Edit mode (both drags, toggle, aspect, hide, rename) → Tasks 5, 6. Defaults on first detection → Task 3. Persistence including corrupt JSON and a throwing localStorage → Task 3. Testing including FAKE_SIGNALS and the flash delta → Tasks 1, 7. Docs → Task 7.
+**Spec coverage:** Slot age-out and the manual layout reset → Tasks 8 and 5, added after the spec was written at the user's request. Placement and serving → Task 2. Data flow (second renderer, suppressed render, flash) → Tasks 2, 4, 6. Card anatomy and font sizing → Task 4. Grid and aspect, narrow screens → Tasks 4, 5. Edit mode (both drags, toggle, aspect, hide, rename) → Tasks 5, 6. Defaults on first detection → Task 3. Persistence including corrupt JSON and a throwing localStorage → Task 3. Testing including FAKE_SIGNALS and the flash delta → Tasks 1, 7. Docs → Task 7.
 
 **Not covered by a test, deliberately:** the `storageBroken` in-memory fallback (private browsing cannot be simulated without a browser flag), and the narrow-screen media queries (CSS-only, verified by eye in Task 7 step 3).
