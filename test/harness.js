@@ -75,6 +75,9 @@ function startServer(opts = {}) {
     res.writeHead(404).end("not found");
   });
 
+  const sockets = new Set();
+  server.on("connection", s => { sockets.add(s); s.on("close", () => sockets.delete(s)); });
+
   return new Promise(resolve => {
     server.listen(0, "127.0.0.1", () => {
       resolve({
@@ -89,6 +92,9 @@ function startServer(opts = {}) {
         },
         close() {
           for (const s of streams) s.end();
+          // close() waits out every idle keep-alive socket, and the page's
+          // EventSource keeps reconnecting into that wait.
+          for (const s of sockets) s.destroy();
           return new Promise(done => server.close(done));
         },
       });
