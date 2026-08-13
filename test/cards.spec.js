@@ -74,11 +74,21 @@ test("a field added later appends without disturbing stored order", async ({ pag
 test("corrupt storage is discarded and defaults rebuild", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.evaluate(() => localStorage.setItem("rtl433.cards.v1", "{not json"));
-  // Call loadCardState directly rather than reloading the page: a reload's
-  // renderCards() would immediately reseed a card for ACURITE, muddying what
-  // this test checks — that corrupt JSON alone resets state to blank.
-  const s = await page.evaluate(() => { loadCardState(); return cardState; });
-  expect(s).toEqual({ order: [], hidden: [], cards: {} });
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("live");
+
+  const s = await page.evaluate(() => cardState);
+  expect(s).toEqual({
+    order: ["Acurite-5n1/396"],
+    hidden: [],
+    cards: {
+      "Acurite-5n1/396": {
+        aspect: "sq",
+        valueOrder: ["battery_ok", "wind_avg_mi_h", "temperature_F", "humidity"],
+        hiddenValues: ["battery_ok"],
+      },
+    },
+  });
 });
 
 test("a __proto__ key in stored cards can't taint an untouched device's defaults", async ({ page }) => {

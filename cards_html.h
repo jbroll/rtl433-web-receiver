@@ -152,9 +152,8 @@ function cardLabel(key) {
   return c && c.name ? c.name : key;
 }
 
-function buildCard(rec) {
+function buildCard(rec, c) {
   const key = rec.key;
-  const c = ensureCard(key, rec.merged);
   const vis = visibleValues(key, rec.merged);
   const cells = cardCells(key, vis.length);
 
@@ -187,11 +186,12 @@ function buildCard(rec) {
 renderCards = function () {
   const grid = document.getElementById("cards");
   if (!grid) return;
-  for (const rec of devices.values()) ensureCard(rec.key, rec.merged);
+  const seeded = new Map();
+  for (const rec of devices.values()) seeded.set(rec.key, ensureCard(rec.key, rec.merged));
   const cards = [];
   for (const key of orderedKeys()) {
     if (cardHidden(key)) continue;
-    cards.push(buildCard(devices.get(key)));
+    cards.push(buildCard(devices.get(key), seeded.get(key)));
   }
   grid.replaceChildren(...cards);
 };
