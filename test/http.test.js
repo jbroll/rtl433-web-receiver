@@ -224,3 +224,33 @@ test('a payload with a non-UTF-8 byte comes back byte for byte', async () => {
     await bridge.close()
   }
 })
+
+test('a second POST to a topic is what a GET returns, on a slow link', async () => {
+  const bridge = await startBridge({ delayMs: 40 })
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"t":1}' })
+    await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"t":2}' })
+
+    for (let i = 0; i < 5; i++) {
+      const got = await fetch(`${bridge.base}/src/Acurite/1234`)
+      assert.equal(await got.text(), '{"t":2}')
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a POST is 503 when the broker takes the publish but never echoes it', async () => {
+  const bridge = await startBridge({ echoTimeoutMs: 300 })
+  try {
+    bridge.blackhole()
+
+    const started = Date.now()
+    const posted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+    assert.equal(posted.status, 503)
+    assert.ok(Date.now() - started < 2000, 'the POST waited far longer than the echo timeout')
+  } finally {
+    await bridge.close()
+  }
+})

@@ -181,3 +181,24 @@ test('a retained topic matching two filters is replayed once', async () => {
     await bridge.close()
   }
 })
+
+test('a subscriber connecting after a POST is sent that message once', async () => {
+  const bridge = await startBridge({ delayMs: 40 })
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
+
+    const stream = await fetch(`${bridge.base}/events?f=src/%23`)
+    try {
+      const events = await readEvents(stream, 2, { timeoutMs: 400 })
+      assert.deepEqual(events, [{ topic: 'src/Acurite/1', payload: { t: 1 } }])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
+  } finally {
+    await bridge.close()
+  }
+})

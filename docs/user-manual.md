@@ -46,12 +46,13 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
 
 - `204` on success, empty body.
 - `400` if the body is not valid JSON, or the topic is malformed.
-- `503` if the bridge is not currently connected to the broker, or the
-  publish itself fails.
+- `503` if the bridge is not currently connected to the broker, or the broker
+  did not take the publish within 5 seconds.
 
-A `204` means the message is readable: a `GET` of the same topic immediately
-after returns the body byte for byte, without waiting for the broker to echo
-the publish back.
+A `204` means the broker has taken the message and sent it back over the
+bridge's own subscription: a `GET` of the same topic immediately after
+returns the body byte for byte, and a subscriber already connected has
+received it. The `POST` is held for the round trip that takes.
 
 Publishing to a `$alias` topic works the same way; see
 [`docs/binding.md`](binding.md#aliases).

@@ -10,6 +10,9 @@ export function createCache() {
     delete(topic) {
       messages.delete(topic)
     },
+    clear() {
+      messages.clear()
+    },
     get(topic) {
       return messages.get(topic)
     },

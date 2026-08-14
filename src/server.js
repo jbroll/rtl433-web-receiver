@@ -66,15 +66,14 @@ async function handle(req, res, { broker, cache, clients }) {
       return send(res, 400, 'body is not JSON')
     }
     try {
+      // This resolves when the broker has echoed the publish back, which is
+      // what has written it to the cache. Nothing is written here: a second
+      // writer lets a late echo of an earlier publish overwrite a newer one.
       await broker.publish(topic, body)
     } catch {
-      // connected() was true a moment ago; the binding has no code for a
-      // publish that fails for any other reason.
+      // The publish never came back, so the broker did not take it.
       return send(res, 503, 'broker unavailable')
     }
-    // The broker echoes the publish back over the '#' subscription a round
-    // trip later; caching it here is what makes a GET right after a 204 hit.
-    cache.set(topic, body)
     res.writeHead(204)
     return res.end()
   }

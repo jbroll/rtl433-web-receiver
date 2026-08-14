@@ -21,11 +21,26 @@ without a round trip to the broker, and what lets a new SSE subscriber be
 replayed with the current state of every topic it's watching on connect,
 rather than waiting for the next publish.
 
-A `POST` writes the published payload into the cache itself, before it
-answers `204`. The broker echoes the same message back over the `#`
-subscription, but that takes a round trip, and until it lands a `GET` of the
-topic just written would answer `404`. The binding's first test case is that
-it does not.
+The broker is the only writer of the cache. A `POST` publishes and then waits
+for the broker to echo the message back over the `#` subscription before it
+answers `204`, so a `GET` right after a `204` reads what was posted, the
+cache stays in the broker's own order, and a subscriber that connects after a
+`POST` sees the message once rather than twice.
+
+Writing the payload locally as well was the alternative, and answers sooner.
+It also puts a second writer on the cache: a late echo of an earlier publish
+lands on top of a newer local write, and a `GET` after a `204` goes
+backwards. Measured over a 40 ms link, two sequential `POST`s to one topic
+made a `GET` return the new value, then the old one, then the new one again.
+
+The wait is bounded by `ECHO_TIMEOUT_MS` in `src/broker.js`, 5 seconds, after
+which the `POST` is `503`. A broker on the same network echoes in a
+millisecond or two; 5 seconds covers a connection dropping and being remade,
+which takes one 2-second reconnect interval plus the round trips to connect
+and resubscribe. It is also the only bound on a publish at QoS 0: `publish`
+does not fail when the client is offline, it queues the packet and calls back
+whenever a broker reappears, which was measured at 5967 ms with the request
+held open and no status the whole time.
 
 ## Payloads stay bytes
 
