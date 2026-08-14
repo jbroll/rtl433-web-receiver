@@ -7,38 +7,50 @@ import { startBroker } from './helpers/broker.js'
 
 test('a published message reaches the cache and the callback', async () => {
   const broker = await startBroker()
-  const cache = createCache()
-  const seen = []
-  const client = await connectBroker({
-    url: broker.url,
-    cache,
-    onMessage: (topic, payload) => seen.push([topic, payload]),
-  })
+  try {
+    const cache = createCache()
+    const seen = []
+    const client = await connectBroker({
+      url: broker.url,
+      cache,
+      onMessage: (topic, payload) => seen.push([topic, payload]),
+    })
+    try {
+      await client.publish('src/Acurite/1', '{"temperature_C":21.4}')
+      await waitFor(() => cache.get('src/Acurite/1') !== undefined)
 
-  await client.publish('src/Acurite/1', '{"temperature_C":21.4}')
-  await waitFor(() => cache.get('src/Acurite/1') !== undefined)
-
-  assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
-  assert.deepEqual(seen, [['src/Acurite/1', '{"temperature_C":21.4}']])
-  assert.equal(client.connected(), true)
-
-  await client.end()
-  await broker.close()
+      assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
+      assert.deepEqual(seen, [['src/Acurite/1', '{"temperature_C":21.4}']])
+      assert.equal(client.connected(), true)
+    } finally {
+      await client.end()
+    }
+  } finally {
+    await broker.close()
+  }
 })
 
 test('a publish is retained, so a later connection is replayed it', async () => {
   const broker = await startBroker()
-  const first = await connectBroker({ url: broker.url, cache: createCache(), onMessage: () => {} })
-  await first.publish('src/Acurite/1', '{"temperature_C":21.4}')
-  await first.end()
+  try {
+    const first = await connectBroker({ url: broker.url, cache: createCache(), onMessage: () => {} })
+    try {
+      await first.publish('src/Acurite/1', '{"temperature_C":21.4}')
+    } finally {
+      await first.end()
+    }
 
-  const cache = createCache()
-  const second = await connectBroker({ url: broker.url, cache, onMessage: () => {} })
-  await waitFor(() => cache.get('src/Acurite/1') !== undefined)
-  assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
-
-  await second.end()
-  await broker.close()
+    const cache = createCache()
+    const second = await connectBroker({ url: broker.url, cache, onMessage: () => {} })
+    try {
+      await waitFor(() => cache.get('src/Acurite/1') !== undefined)
+      assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
+    } finally {
+      await second.end()
+    }
+  } finally {
+    await broker.close()
+  }
 })
 
 async function waitFor(predicate, timeoutMs = 2000) {
