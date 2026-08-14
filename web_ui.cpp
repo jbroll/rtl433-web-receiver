@@ -250,29 +250,14 @@ static void handleState() {
     }
     out.print("{\"key\":");
     writeJsonString(out, d.key);
-    out.print(",\"model\":");
-    writeJsonString(out, d.model);
-    char nums[80];
-    snprintf(nums, sizeof(nums), ",\"rssi\":%d,\"lastSeen\":%lu,\"count\":%lu,\"payload\":",
-             d.rssi, d.lastSeen, (unsigned long)d.count);
+    char nums[64];
+    snprintf(nums, sizeof(nums), ",\"lastSeen\":%lu,\"count\":%lu,\"payload\":",
+             d.lastSeen, (unsigned long)d.count);
     out.print(nums);
     writeJsonString(out, d.payload);
     out.print('}');
   }
 
-  out.print("],\"events\":[");
-  uint8_t events = signal_store::eventCount();
-  for (uint8_t i = 0; i < events; i++) {
-    const SignalEvent& e = signal_store::event(i);
-    if (i) {
-      out.print(',');
-    }
-    char at[40];
-    snprintf(at, sizeof(at), "{\"at\":%lu,\"payload\":", e.at);
-    out.print(at);
-    writeJsonString(out, e.payload);
-    out.print('}');
-  }
   out.print("]}");
   out.finish();
 }
@@ -381,8 +366,6 @@ void broadcast(const DeviceSlot& slot, bool isDecode) {
   frame.print(now);
   frame.print(",\"key\":");
   writeJsonString(frame, slot.key);
-  frame.print(",\"rssi\":");
-  frame.print(slot.rssi);
   frame.print(",\"count\":");
   frame.print(slot.count);
   frame.print(",\"payload\":");

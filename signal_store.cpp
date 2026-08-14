@@ -2,28 +2,24 @@
 
 #include <ArduinoJson.h>
 #include <ArduinoLog.h>
+#include <time.h>
 
 namespace signal_store {
 
-static DeviceSlot  _devices[SIGNAL_DEVICE_SLOTS];
-static uint32_t    _seq[SIGNAL_DEVICE_SLOTS]; // orders and evicts devices; unlike lastSeen, never rolls over
-static uint8_t     _order[SIGNAL_DEVICE_SLOTS];
-static uint8_t     _deviceCount = 0;
-static uint32_t    _seqCounter = 0;
-static SignalEvent _events[SIGNAL_EVENT_SLOTS];
-static uint8_t     _eventHead = 0;
-static uint8_t     _eventCount = 0;
-static uint32_t    _total = 0;
-static uint32_t    _dropped = 0;
+static DeviceSlot _devices[SIGNAL_DEVICE_SLOTS];
+static uint32_t   _seq[SIGNAL_DEVICE_SLOTS]; // orders and evicts devices; unlike lastSeen, never rolls over
+static uint8_t    _order[SIGNAL_DEVICE_SLOTS];
+static uint8_t    _deviceCount = 0;
+static uint32_t   _seqCounter = 0;
+static uint32_t   _total = 0;
+static uint32_t   _dropped = 0;
+static char       _source[SIGNAL_SOURCE_MAX] = "rtl433";
 
 void reset() {
   memset(_devices, 0, sizeof(_devices));
   memset(_seq, 0, sizeof(_seq));
-  memset(_events, 0, sizeof(_events));
   _deviceCount = 0;
   _seqCounter = 0;
-  _eventHead = 0;
-  _eventCount = 0;
   _total = 0;
   _dropped = 0;
 }
@@ -33,21 +29,48 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
   dest[destSize - 1] = '\0';
 }
 
-static bool buildKey(const JsonDocument& doc, char* key, size_t keySize,
-                     char* model, size_t modelSize) {
+void setSource(const char* source) {
+  if (source != NULL && source[0] != '\0') {
+    copyTruncated(_source, sizeof(_source), source);
+  }
+}
+
+const char* source() {
+  return _source;
+}
+
+// A topic segment holding a slash or a space would not parse back out of the
+// topic, and rtl_433 model names are free text.
+static void sanitizeSegment(char* s) {
+  for (char* p = s; *p; p++) {
+    if (*p == '/' || *p == ' ' || *p == '+' || *p == '#') {
+      *p = '-';
+    }
+  }
+}
+
+static bool buildKey(const JsonDocument& doc, char* key, size_t keySize) {
   const char* m = doc["model"];
   if (m == NULL || m[0] == '\0') {
     return false;
   }
-  copyTruncated(model, modelSize, m);
+  char model[SIGNAL_MODEL_MAX];
+  copyTruncated(model, sizeof(model), m);
+  sanitizeSegment(model);
+
+  char id[16];
   if (doc["id"].is<const char*>() || doc["id"].is<long>() ||
       doc["id"].is<unsigned long>()) {
-    snprintf(key, keySize, "%s/%s", m, doc["id"].as<String>().c_str());
+    copyTruncated(id, sizeof(id), doc["id"].as<String>().c_str());
   } else if (!doc["channel"].isNull()) {
-    snprintf(key, keySize, "%s/%s", m, doc["channel"].as<String>().c_str());
+    copyTruncated(id, sizeof(id), doc["channel"].as<String>().c_str());
   } else {
-    copyTruncated(key, keySize, m);
+    // The binding requires an id segment; a device with one instance uses 0.
+    strcpy(id, "0");
   }
+  sanitizeSegment(id);
+
+  snprintf(key, keySize, "%s/%s/%s", _source, model, id);
   return true;
 }
 
@@ -77,13 +100,16 @@ static int claimSlot() {
   return oldest;
 }
 
-static void pushEvent(const char* payload, unsigned long at) {
-  _eventHead = (_eventHead + 1) % SIGNAL_EVENT_SLOTS;
-  copyTruncated(_events[_eventHead].payload, sizeof(_events[_eventHead].payload), payload);
-  _events[_eventHead].at = at;
-  if (_eventCount < SIGNAL_EVENT_SLOTS) {
-    _eventCount++;
+// An age has to be computable from a retained replay, which the binding's frame
+// does not otherwise carry. Empty until SNTP has set the clock.
+static bool isoTime(char* out, size_t size) {
+  time_t now = time(NULL);
+  if (now < 1700000000) { // before 2023; the clock has not been set
+    return false;
   }
+  struct tm utc;
+  gmtime_r(&now, &utc);
+  return strftime(out, size, "%Y-%m-%dT%H:%M:%SZ", &utc) > 0;
 }
 
 bool record(const char* payload, int rssi, bool isDecode) {
@@ -93,30 +119,40 @@ bool record(const char* payload, int rssi, bool isDecode) {
     return false;
   }
   char key[SIGNAL_KEY_MAX];
-  char model[SIGNAL_MODEL_MAX];
-  if (!buildKey(doc, key, sizeof(key), model, sizeof(model))) {
+  if (!buildKey(doc, key, sizeof(key))) {
     _dropped++;
     return false;
   }
 
-  unsigned long now = millis();
-  int           idx = findSlot(key);
+  int      idx = findSlot(key);
+  uint32_t count = (idx < 0 ? 0 : _devices[idx].count) + 1;
+
+  char stamp[24];
+  if (isoTime(stamp, sizeof(stamp))) {
+    doc["time"] = stamp;
+  }
+  doc["rssi"] = rssi;
+  doc["count"] = count;
+
+  // The frame embeds the payload as JSON rather than as an escaped string, so a
+  // truncated one would be unparseable on the wire. Drop it instead.
+  if (measureJson(doc) > SIGNAL_PAYLOAD_MAX) {
+    _dropped++;
+    return false;
+  }
+
   if (idx < 0) {
     idx = claimSlot();
     copyTruncated(_devices[idx].key, SIGNAL_KEY_MAX, key);
-    copyTruncated(_devices[idx].model, SIGNAL_MODEL_MAX, model);
     _devices[idx].used = true;
-    _devices[idx].count = 0;
   }
   DeviceSlot& slot = _devices[idx];
-  copyTruncated(slot.payload, sizeof(slot.payload), payload);
-  slot.rssi = rssi;
-  slot.lastSeen = now;
-  slot.count++;
+  serializeJson(doc, slot.payload, sizeof(slot.payload));
+  slot.lastSeen = millis();
+  slot.count = count;
   _seq[idx] = ++_seqCounter;
 
   if (isDecode) {
-    pushEvent(payload, now);
     _total++;
   }
   return true;
@@ -149,20 +185,11 @@ const DeviceSlot& device(uint8_t i) {
   return _devices[_order[i]];
 }
 
-uint8_t eventCount() {
-  return _eventCount;
-}
-
-const SignalEvent& event(uint8_t i) {
-  static SignalEvent empty;
-  if (i >= _eventCount) {
-    return empty;
+const DeviceSlot* slotAt(uint8_t i) {
+  if (i >= SIGNAL_DEVICE_SLOTS || !_devices[i].used) {
+    return NULL;
   }
-  int idx = (int)_eventHead - (int)i;
-  while (idx < 0) {
-    idx += SIGNAL_EVENT_SLOTS;
-  }
-  return _events[idx];
+  return &_devices[i];
 }
 
 uint32_t totalRecorded() {
@@ -199,22 +226,33 @@ bool selfTest() {
   bool ok = true;
   char buf[SIGNAL_PAYLOAD_MAX + 64];
 
+  setSource("rtl433-a1b2c3");
   reset();
   ok &= check("record accepts a decode",
               record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70));
   ok &= check("one device after one decode", deviceCount() == 1);
-  ok &= check("key is model/id", strcmp(device(0).key, "Acurite-Tower/1234") == 0);
+  ok &= check("key is source/model/id",
+              strcmp(device(0).key, "rtl433-a1b2c3/Acurite-Tower/1234") == 0);
+  ok &= check("rssi is stamped into the payload",
+              strstr(device(0).payload, "\"rssi\":-70") != NULL);
+  ok &= check("count is stamped into the payload",
+              strstr(device(0).payload, "\"count\":1") != NULL);
 
   record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.6}", -71);
   ok &= check("same key updates in place", deviceCount() == 1);
   ok &= check("count increments", device(0).count == 2);
+  ok &= check("the stamped count follows",
+              strstr(device(0).payload, "\"count\":2") != NULL);
 
-  ok &= check("channel keys when id is absent",
+  ok &= check("channel is the id segment when id is absent",
               record("{\"model\":\"Nexus-TH\",\"channel\":2}", -60) &&
-                  strcmp(device(0).key, "Nexus-TH/2") == 0);
-  ok &= check("model alone keys when id and channel are absent",
+                  strcmp(device(0).key, "rtl433-a1b2c3/Nexus-TH/2") == 0);
+  ok &= check("the id segment is 0 when id and channel are absent",
               record("{\"model\":\"Generic-Remote\"}", -60) &&
-                  strcmp(device(0).key, "Generic-Remote") == 0);
+                  strcmp(device(0).key, "rtl433-a1b2c3/Generic-Remote/0") == 0);
+  ok &= check("a slash in a model name is replaced",
+              record("{\"model\":\"Odd/Name\",\"id\":1}", -60) &&
+                  strcmp(device(0).key, "rtl433-a1b2c3/Odd-Name/1") == 0);
 
   reset();
   for (int i = 0; i < SIGNAL_DEVICE_SLOTS + 6; i++) {
@@ -223,17 +261,17 @@ bool selfTest() {
     delay(2);
   }
   ok &= check("table caps at SIGNAL_DEVICE_SLOTS", deviceCount() == SIGNAL_DEVICE_SLOTS);
-  ok &= check("newest survives eviction", strcmp(device(0).key, "Dev/29") == 0);
-  ok &= check("oldest was evicted", strcmp(device(SIGNAL_DEVICE_SLOTS - 1).key, "Dev/6") == 0);
+  ok &= check("newest survives eviction",
+              strcmp(device(0).key, "rtl433-a1b2c3/Dev/29") == 0);
+  ok &= check("oldest was evicted",
+              strcmp(device(SIGNAL_DEVICE_SLOTS - 1).key, "rtl433-a1b2c3/Dev/6") == 0);
 
   reset();
-  for (int i = 0; i < SIGNAL_EVENT_SLOTS + 5; i++) {
-    snprintf(buf, sizeof(buf), "{\"model\":\"Dev\",\"id\":%d}", i);
-    record(buf, -70);
-  }
-  ok &= check("ring caps at SIGNAL_EVENT_SLOTS", eventCount() == SIGNAL_EVENT_SLOTS);
-  ok &= check("event 0 is newest",
-              strstr(event(0).payload, "\"id\":44") != NULL);
+  record("{\"model\":\"Dev\",\"id\":1}", -70);
+  ok &= check("slotAt finds a used slot", slotAt(0) != NULL);
+  ok &= check("slotAt reports an unused slot",
+              slotAt(SIGNAL_DEVICE_SLOTS - 1) == NULL);
+  ok &= check("slotAt bounds its index", slotAt(SIGNAL_DEVICE_SLOTS) == NULL);
 
   reset();
   ok &= check("unparseable payload is dropped", !record("not json at all", -70));
@@ -245,7 +283,8 @@ bool selfTest() {
   record("{\"model\":\"Real\",\"id\":1}", -70);
   record("{\"model\":\"Receiver\",\"temperature_C\":40}", -50, false);
   ok &= check("telemetry takes a device slot", deviceCount() == 2);
-  ok &= check("telemetry stays out of the event ring", eventCount() == 1);
+  ok &= check("telemetry keys with a 0 id",
+              strcmp(device(0).key, "rtl433-a1b2c3/Receiver/0") == 0);
   ok &= check("telemetry is not counted as a decode", totalRecorded() == 1);
 
   reset();
@@ -253,8 +292,8 @@ bool selfTest() {
   memset(note, 'A', sizeof(note) - 1);
   note[sizeof(note) - 1] = '\0';
   snprintf(buf, sizeof(buf), "{\"model\":\"Long\",\"id\":1,\"note\":\"%s\"}", note);
-  ok &= check("long payload is kept and truncated",
-              record(buf, -70) && strlen(device(0).payload) == SIGNAL_PAYLOAD_MAX);
+  ok &= check("an over-long payload is dropped rather than truncated",
+              !record(buf, -70) && deviceCount() == 0);
 
   reset();
   record("{\"model\":\"Stale\",\"id\":1,\"temperature_C\":1}", -50);
