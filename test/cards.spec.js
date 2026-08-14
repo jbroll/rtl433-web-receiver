@@ -54,9 +54,9 @@ test("a message with no time still renders, ages from arrival, and reaches the l
   await expect(ageCell).not.toContainText("Invalid");
 
   await page.click("#tab-cards");
+  await showEveryCard(page);
   const cardAge = page.locator(`.card[data-key="${OREGON_KEY}"] .age`);
-  await expect(cardAge).not.toContainText("NaN");
-  await expect(cardAge).not.toContainText("Invalid");
+  await expect(cardAge).toHaveText(/^\d+[hms]/);
 
   await page.click("#tab-log");
   const logTime = page.locator("#logrows tr").first().locator("td").first();
@@ -261,6 +261,29 @@ test("corrupt storage is discarded and defaults rebuild", async ({ page }) => {
     grid: { cols: 6, rows: 4 },
     order: [ACURITE_KEY],
     hidden: [ACURITE_KEY],
+    cards: {
+      [ACURITE_KEY]: {
+        w: 2, h: 2,
+        valueOrder: ["battery_ok", "wind_avg_mi_h", "temperature_F", "humidity"],
+        hiddenValues: [],
+        bottomValues: ["battery_ok"],
+      },
+    },
+  });
+});
+
+test("a stale v1 key is removed on load and the page starts from a clean v2 state", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.evaluate(() => localStorage.setItem("rtl433.cards.v1", '{"cards":{"k":{"name":"Old"}}}'));
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("live");
+
+  expect(await page.evaluate(() => localStorage.getItem("rtl433.cards.v1"))).toBeNull();
+  const s = await page.evaluate(() => cardState);
+  expect(s).toEqual({
+    grid: { cols: 6, rows: 4 },
+    order: [ACURITE_KEY],
+    hidden: [],
     cards: {
       [ACURITE_KEY]: {
         w: 2, h: 2,
@@ -566,7 +589,8 @@ test("committing a rename closes the input and shows the stream-derived name", a
   await page.dblclick(CARD + " .lbl");
   await page.fill(CARD + " .lbl input", "Roof station");
   await page.press(CARD + " .lbl input", "Enter");
-  await expect(page.locator(CARD + " .lbl input")).toHaveCount(0);
+  // Short enough that the 1s render tick can't be what closes the input.
+  await expect(page.locator(CARD + " .lbl input")).toHaveCount(0, { timeout: 400 });
   await expect(page.locator(CARD + " .nm")).toHaveText("Acurite-5n1/396");
 });
 
