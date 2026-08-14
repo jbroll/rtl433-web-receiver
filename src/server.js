@@ -1,11 +1,14 @@
 import http from 'node:http'
 
-import { validTopic } from './topic.js'
+import { openStream } from './sse.js'
+import { validFilter, validTopic } from './topic.js'
 
 export function createBridge({ broker, cache }) {
+  const clients = new Set()
+
   const bridge = {
     httpServer: http.createServer((req, res) => {
-      handle(req, res, { broker, cache }).catch(() => {
+      handle(req, res, { broker, cache, clients }).catch(() => {
         try {
           if (res.headersSent) res.end()
           else send(res, 500, 'internal error')
@@ -14,14 +17,24 @@ export function createBridge({ broker, cache }) {
         }
       })
     }),
-    clients: new Set(),
-    broadcast() {},
+    clients,
+    broadcast(topic, payload) {
+      for (const client of clients) client.send(topic, payload)
+    },
   }
   return bridge
 }
 
-async function handle(req, res, { broker, cache }) {
+async function handle(req, res, { broker, cache, clients }) {
   const url = new URL(req.url, 'http://bridge.invalid')
+
+  if (!broker.connected()) return send(res, 503, 'broker unavailable')
+
+  if (url.pathname === '/events') {
+    if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+    return subscribe(req, res, { cache, clients, url })
+  }
+
   let topic
   try {
     topic = decodeURIComponent(url.pathname.slice(1))
@@ -30,7 +43,6 @@ async function handle(req, res, { broker, cache }) {
     throw err
   }
 
-  if (!broker.connected()) return send(res, 503, 'broker unavailable')
   if (!validTopic(topic)) return send(res, 400, 'malformed topic')
 
   if (req.method === 'GET') {
@@ -58,6 +70,28 @@ async function handle(req, res, { broker, cache }) {
   }
 
   return send(res, 405, 'method not allowed')
+}
+
+function subscribe(req, res, { cache, clients, url }) {
+  const filters = url.searchParams.getAll('f')
+  if (filters.length === 0) filters.push('#')
+  if (!filters.every(validFilter)) return send(res, 400, 'malformed filter')
+
+  const client = openStream(res, filters)
+  clients.add(client)
+  req.on('close', () => {
+    clients.delete(client)
+    client.close()
+  })
+
+  const replayed = new Set()
+  for (const filter of filters) {
+    for (const [topic, payload] of cache.match(filter)) {
+      if (replayed.has(topic)) continue
+      replayed.add(topic)
+      client.send(topic, payload)
+    }
+  }
 }
 
 function readBody(req) {

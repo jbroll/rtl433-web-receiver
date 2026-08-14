@@ -39,6 +39,29 @@ export async function startBridge() {
   }
 }
 
+export async function readEvents(response, count) {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const events = []
+  let buffer = ''
+
+  while (events.length < count) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    let split
+    while ((split = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, split)
+      buffer = buffer.slice(split + 2)
+      if (frame.startsWith('data: ')) events.push(JSON.parse(frame.slice(6)))
+    }
+  }
+
+  await reader.cancel()
+  return events
+}
+
 export async function waitFor(predicate, timeoutMs = 2000) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
