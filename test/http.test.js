@@ -200,3 +200,19 @@ test('a zero-length retained publish deletes the message, so GET is 404 again', 
     await bridge.close()
   }
 })
+
+test('a payload with a non-UTF-8 byte comes back byte for byte', async () => {
+  const bridge = await startBridge()
+  try {
+    const payload = Buffer.from([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d])
+
+    await bridge.broker.publish('src/Acurite/1234', payload)
+    // Nothing local wrote this one; it arrives on the '#' subscription.
+    await waitFor(async () => (await fetch(`${bridge.base}/src/Acurite/1234`)).status === 200)
+
+    const got = await fetch(`${bridge.base}/src/Acurite/1234`)
+    assert.deepEqual(Buffer.from(await got.arrayBuffer()), payload)
+  } finally {
+    await bridge.close()
+  }
+})

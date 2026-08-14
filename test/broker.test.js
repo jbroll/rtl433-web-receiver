@@ -21,8 +21,8 @@ test('a published message reaches the cache and the callback', async () => {
       await client.publish('src/Acurite/1', '{"temperature_C":21.4}')
       await waitFor(() => cache.get('src/Acurite/1') !== undefined)
 
-      assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
-      assert.deepEqual(seen, [['src/Acurite/1', '{"temperature_C":21.4}']])
+      assert.deepEqual(cache.get('src/Acurite/1'), Buffer.from('{"temperature_C":21.4}'))
+      assert.deepEqual(seen, [['src/Acurite/1', Buffer.from('{"temperature_C":21.4}')]])
       assert.equal(client.connected(), true)
     } finally {
       await client.end()
@@ -48,7 +48,7 @@ test('a publish is retained, so a later connection is replayed it', async () => 
     try {
       await second.subscribed
       await waitFor(() => cache.get('src/Acurite/1') !== undefined)
-      assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
+      assert.deepEqual(cache.get('src/Acurite/1'), Buffer.from('{"temperature_C":21.4}'))
     } finally {
       await second.end()
     }

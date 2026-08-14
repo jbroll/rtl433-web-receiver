@@ -61,7 +61,7 @@ async function handle(req, res, { broker, cache, clients }) {
       return
     }
     try {
-      JSON.parse(body)
+      JSON.parse(body.toString('utf8'))
     } catch {
       return send(res, 400, 'body is not JSON')
     }
@@ -104,14 +104,13 @@ function subscribe(req, res, { cache, clients, url }) {
   }
 }
 
+// The body is kept as bytes: it is published and cached unchanged, and
+// decoding it would replace any byte that is not valid UTF-8.
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = ''
-    req.setEncoding('utf8')
-    req.on('data', (chunk) => {
-      body += chunk
-    })
-    req.on('end', () => resolve(body))
+    const chunks = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => resolve(Buffer.concat(chunks)))
     req.on('error', reject)
   })
 }

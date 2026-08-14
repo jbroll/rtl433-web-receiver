@@ -27,6 +27,16 @@ subscription, but that takes a round trip, and until it lands a `GET` of the
 topic just written would answer `404`. The binding's first test case is that
 it does not.
 
+## Payloads stay bytes
+
+A payload is a `Buffer` from the moment it is read, whether from a `POST`
+body or from the broker, and that is what the cache holds and what a `GET`
+writes back. The bridge subscribes to `#`, so it sees payloads from every
+other publisher on the broker too, and decoding them to UTF-8 would replace
+any byte that is not valid UTF-8 with U+FFFD. The one place a payload
+becomes text is the SSE frame in `src/sse.js`, which is JSON and has no
+other choice.
+
 An incoming message with a zero-length payload deletes the cache entry
 instead of replacing it, matching what the broker does with its own retain:
 a zero-length retained publish is how MQTT removes a retained message. A

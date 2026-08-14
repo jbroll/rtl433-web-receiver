@@ -27,7 +27,7 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
 ```
 
 - `200`, `Content-Type: application/json`, body is the retained message
-  verbatim.
+  verbatim, byte for byte, including bytes that are not valid UTF-8.
 - `404` if nothing has been published to that topic, or its retained message
   was deleted by a zero-length publish on the broker.
 - `400` if the topic is malformed (empty, contains a space, or contains an
