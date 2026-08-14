@@ -63,13 +63,15 @@ static void loadTable(const char* json) {
 static bool persist() {
   char   blob[ALIAS_BLOB_MAX];
   size_t n = serializeTable(blob, sizeof(blob));
-  if (n == 0 && _count > 0) {
+  if (n == 0) {
     return false;
   }
   if (!_open) {
+    // A receiver whose NVS won't open should still let a viewer name a
+    // device for the session rather than answer 503 to every rename.
     return true;
   }
-  return _prefs.putString("map", blob) > 0 || _count == 0;
+  return _prefs.putString("map", blob) > 0;
 }
 
 bool begin() {
@@ -159,6 +161,11 @@ bool selfTest() {
   char blob[ALIAS_BLOB_MAX];
   char topic[ALIAS_TOPIC_MAX];
 
+  // Suppress NVS traffic across the dozens of set() calls below; persist()'s
+  // blob-size check runs before its _open check, so the cap tests still work.
+  bool saved_open = _open;
+  _open           = false;
+
   _count = 0;
   ok &= check("an unset topic has no alias", get("s/M/1/$alias") == NULL);
   ok &= check("set stores a name", set("s/M/1/$alias", "Back fence"));
@@ -208,6 +215,35 @@ bool selfTest() {
   ok &= check("an unparseable blob loads as empty", count() == 0);
 
   _count = 0;
+  char name[ALIAS_NAME_MAX];
+  memset(name, 'n', sizeof(name) - 1);
+  name[sizeof(name) - 1] = '\0';
+  bool blobFailed = false;
+  int  filled     = 0;
+  for (int i = 0; i < ALIAS_SLOTS; i++) {
+    int    prefixLen = snprintf(topic, sizeof(topic), "s/M/%d/", i);
+    size_t padLen = sizeof(topic) - 1 - (size_t)prefixLen;
+    memset(topic + prefixLen, 't', padLen);
+    topic[sizeof(topic) - 1] = '\0';
+    if (!set(topic, name)) {
+      blobFailed = true;
+      break;
+    }
+    filled++;
+  }
+  ok &= check("a set that would overflow the blob fails", blobFailed);
+  ok &= check("a set that overflows the blob leaves the count unchanged",
+              (int)count() == filled);
+  char   lastTopic[ALIAS_TOPIC_MAX];
+  int    prefixLen = snprintf(lastTopic, sizeof(lastTopic), "s/M/%d/", filled - 1);
+  size_t padLen = sizeof(lastTopic) - 1 - (size_t)prefixLen;
+  memset(lastTopic + prefixLen, 't', padLen);
+  lastTopic[sizeof(lastTopic) - 1] = '\0';
+  ok &= check("the last name stored before the blob overflow is still readable",
+              get(lastTopic) != NULL && strcmp(get(lastTopic), name) == 0);
+
+  _count = 0;
+  _open  = saved_open;
   Log.notice(F("alias selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
 }
