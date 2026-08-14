@@ -283,7 +283,7 @@ function buildCard(rec, c) {
 
   const rz = el("button", "rz", "");
   rz.onpointerdown = ev => {
-    if (!editing || ev.button !== 0) return;
+    if (!editing || ev.button !== 0 || dragging) return;
     ev.stopPropagation();
     beginResize(ev, card, w, h);
   };
@@ -314,7 +314,7 @@ function buildCard(rec, c) {
   lbl.onpointerup = lbl.onpointercancel = card.cancelPress;
 
   card.onpointerdown = ev => {
-    if (!editing || ev.button !== 0) return;
+    if (!editing || ev.button !== 0 || resizing) return;
     if (ev.target.closest("button") || ev.target.closest("input")) return;
     beginDrag(ev, card, ev.target.closest(".val"));
   };

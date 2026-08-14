@@ -672,16 +672,24 @@ test("a drag on the handle moves neither the card nor a value", async ({ page })
   expect(keys).toEqual(["Acurite-5n1/396", "Oregon-THN132N/23"]);
   expect(await page.locator(CARD + " .val").evaluateAll(n => n.map(v => v.dataset.f))).toEqual(fieldsBefore);
   await expect(page.locator(".ghostcard")).toHaveCount(0);
+
+  const c = (await cardState(page)).cards["Acurite-5n1/396"];
+  expect(c.w).toBeGreaterThan(2);
+  expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span 2 auto" });
 });
 
 test("a card resized larger renders larger type", async ({ page }) => {
   await open(page, [ACURITE]);
-  await page.click("#tab-cards");
+  await edit(page);
+  const cell = await page.evaluate(() => cellSide);
   const font = () => page.locator(CARD + ' .val[data-f="temperature_F"] .fv')
     .evaluate(n => parseFloat(n.style.fontSize));
 
-  await setSize(page, "Acurite-5n1/396", 1, 1);
+  await dragHandle(page, CARD, -4000, -4000);
+  expect(await spans(page, CARD)).toEqual({ col: "span 1 auto", row: "span 1 auto" });
   const small = await font();
-  await setSize(page, "Acurite-5n1/396", 4, 4);
+
+  await dragHandle(page, CARD, 3 * cell, 3 * cell);
+  expect(await spans(page, CARD)).toEqual({ col: "span 4 auto", row: "span 4 auto" });
   expect(await font()).toBeGreaterThan(small);
 });
