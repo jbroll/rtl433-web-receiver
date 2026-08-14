@@ -54,6 +54,10 @@
 #define RADIO_TEMP_OFFSET 91
 #endif
 
+#ifndef BUILD_ID
+#  define BUILD_ID "dev"
+#endif
+
 // The library's radio object, file-scope in rtl_433_ESP.cpp and not exported by
 // its header. Reaching it is what gets the SX1231's own temperature. The guard
 // must match the library's: it defines the same name as an SX1231, CC1101 or
@@ -102,6 +106,12 @@ static const char* mdnsHostname() {
   return host;
 }
 
+// The device has no RTC, so record() gets its timestamp from SNTP. Resynced on
+// each reconnect; until the first sync a message carries no time at all.
+static void startTime() {
+  configTime(0, 0, "pool.ntp.org");
+}
+
 static void startMDNS() {
   MDNS.end(); // a second begin() without this fails to re-add the http service
   if (MDNS.begin(mdnsHostname())) {
@@ -123,6 +133,8 @@ static void connectWiFi() {
   if (wifiReady()) {
     Log.notice(F("WiFi connected: %s" CR), WiFi.localIP().toString().c_str());
     startMDNS();
+    startTime();
+    signal_store::setSource(mdnsHostname());
     wifiWasConnected = true;
   } else {
     Log.warning(F("WiFi connect failed, decoding continues" CR));
@@ -136,6 +148,8 @@ static void serviceWiFi() {
       wifiWasConnected = true;
       Log.notice(F("WiFi up: %s" CR), WiFi.localIP().toString().c_str());
       startMDNS();
+      startTime();
+      signal_store::setSource(mdnsHostname());
     }
     return;
   }
@@ -256,7 +270,8 @@ static void recordReceiver() {
   char buf[JSON_MSG_BUFFER];
   size_t n = 0;
   n = appendf(buf, sizeof(buf), n,
-              "{\"model\":\"Receiver\",\"temperature_C\":%.1f,\"heap_kB\":%lu",
+              "{\"model\":\"Receiver\",\"build\":\"" BUILD_ID "\","
+              "\"temperature_C\":%.1f,\"heap_kB\":%lu",
               temperatureRead(), (unsigned long)(ESP.getFreeHeap() / 1024));
   if (radioC != INT16_MIN) {
     n = appendf(buf, sizeof(buf), n, ",\"radio_C\":%d", radioC);
@@ -305,6 +320,7 @@ void setup() {
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
   connectWiFi();
+  signal_store::setSource(mdnsHostname());
   alias_store::begin();
   web_ui::begin();
   rtl433Queue = xQueueCreate(RTL433_QUEUE_LEN, sizeof(SignalQueueItem));
