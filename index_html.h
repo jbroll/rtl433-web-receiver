@@ -226,8 +226,19 @@ function shortKey(topic) { return topic.split("/").slice(1).join("/"); }
 
 function aliasOf(topic) { return aliases.get(topic) || ""; }
 
-// Task 9 posts the alias asynchronously; the render must not wait on that.
-function postAlias(topic, name) { renderCards(); renderDevices(); }
+// Applied locally first so the field and the card settle at once; the frame the
+// device sends back confirms it.
+function postAlias(topic, name) {
+  const trimmed = String(name).trim();
+  if (trimmed) aliases.set(topic, trimmed); else aliases.delete(topic);
+  renderCards();
+  renderDevices();
+  fetch("/" + topic + ALIAS_SUFFIX, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(trimmed),
+  }).catch(() => {});
+}
 
 function applyAlias(topic, payload) {
   const key = topic.slice(0, -ALIAS_SUFFIX.length);

@@ -476,7 +476,7 @@ function setCardHidden(key, hidden) {
 }
 
 function renameCard(key, name) {
-  postAlias(key, name.trim());
+  postAlias(key, name);
 }
 
 function startRename(key, lbl) {

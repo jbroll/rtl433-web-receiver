@@ -10,6 +10,7 @@ const RECEIVER_KEY = topicOf(RECEIVER);
 const CARD = `.card[data-key="${ACURITE_KEY}"]`;
 const LONG_KEY = topicOf(LONGNAME);
 const LONG_CARD = `.card[data-key="${LONG_KEY}"]`;
+const shortKeyOf = payload => topicOf(payload).split("/").slice(1).join("/");
 
 let server;
 
@@ -176,6 +177,39 @@ test("an alias published on the stream names the card and the device table's box
   server.emitAlias(ACURITE_KEY, "");
   await page.click("#tab-cards");
   await expect(page.locator(`${CARD} .nm`)).toHaveText("Acurite-5n1/396");
+});
+
+test("a card takes the name published for its topic", async ({ page }) => {
+  await open(page, [ACURITE]);
+  server.emitAlias(topicOf(ACURITE), "Back fence");
+  await expect(page.locator(CARD + " .nm")).toHaveText("Back fence");
+
+  server.emitAlias(topicOf(ACURITE), "");
+  await expect(page.locator(CARD + " .nm")).toHaveText(shortKeyOf(ACURITE));
+});
+
+test("renaming a card posts an alias", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#edit-cards");
+  await page.dblclick(CARD + " .lbl");
+  await page.fill(CARD + " .lbl input", "Back fence");
+  await page.press(CARD + " .lbl input", "Enter");
+
+  await expect.poll(async () => (await server.get(topicOf(ACURITE) + "/$alias")).body)
+    .toBe(JSON.stringify("Back fence"));
+});
+
+test("clearing the device table's alias field removes the alias", async ({ page }) => {
+  await open(page, [ACURITE]);
+  server.emitAlias(topicOf(ACURITE), "Back fence");
+  await page.click("#tab-devices");
+  const field = page.locator('#devices tr[data-key="' + topicOf(ACURITE) + '"] input[type=text]');
+  await expect(field).toHaveValue("Back fence");
+
+  await field.fill("");
+  await field.blur();
+  await expect.poll(async () => (await server.get(topicOf(ACURITE) + "/$alias")).status)
+    .toBe(404);
 });
 
 test("hiding a card in edit mode unchecks it in the device table", async ({ page }) => {
@@ -583,7 +617,7 @@ test("an open rename survives the render tick", async ({ page }) => {
   await expect(input).toHaveValue("Roof");
 });
 
-test("committing a rename closes the input and shows the stream-derived name", async ({ page }) => {
+test("committing a rename closes the input and shows the new name", async ({ page }) => {
   await open(page, [ACURITE]);
   await edit(page);
   await page.dblclick(CARD + " .lbl");
@@ -591,7 +625,7 @@ test("committing a rename closes the input and shows the stream-derived name", a
   await page.press(CARD + " .lbl input", "Enter");
   // Short enough that the 1s render tick can't be what closes the input.
   await expect(page.locator(CARD + " .lbl input")).toHaveCount(0, { timeout: 400 });
-  await expect(page.locator(CARD + " .nm")).toHaveText("Acurite-5n1/396");
+  await expect(page.locator(CARD + " .nm")).toHaveText("Roof station");
 });
 
 test("the device table keeps up after a checkbox takes focus", async ({ page }) => {
