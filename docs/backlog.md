@@ -10,6 +10,9 @@
   `PORT=0x1F90` silently becomes 8080 instead of being rejected.
 - A slow SSE reader is never dropped; `res.write` in `src/sse.js` buffers
   without bound.
+- Clearing the cache on reconnect is invisible to an SSE subscriber: it is
+  told nothing about the topics that went away, and is not replayed the ones
+  that come back.
 - `503` is decided from `broker.connected()` at request time, so a request
   in flight when the broker drops can still get a `404` or a stale `200`.
 - A `POST` is held for the broker's round trip, so a publisher's throughput

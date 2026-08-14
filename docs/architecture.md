@@ -63,6 +63,12 @@ subscription, so the bridge does not see a retained delete as a delete: it
 keeps serving the payload that was there until the connection is remade and
 the cache is rebuilt.
 
+The cache is emptied on every `connect`, before the `#` subscription is
+made. What it holds came from the last connection, and a broker that has
+restarted, or a different one at the same address, has its own retained set.
+Keeping the old entries would serve a `200` for every topic the old broker
+held, forever.
+
 On a broker with a large topic space this is a real memory cost: the cache
 holds one entry per topic ever seen, for the life of the process, whether or
 not anyone is watching it. It is the first thing to revisit if the bridge

@@ -254,3 +254,17 @@ test('a POST is 503 when the broker takes the publish but never echoes it', asyn
     await bridge.close()
   }
 })
+
+test('a topic the old broker held is not served after a reconnect to an empty one', async () => {
+  const bridge = await startBridge()
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 200)
+
+    await bridge.restartBroker()
+
+    await waitFor(async () => (await fetch(`${bridge.base}/src/Acurite/1234`)).status === 404, 8000)
+  } finally {
+    await bridge.close()
+  }
+})
