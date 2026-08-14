@@ -111,3 +111,13 @@ test('every request is 503 once the broker is gone', async () => {
 
   await bridge.close()
 })
+
+test('a malformed percent-escape is 400 even when the broker is down', async () => {
+  const bridge = await startBridge()
+  await bridge.stopBroker()
+
+  const malformed = await fetch(`${bridge.base}/%E0%A4%A`)
+  assert.equal(malformed.status, 400)
+
+  await bridge.close()
+})

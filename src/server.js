@@ -28,10 +28,9 @@ export function createBridge({ broker, cache }) {
 async function handle(req, res, { broker, cache, clients }) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
-  if (!broker.connected()) return send(res, 503, 'broker unavailable')
-
   if (url.pathname === '/events') {
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+    if (!broker.connected()) return send(res, 503, 'broker unavailable')
     return subscribe(req, res, { cache, clients, url })
   }
 
@@ -44,6 +43,8 @@ async function handle(req, res, { broker, cache, clients }) {
   }
 
   if (!validTopic(topic)) return send(res, 400, 'malformed topic')
+
+  if (!broker.connected()) return send(res, 503, 'broker unavailable')
 
   if (req.method === 'GET') {
     const payload = cache.get(topic)
