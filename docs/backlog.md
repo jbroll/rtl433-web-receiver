@@ -3,18 +3,19 @@
 Known gaps, in rough priority order. None of these break the receiver as it
 stands; each was found during review or hardware testing and deliberately left.
 
-The roadmap comes first: it is a program of four projects, of which this
+The roadmap comes first: it is a program of three projects, of which this
 receiver is one. The gaps below are about the receiver as it exists today.
 
 # Roadmap: splitting the receiver into a source, a bridge, and a dashboard
 
-Today the firmware is all three at once. It decodes, it holds the state, and it
-serves a page shaped around its own device table. Nothing else can feed that
-page and the page cannot read anything else, so a second receiver, a wired
-sensor, or a real broker has no way in. Aliases live in one browser's
-localStorage, so a name assigned in one place is invisible everywhere else.
+The receiver decodes, holds state, and serves a page shaped around its own
+device table, all in one firmware image. Naming is stable now — device keys
+are `<source>/<model>/<id>` topics, matching what a bridge or a second
+receiver would publish — but nothing else can feed this page yet, and it
+cannot read anything else. A wired sensor or a real broker still has no way
+in.
 
-Four projects, in dependency order. The first is done.
+Two projects remain, in dependency order.
 
 ## 1. The HTTP binding for MQTT (spec)
 
@@ -22,27 +23,13 @@ Four projects, in dependency order. The first is done.
 `<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an
 alias at the source, device, and reading levels carried as a `$alias` topic.
 Everything below is written against it. It now lives beside the bridge that
-implements it.
+implements it. Done, and the receiver now serves the source-only subset of it.
 
 ## 2. `mqtt-http-bridge`
 
 Built as a standalone service implementing the whole binding over a real broker.
 
-## 3. The binding in the receiver
-
-Replaces `/api/state`, `/events`, and `/api/status` with the source-only subset:
-serves GET and `/events` for its own topics, accepts POST only to its own
-`$alias` topics, persists those to NVS, and answers 405 to everything else.
-
-This is where stable naming lands. Device keys become `<source>/<model>/<id>`
-with `source` the existing mDNS name, which also retires the 48-byte key
-collision noted below. Aliases move out of the browser and onto the device, so
-a sensor named once is named for every viewer.
-
-Doing the naming and the NVS aliases as a separate step ahead of this would
-build the alias path twice, now that the spec exists. They are one project.
-
-## 4. The dashboard as its own project
+## 3. The dashboard as its own project
 
 The page lifted out of `cards_html.h` and `index_html.h` into a project with a
 build step, reading a configurable list of bridges rather than the host it was
@@ -87,7 +74,7 @@ alias, and lay out. Nothing else uses it. Three directions, none started:
 - Egress to home automation: publishing each decode to
   `rtl_433/<host>/devices/<model>/<id>/<field>` matches what rtl_433's own
   `-F mqtt` emits, so existing Home Assistant setups would take it unchanged.
-  Polling `/api/state` from an HA REST sensor works today with no firmware
+  A `GET` of a topic from an HA REST sensor works today with no firmware
   change at all, and is the cheapest first step.
 
 ## Radio SPI is shared between two tasks with no lock
@@ -120,24 +107,11 @@ the `JsonDocument` constructor) removes it without touching the parse.
 
 ## Constants duplicated between the firmware and the page
 
-`index_html.h:58` caps the browser's device table at `DEVICE_MAX = 24` to match
-`SIGNAL_DEVICE_SLOTS` in `signal_store.h:9`, and `LOG_MAX = 200` mirrors the
-truncation the device already applies. Change one and nothing catches the
+`index_html.h:61` caps the browser's device table at `DEVICE_MAX = 24` to match
+`SIGNAL_DEVICE_SLOTS` in `signal_store.h:8`. Change one and nothing catches the
 divergence — the page would silently keep a different number of rows than the
 device tracks. The page is a PROGMEM string with no build step, so the fix is
-either to serve the limits in `/api/state` and read them at runtime, or to
-generate the constants into the page at build time.
-
-## Ages skew for ~49 days after a millis() rollover
-
-The page derives `offset` from the device's `now` on each fetch and ticks ages
-locally. After the device's `millis()` wraps at about 49.7 days, every row's age
-is wrong until that device is next heard from, and `refresh()` will not delete a
-stale row because its `at` compares as newer. Ordering and eviction inside
-`signal_store` are already rollover-proof — they key on the monotonic `_seq`
-counter, not `lastSeen` — but the page has no equivalent. Fixing it properly
-means sending a monotonic sequence to the page as well, or having the device
-report ages rather than timestamps.
+to generate the constant into the page at build time.
 
 ## Heap allocation on the decode path
 
@@ -148,15 +122,6 @@ project's "static allocation only" rule. They are transient and uniformly sized,
 so the footprint stays flat — free heap held steady across a 4 minute sample —
 but the `String` is avoidable in two lines by formatting the id as an integer
 and falling back only when it is genuinely a string.
-
-## Device keys can collide
-
-`buildKey()` formats `model/id` into `SIGNAL_KEY_MAX` = 48 bytes
-(`signal_store.h:11`). Two sensors whose model names share a long prefix
-truncate to the same key and merge into one slot, with their message counts
-added together and their readings overwriting each other. rtl_433 model names
-run past 48 characters — several device names in the decoder set exceed it — so
-this is reachable, not theoretical. Either widen the key or hash the tail.
 
 ## A slow HTTP client can still stall the receive path
 
@@ -178,15 +143,6 @@ testing with five clients plus an open tab. It is self-limiting and only happens
 when oversubscribed, but a viewer in that state sees the table reload
 repeatedly. Raising the slot count or backing off the page's reconnect would
 both help.
-
-## A decode can be missed at page load
-
-The page fetches `/api/state` once on load and again only on a genuine
-reconnect. A decode landing between the device serialising that snapshot and the
-`/events` socket being accepted is lost until that device transmits again. The
-window is tens of milliseconds because the ESP32 web server handles one request
-at a time. This is the accepted cost of dropping the previous behaviour, which
-fetched the snapshot twice on every load.
 
 ## The card page costs more flash than budgeted
 
@@ -230,13 +186,21 @@ reachable from the device table as well as from a card.
 
 ## The firmware self-test has never been read on a device
 
-`signal_store::selfTest()` runs at startup under `FAKE_SIGNALS` and prints a
-PASS/FAIL line per check, but nobody has seen those lines. The board flashes
-and runs, and `ArduinoLog` writes to `Serial0`, a hardware UART at 921600 baud,
-while the port exposed over USB is the S3's CDC device. Reading the self-test
-needs a UART adapter on the TX pin, or the sketch pointing `Log.begin()` at
-`Serial` so it comes out over USB. Until then all 23 checks are verified by
-compilation and by reasoning, not by execution.
+`signal_store::selfTest()` and `alias_store::selfTest()` run at startup under
+`FAKE_SIGNALS` and print a PASS/FAIL line per check, but nobody has seen those
+lines. The board flashes and runs, and `ArduinoLog` writes to `Serial0`, a
+hardware UART at 921600 baud, while the port exposed over USB is the S3's CDC
+device. Reading the self-test needs a UART adapter on the TX pin, or the
+sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
+`signal_store`'s 31 checks and `alias_store`'s 21 are verified by compilation
+and by reasoning, not by execution.
+
+## An alias surviving a reboot is unverified
+
+`alias_store::selfTest()` covers the in-RAM table and the round trip through a
+serialised blob, but not `Preferences::putString()` actually landing in NVS
+and surviving a power cycle — that needs hardware, like the self-test gap
+above.
 
 ## Gaps in the page tests
 
@@ -265,11 +229,10 @@ compilation and by reasoning, not by execution.
   always defines `LOG_LEVEL`, so it is inert.
 - `platformio.ini:46` still labels the pin map "ESP32-S3-CAM", copied from the
   upstream example. The pins are right; the board name is not.
-- `signal_store` has a `FAKE_SIGNALS` self-test that also compiles and runs on
-  the host against real ArduinoJson, which is how its 23 checks are verified.
-  The page has Playwright tests under `test/`. The firmware itself is still
-  compile plus hardware; a PlatformIO `native` environment would make the
-  store's tests a normal `pio test`.
+- `signal_store` and `alias_store` each have a `FAKE_SIGNALS` self-test that
+  only compiles and runs on the device (see above); `topic` is the one module
+  host-tested today. A PlatformIO `native` environment would make the other
+  two stores' tests a normal `pio test` as well.
 - The card view's font-size factor of 0.42 and its 11–64px clamp were tuned
   against a handful of synthetic devices. A wrong factor leaves a card sparse or
   crowded; it cannot overflow, because both axes use `minmax(0,1fr)` and `.fv`

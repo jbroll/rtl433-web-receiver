@@ -55,53 +55,34 @@ WiFi is not required to decode. If it is unavailable the sketch keeps decoding
 and logging to serial, and retries every 30 seconds, though the first connect
 attempt times out after 20 seconds before the receiver starts.
 
-## Pages and endpoints
+## The HTTP surface
 
-| Path | Returns |
+The receiver serves the source-only subset of the
+[HTTP binding for MQTT](../mqtt-http-bridge/docs/binding.md): stable
+`<source>/<model>/<id>` topics, the rtl_433 message as the payload, and an alias
+at every level.
+
+| Request | Returns |
 |---|---|
-| `/` | the live page: a card dashboard, a device table, and a raw log, behind tabs; the page opens on Cards |
-| `/api/state` | build id and a snapshot of the device table and event ring |
-| `/events` | SSE stream; each `signal` event's `data` is JSON with `at`, `now`, `key`, `rssi`, `count`, and `payload`; a `:keepalive` comment every 15 s |
-| `/api/status` | uptime, build id, free heap, WiFi RSSI, IP, total decodes, dropped count |
+| `GET /` | the live page: a card dashboard, a device table, and a raw log, behind tabs; the page opens on Cards |
+| `GET /<topic>` | the stored message, `Content-Type: application/json`; `404` if there is none |
+| `POST /<topic>` | store an alias, `204`; `405` unless the topic is an `$alias` under this receiver's source |
+| `GET /events?f=…` | SSE stream; each frame's `data` is `{"topic":…,"payload":…}`, with a `:keepalive` comment every 15 s |
 
-The page loads `/api/state`, then applies `signal` events as they arrive. On
-reconnect it re-fetches `/api/state`, so a missed event cannot leave the table
-stale.
+`source` is the mDNS name, `rtl433-a1b2c3`. The receiver's own telemetry is
+`rtl433-a1b2c3/Receiver/0`, and a device with no id and no channel uses `0` too.
 
-`build` is `git describe --always --dirty --exclude "*"` at compile time, set by
-`load_env.py`. The exclude suppresses tag names, so the id is always the
-abbreviated commit hash. The page keeps the id its first fetch returned and reloads
-itself when a later one differs, so a reflash reboots the device, the stream
-reconnects, and every open browser picks up the new page. A rebuild with no new
-commit keeps the same id, so uncommitted work needs a manual reload.
+Every stored message carries `time` (ISO 8601 UTC, from SNTP), `rssi`, and
+`count`, stamped in by the receiver. Until the clock is set `time` is absent and
+the page ages that device from when it arrived.
 
-Payloads are truncated to 512 characters and carried as JSON strings, so a
-truncated payload cannot break a response. The page shows the raw text when it
-does not parse. 512 is the size of the library's own message buffer, so a real
-decode is never cut; a shorter cap silently strips the trailing fields rtl_433
-appends and leaves the page with unparseable JSON.
+`build` rides on the telemetry message. The page keeps the first id it sees and
+reloads itself when a later one differs, so a reflash reboots the device, the
+stream reconnects, and every open browser picks up the new page.
 
-The reading column shows every field in the payload except the metadata
-rtl_433 adds (`model`, `id`, `channel`, `protocol`, `rssi`, `duration`, `mic`,
-`message_type`, `sequence_num`, `time`). Readings accumulate per device: an
-Acurite 5n1 splits its data across two message types, so a row keeps what
-earlier messages reported rather than showing only the latest half. A value can
-therefore be older than the age column, which tracks the newest message.
-
-A new device gets no card. The Card checkbox is how it gets one, and it is the
-same setting as ✕ on the card in edit mode, so a device hidden either way is
-unchecked here. Decodes from protocols nobody owns arrive on any 433 MHz
-receiver, and this keeps them off the dashboard.
-
-The Alias box names that device's card, the same name double-clicking the card
-label sets. Emptying it puts the key back. The table rebuilds every second but
-holds still while a text box or a select in it has focus, so an entry in
-progress is never interrupted. Only the tab on screen is rebuilt; switching to
-one draws it.
-
-Under each device is one row per reading, carrying that reading's current value
-and its display mode. This is where a card's contents are chosen; the card's own
-edit mode only arranges what is already there.
+See [docs/user-manual.md](docs/user-manual.md) for the routes, their statuses,
+and the filter syntax, and [docs/architecture.md](docs/architecture.md) for the
+module boundaries and the replay design.
 
 ## Cards
 
@@ -123,25 +104,10 @@ wide to fit at that size. Every reading on a card takes the same size, the
 one its widest needs. Cards that do not fit in the set number of rows
 render below the fold.
 
-Every value has three display modes, set from its row in the device table.
-Shown puts it in the card body at full size. Bottom puts it small and labelled
-along the bottom-left edge, mirroring the age at bottom-right, which is where a
-battery flag belongs. Hidden drops it. rtl_433's status fields (`battery_ok`,
-`test`, `tamper`, and the rest) start at the bottom; everything else starts
-shown.
-
-The pencil button opens edit mode, which arranges the card and nothing else:
-cards drag to reorder, values drag to reorder within their card, the corner
-handle resizes, ✕ hides the card, and double-clicking the label renames it. A
-card shows the same values in edit mode as out of it; what appears is the card's
-own controls, and hidden cards as ghosts. A long device name in the
-label ellipsizes rather than overflowing the card; readings round to one
-or two decimal places for display, without changing the stored values.
-
 Layout is per browser, in localStorage under `rtl433.cards.v2`: the grid size,
 the card order, which cards are hidden, and per card a size in cells, the value
-order, and which values are hidden or at the bottom. A card's name is not
-stored here; it is the published alias, or the device's key if none is set.
+order, and which values are hidden or at the bottom. No name is stored there;
+a card's name is the published alias, or the device's key if none is set.
 Layout is never sent to the device, so two browsers can arrange the same
 receiver differently.
 
@@ -181,9 +147,10 @@ while RSSI is above the decode threshold or within `RECEIVER_QUIET_MS` of the
 last decode, rather than cutting a signal in half; a skipped read repeats the
 previous value, and the field is absent until the first one succeeds.
 
-The record does not enter the raw log or the decode count, on the device or in
-the browser: its SSE frame carries `"log":0` and the page applies it to the
-device without logging it. `RECEIVER_TELEMETRY_MS` sets the interval.
+The record does not enter the raw log or the decode count: `signal_store::record`
+takes `isDecode=false` for it, and the page recognises its topic's model
+segment, `Receiver`, and skips the Log tab entry it would otherwise add.
+`RECEIVER_TELEMETRY_MS` sets the interval.
 
 ## Limits
 
@@ -193,10 +160,10 @@ device without logging it. `RECEIVER_TELEMETRY_MS` sets the interval.
   16–60 seconds, so the default only clears a genuinely dead one. Raise it if
   you receive TPMS, which is silent while a car is parked, or door contacts and
   remotes, which transmit only when triggered.
-- 40 events retained on the device, 200 in the browser
-- payloads kept whole up to 512 characters
-- 4 concurrent SSE clients; a fifth evicts the longest-attached one, whose
-  browser reconnects on its own
+- payloads up to 600 bytes; a longer one is dropped rather than truncated
+- 32 aliases
+- 4 concurrent SSE clients, each subscribing up to 4 filters; a fifth client
+  evicts the longest-attached one, whose browser reconnects on its own
 
 ## Testing without a radio
 
@@ -204,7 +171,10 @@ Uncomment `'-DFAKE_SIGNALS=true'` in `platformio.ini`. The sketch injects a
 synthetic decode every 3 seconds and runs `signal_store::selfTest()` at startup,
 printing a PASS/FAIL line per check over serial.
 
+`topic.cpp` has no Arduino dependency and is host-tested: `bash test/host/run.sh`
+compiles and runs it on the host.
+
 The browser page has its own tests. `npm install` once, then `npx playwright
 test`. `test/harness.js` extracts the same PROGMEM literals the firmware serves
-and serves them with a mock `/api/state` and `/events`, so the tests run
-without a board.
+and implements the HTTP binding — `GET` and `POST` of a topic, `/events` with
+filters and a retained replay — so the tests run without a board.
