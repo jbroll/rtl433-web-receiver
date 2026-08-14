@@ -166,6 +166,13 @@ compilation and by reasoning, not by execution.
   against a handful of synthetic devices. A wrong factor leaves a card sparse or
   crowded; it cannot overflow, because both axes use `minmax(0,1fr)` and `.fv`
   ellipsizes.
+- `fitValues()` caps the type size by measuring the text on a canvas at the
+  font family `getComputedStyle(document.body)` reports. That matches what the
+  page renders today, but the measurement ignores letter-spacing and any
+  font-feature settings, so a future style change to `.fv` could make the
+  estimate too small and bring the ellipsis back. It errs about 4px high per
+  value at 64px, which is why it shrinks slightly more than strictly needed.
+  A card whose widest reading cannot fit even at 11px still ellipsizes.
 - `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid
   has no `gap`; the spacing moved to `.card { margin:.35rem }`. Re-adding a
   `gap` would overflow the grid by `(cols-1) × gap`. Nothing in the file says

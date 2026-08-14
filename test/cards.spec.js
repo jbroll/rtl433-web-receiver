@@ -772,14 +772,28 @@ test("a value shrinks to fit its box instead of ellipsizing", async ({ page }) =
   }
 });
 
-test("a wide value gets a smaller size than a short one in the same card", async ({ page }) => {
+test("every value in a card shares the size its widest reading needs", async ({ page }) => {
   await open(page, [LONGNAME]);
   await page.click("#tab-cards");
-  const size = f => page.locator(`${LONG_CARD} .val[data-f="${f}"] .fv`)
-    .evaluate(n => parseFloat(n.style.fontSize));
 
-  // "1013.3hPa" is more than twice as wide as "38%" at the same size.
-  expect(await size("pressure_hPa")).toBeLessThan(await size("humidity"));
+  const sizes = await page.locator(LONG_CARD + " .fv").evaluateAll(n => n.map(f => f.style.fontSize));
+  expect(sizes.length).toBeGreaterThan(3);
+  expect([...new Set(sizes)]).toHaveLength(1);
+
+  // "1013.3hPa" is the widest reading, so it is the one the shared size fits.
+  const cut = await page.locator(LONG_CARD + ' .val[data-f="pressure_hPa"] .fv')
+    .evaluate(n => n.scrollWidth - n.clientWidth);
+  expect(cut).toBeLessThanOrEqual(0);
+});
+
+test("a card of short readings keeps larger type than one with a long reading", async ({ page }) => {
+  await open(page, [ACURITE, LONGNAME]);
+  await page.click("#tab-cards");
+  await setSize(page, "Acurite-5n1/396", 2, 2);
+  await setSize(page, LONG_KEY, 2, 2);
+  const size = sel => page.locator(sel + " .fv").first().evaluate(n => parseFloat(n.style.fontSize));
+
+  expect(await size(LONG_CARD)).toBeLessThan(await size(CARD));
 });
 
 test("the width fit only shrinks, never grows past the height fit", async ({ page }) => {

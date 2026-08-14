@@ -243,17 +243,23 @@ function textWidthEm(num, unit) {
 }
 
 // valueFont() sizes to the row height alone, so a reading as wide as 1013.3hPa
-// would ellipsize in a box tall enough to hold it twice over. Every box is read
-// before any font is written, to keep this to one layout for the whole grid.
+// would ellipsize in a box tall enough to hold it twice over. A card takes one
+// size, the widest reading's, rather than letting its values size raggedly.
+// Every box is read before any font is written, to keep this to one layout.
 let fitting = [];
 function fitValues() {
   const boxes = fitting.map(f => f.node.parentNode.clientWidth);
+  const caps = new Map();
   fitting.forEach((f, i) => {
     const cap = Math.floor(boxes[i] / f.em);
+    if (!caps.has(f.card) || cap < caps.get(f.card)) caps.set(f.card, cap);
+  });
+  for (const f of fitting) {
+    const cap = caps.get(f.card);
     if (cap < parseFloat(f.node.style.fontSize)) {
       f.node.style.fontSize = Math.max(FONT_MIN, cap) + "px";
     }
-  });
+  }
   fitting = [];
 }
 
@@ -306,7 +312,7 @@ function buildCard(rec, c) {
     const num = fmtValue(rec.merged[f]);
     const fv = el("div", "fv", num);
     fv.style.fontSize = font;
-    fitting.push({ node: fv, em: textWidthEm(num, parts.unit) });
+    fitting.push({ node: fv, card: card, em: textWidthEm(num, parts.unit) });
     if (parts.unit) fv.append(el("span", "u", parts.unit));
     v.append(fv);
     v.onclick = () => { if (editing && !dragMoved) toggleValue(key, f); };

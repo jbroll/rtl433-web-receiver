@@ -95,8 +95,10 @@ visible readings one per cell, in the most compact rectangle: one reading
 gives 1×1, three or four give 2×2, seven through nine give 3×3. Dragging
 the corner handle in edit mode resizes it, snapped to whole cells, from
 1×1 up to the grid's own dimensions. Type size follows the measured cell,
-so a bigger card reads bigger. Cards that do not fit in the set number of
-rows render below the fold.
+so a bigger card reads bigger, and shrinks further where a reading is too
+wide to fit at that size. Every reading on a card takes the same size, the
+one its widest needs. Cards that do not fit in the set number of rows
+render below the fold.
 
 The pencil button opens edit mode, where cards drag to reorder, values
 drag to reorder within their card, clicking a value hides it, ✕ hides the
