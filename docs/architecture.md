@@ -37,10 +37,16 @@ any byte that is not valid UTF-8 with U+FFFD. The one place a payload
 becomes text is the SSE frame in `src/sse.js`, which is JSON and has no
 other choice.
 
-An incoming message with a zero-length payload deletes the cache entry
-instead of replacing it, matching what the broker does with its own retain:
-a zero-length retained publish is how MQTT removes a retained message. A
-`GET` of that topic goes back to `404`.
+An incoming message with a zero-length payload deletes the cache entry only
+when its packet carries the retain flag, which is how MQTT removes a
+retained message. Without the flag it is an ordinary message with an empty
+body and is cached like any other, because a foreign publisher sending one
+must not make the bridge answer `404` for a topic the broker still holds.
+
+A broker clears the retain flag on messages it forwards to an established
+subscription, so the bridge does not see a retained delete as a delete: it
+keeps serving the payload that was there until the connection is remade and
+the cache is rebuilt.
 
 On a broker with a large topic space this is a real memory cost: the cache
 holds one entry per topic ever seen, for the life of the process, whether or

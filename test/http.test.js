@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 
+import mqtt from 'mqtt'
+
 import { createCache } from '../src/cache.js'
 import { createBridge } from '../src/server.js'
 import { startBridge, waitFor } from './helpers/bridge.js'
@@ -187,16 +189,22 @@ function freePort() {
   })
 }
 
-test('a zero-length retained publish deletes the message, so GET is 404 again', async () => {
+test('a zero-length publish from another client does not make the topic 404', async () => {
   const bridge = await startBridge()
+  const foreign = await mqtt.connectAsync(bridge.mqttUrl)
   try {
     await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
     assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 200)
 
-    await bridge.broker.publish('src/Acurite/1234', '')
-    // The deletion is only known when the broker echoes the empty publish.
-    await waitFor(async () => (await fetch(`${bridge.base}/src/Acurite/1234`)).status === 404)
+    await foreign.publishAsync('src/Acurite/1234', '', { qos: 0, retain: false })
+    // The empty publish is in flight; a later publish the bridge can see
+    // arriving is what says the first one has been handled too.
+    await foreign.publishAsync('src/Marker/1', '{"seen":true}', { qos: 0, retain: false })
+    await waitFor(async () => (await fetch(`${bridge.base}/src/Marker/1`)).status === 200)
+
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 200)
   } finally {
+    await foreign.endAsync()
     await bridge.close()
   }
 })

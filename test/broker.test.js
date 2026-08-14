@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { connectBroker } from '../src/broker.js'
+import { cacheMessage, connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
 import { waitFor } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
@@ -55,4 +55,16 @@ test('a publish is retained, so a later connection is replayed it', async () => 
   } finally {
     await broker.close()
   }
+})
+
+test('a zero-length publish deletes the cached message only when it is retained', () => {
+  const cache = createCache()
+
+  cache.set('src/Acurite/1', Buffer.from('{"t":1}'))
+  cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: false })
+  assert.deepEqual(cache.get('src/Acurite/1'), Buffer.alloc(0))
+
+  cacheMessage(cache, 'src/Acurite/1', Buffer.from('{"t":2}'), { retain: false })
+  cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: true })
+  assert.equal(cache.get('src/Acurite/1'), undefined)
 })

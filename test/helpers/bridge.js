@@ -29,6 +29,7 @@ export async function startBridge({ url } = {}) {
 
   return {
     base: `http://127.0.0.1:${port}`,
+    mqttUrl: url ?? mqttBroker.url,
     broker,
     cache,
     stopBroker,

@@ -20,6 +20,13 @@
 - A retained message deleted by a zero-length publish reaches SSE
   subscribers as an event with an empty payload. Nothing marks it as a
   deletion, so a subscriber cannot tell it apart from an empty message.
+- A retained message deleted while the bridge is connected stays in the
+  cache until the next reconnect, because the broker clears the retain flag
+  on what it forwards and the delete is indistinguishable from an ordinary
+  empty message. MQTT 5's retain-as-published subscription option would tell
+  them apart, at the cost of requiring an MQTT 5 broker.
+- A zero-length message is served by `GET` as a `200` with an empty body,
+  which is not the JSON the binding says the body is.
 - `matchFilter('#', '$SYS/...')` returns `true`, where MQTT excludes topics
   beginning with `$` from a `#` subscription. Moot against a real broker,
   which never delivers them, but wrong on its own terms.
