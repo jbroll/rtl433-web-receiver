@@ -90,7 +90,11 @@ update ages in place rather than rebuild.
   always defines `LOG_LEVEL`, so it is inert.
 - `platformio.ini:46` still labels the pin map "ESP32-S3-CAM", copied from the
   upstream example. The pins are right; the board name is not.
-- There is no test framework. `signal_store` has a `FAKE_SIGNALS` self-test that
-  also compiles and runs on the host against real ArduinoJson, which is how its
-  17 checks are verified; everything else is compile plus hardware. A PlatformIO
-  `native` environment would make the store's tests a normal `pio test`.
+- `signal_store` has a `FAKE_SIGNALS` self-test that also compiles and runs on
+  the host against real ArduinoJson, which is how its 17 checks are verified.
+  The page has Playwright tests under `test/`. The firmware itself is still
+  compile plus hardware; a PlatformIO `native` environment would make the
+  store's tests a normal `pio test`.
+- The card view's font-size base of 2.4rem was tuned against a handful of
+  synthetic devices. A card with long field names and four or more values can
+  still clip, because the body hides overflow rather than shrinking to fit.

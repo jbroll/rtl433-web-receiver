@@ -59,7 +59,7 @@ attempt times out after 20 seconds before the receiver starts.
 
 | Path | Returns |
 |---|---|
-| `/` | the live page: a device table and a raw log, behind tabs |
+| `/` | the live page: a device table, a raw log, and a card dashboard, behind tabs |
 | `/api/state` | snapshot of the device table and event ring |
 | `/events` | SSE stream; each `signal` event's `data` is JSON with `at`, `now`, `key`, `rssi`, `count`, and `payload`; a `:keepalive` comment every 15 s |
 | `/api/status` | uptime, free heap, WiFi RSSI, IP, total decodes, dropped count |
@@ -81,6 +81,19 @@ Acurite 5n1 splits its data across two message types, so a row keeps what
 earlier messages reported rather than showing only the latest half. A value can
 therefore be older than the age column, which tracks the newest message.
 
+## Cards
+
+The Cards tab shows each tracked device as a card. The pencil button opens edit
+mode, where cards drag to reorder, values drag to reorder within their card,
+clicking a value hides it, ✕ hides the card, the ▭ button cycles square,
+horizontal, and vertical, and double-clicking the label renames it. Values grow
+as fewer of them share a card and as the card grows.
+
+Layout is per browser, in localStorage under `rtl433.cards.v1`. It is never
+sent to the device, so two browsers can arrange the same receiver differently.
+Clearing site data restores the defaults: every device visible, readings shown,
+status flags such as `battery_ok` hidden.
+
 ## Limits
 
 - 24 devices tracked; a new decode evicts the least recently seen device once the table is full
@@ -94,3 +107,8 @@ therefore be older than the age column, which tracks the newest message.
 Uncomment `'-DFAKE_SIGNALS=true'` in `platformio.ini`. The sketch injects a
 synthetic decode every 3 seconds and runs `signal_store::selfTest()` at startup,
 printing a PASS/FAIL line per check over serial.
+
+The browser page has its own tests. `npm install` once, then `npx playwright
+test`. `test/harness.js` extracts the same PROGMEM literals the firmware serves
+and serves them with a mock `/api/state` and `/events`, so the tests run
+without a board.
