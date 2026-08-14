@@ -217,9 +217,44 @@ function measureGrid() {
   grid.style.gridTemplateRows = "repeat(" + g.rows + ",var(--cell))";
 }
 
+const FONT_MIN = 11, FONT_MAX = 64;
+
 function valueFont(h, cell, rows) {
   const px = Math.round(0.42 * h * cell / Math.max(1, rows));
-  return Math.min(64, Math.max(11, px)) + "px";
+  return Math.min(FONT_MAX, Math.max(FONT_MIN, px)) + "px";
+}
+
+// Width of a value at a 1px font, the unit's .5em and .12em margin included.
+// Measured on a canvas rather than in the document: fitting every value by
+// reflow would cost a layout each, and the numbers are tabular either way.
+let textProbe = null, probeFont = "";
+function textWidthEm(num, unit) {
+  if (!textProbe) {
+    textProbe = document.createElement("canvas").getContext("2d");
+    probeFont = getComputedStyle(document.body).fontFamily;
+  }
+  textProbe.font = "100px " + probeFont;
+  let w = textProbe.measureText(num).width;
+  if (unit) {
+    textProbe.font = "50px " + probeFont;
+    w += textProbe.measureText(unit).width + 12;
+  }
+  return w / 100;
+}
+
+// valueFont() sizes to the row height alone, so a reading as wide as 1013.3hPa
+// would ellipsize in a box tall enough to hold it twice over. Every box is read
+// before any font is written, to keep this to one layout for the whole grid.
+let fitting = [];
+function fitValues() {
+  const boxes = fitting.map(f => f.node.parentNode.clientWidth);
+  fitting.forEach((f, i) => {
+    const cap = Math.floor(boxes[i] / f.em);
+    if (cap < parseFloat(f.node.style.fontSize)) {
+      f.node.style.fontSize = Math.max(FONT_MIN, cap) + "px";
+    }
+  });
+  fitting = [];
 }
 
 // rtl_433 sends full float precision; the card only needs enough to read at a glance.
@@ -268,8 +303,10 @@ function buildCard(rec, c) {
     v.dataset.f = f;
     const parts = splitUnit(f);
     v.append(el("div", "fn", parts.name));
-    const fv = el("div", "fv", fmtValue(rec.merged[f]));
+    const num = fmtValue(rec.merged[f]);
+    const fv = el("div", "fv", num);
     fv.style.fontSize = font;
+    fitting.push({ node: fv, em: textWidthEm(num, parts.unit) });
     if (parts.unit) fv.append(el("span", "u", parts.unit));
     v.append(fv);
     v.onclick = () => { if (editing && !dragMoved) toggleValue(key, f); };
@@ -337,7 +374,9 @@ renderCards = function () {
   const keys = orderedKeys();
   const shownKeys = keys.filter(k => !cardHidden(k));
   if (editing) shownKeys.push(...keys.filter(cardHidden));
+  fitting = [];
   grid.replaceChildren(...shownKeys.map(k => buildCard(devices.get(k), seeded.get(k))));
+  fitValues();
 };
 
 let editing = false;

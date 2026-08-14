@@ -754,3 +754,48 @@ test("a card resized larger renders larger type", async ({ page }) => {
   expect(await spans(page, CARD)).toEqual({ col: "span 4 auto", row: "span 4 auto" });
   expect(await font()).toBeGreaterThan(small);
 });
+
+test("a value shrinks to fit its box instead of ellipsizing", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, LONGNAME]);
+  await page.click("#tab-cards");
+
+  const clipped = () => page.evaluate(() =>
+    [...document.querySelectorAll("#cards .fv")]
+      .filter(fv => fv.scrollWidth > fv.clientWidth)
+      .map(fv => fv.textContent + " @" + fv.style.fontSize));
+
+  expect(await clipped()).toEqual([]);
+
+  for (const [w, h] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]]) {
+    await setSize(page, LONG_KEY, w, h);
+    expect(await clipped(), `${w}x${h}`).toEqual([]);
+  }
+});
+
+test("a wide value gets a smaller size than a short one in the same card", async ({ page }) => {
+  await open(page, [LONGNAME]);
+  await page.click("#tab-cards");
+  const size = f => page.locator(`${LONG_CARD} .val[data-f="${f}"] .fv`)
+    .evaluate(n => parseFloat(n.style.fontSize));
+
+  // "1013.3hPa" is more than twice as wide as "38%" at the same size.
+  expect(await size("pressure_hPa")).toBeLessThan(await size("humidity"));
+});
+
+test("the width fit only shrinks, never grows past the height fit", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  const fits = await page.evaluate(() => {
+    const rows = [];
+    for (const fv of document.querySelectorAll("#cards .fv")) {
+      const card = fv.closest(".card");
+      const h = cardState.cards[card.dataset.key].h;
+      const rows_ = Math.max(h, Math.ceil(card.querySelectorAll(".val").length / 2));
+      rows.push({ got: parseFloat(fv.style.fontSize),
+                  ceiling: parseFloat(valueFont(h, cellSide, rows_)) });
+    }
+    return rows;
+  });
+  expect(fits.length).toBeGreaterThan(0);
+  for (const f of fits) expect(f.got).toBeLessThanOrEqual(f.ceiling);
+});
