@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import net from 'node:net'
 
 import { startBridge, waitFor } from './helpers/bridge.js'
 
@@ -77,6 +78,32 @@ test('a POST body that fails to parse as JSON is 400, not a thrown error', async
 
   const bad = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{not valid json' })
   assert.equal(bad.status, 400)
+
+  await bridge.close()
+})
+
+test('a client that hangs up mid-body does not take the bridge down with it', async () => {
+  const bridge = await startBridge()
+  const { hostname, port } = new URL(bridge.base)
+
+  const socket = net.connect(Number(port), hostname)
+  await new Promise((resolve, reject) => {
+    socket.once('connect', resolve)
+    socket.once('error', reject)
+  })
+
+  const body = '{"a":1}'
+  socket.write(
+    `POST /src/Acurite/1234 HTTP/1.1\r\n` +
+      `Host: ${hostname}\r\n` +
+      `Content-Length: ${body.length + 10}\r\n` +
+      `Connection: close\r\n\r\n` +
+      body.slice(0, 3),
+  )
+  socket.destroy()
+
+  const after = await fetch(`${bridge.base}/src/Acurite/1234`)
+  assert.equal(after.status, 404)
 
   await bridge.close()
 })

@@ -6,8 +6,12 @@ export function createBridge({ broker, cache }) {
   const bridge = {
     httpServer: http.createServer((req, res) => {
       handle(req, res, { broker, cache }).catch(() => {
-        if (res.headersSent) return res.end()
-        send(res, 500, 'internal error')
+        try {
+          if (res.headersSent) res.end()
+          else send(res, 500, 'internal error')
+        } catch {
+          // the socket is already gone; nothing left to do
+        }
       })
     }),
     clients: new Set(),
