@@ -82,6 +82,37 @@ already suppresses the tick while a drag is in progress (`cards_html.h`,
 `if (dragging) return;`); a rename needs the same, or the renderer needs to
 update ages in place rather than rebuild.
 
+## The card page costs more flash than budgeted
+
+The Cards tab added 16,432 bytes against a design expectation of under 15 KB,
+and the label and decimal work added a further 1,124, for about 17.5 KB.
+Measured by building this branch against its merge-base with `main`. The build
+sits at 86% of flash, so nothing is at risk today, but the figure was never
+brought back under the number it was written against. Either the budget was
+wrong or the page needs trimming; `CARDS_HTML` is the obvious target, being
+mostly CSS and hand-rolled pointer handling.
+
+## The firmware self-test has never been read on a device
+
+`signal_store::selfTest()` runs at startup under `FAKE_SIGNALS` and prints a
+PASS/FAIL line per check, but nobody has seen those lines. The board flashes
+and runs, and `ArduinoLog` writes to `Serial0`, a hardware UART at 921600 baud,
+while the port exposed over USB is the S3's CDC device. Reading the self-test
+needs a UART adapter on the TX pin, or the sketch pointing `Log.begin()` at
+`Serial` so it comes out over USB. Until then all 23 checks are verified by
+compilation and by reasoning, not by execution.
+
+## Gaps in the page tests
+
+- No test covers a negative reading, though rtl_433 temperatures go below zero
+  and `fmtValue` branches on `Math.abs`. The rounding is correct by inspection;
+  it is simply unexercised.
+- The card overflow test runs one device at its default aspect, so the
+  `wide` (2×2) and `v` branches of `bodyCols()` are never exercised by
+  `npx playwright test`. Both were checked by hand and passed.
+- Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the
+  Escape path out of a rename.
+
 ## Smaller items
 
 - `WebReceiver.ino:169-171` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
@@ -95,6 +126,9 @@ update ages in place rather than rebuild.
   The page has Playwright tests under `test/`. The firmware itself is still
   compile plus hardware; a PlatformIO `native` environment would make the
   store's tests a normal `pio test`.
-- The card view's font-size base of 2.4rem was tuned against a handful of
-  synthetic devices. A card with long field names and four or more values can
-  still clip, because the body hides overflow rather than shrinking to fit.
+- The card view's font-size base of 1.9rem and its 0.7–2.6rem clamp were tuned
+  against a handful of synthetic devices, and `bodyCols()` picks a column count
+  from per-aspect ratio constants (2.2, 0.5, 1.1) that were estimated rather
+  than measured against the live grid. A wrong ratio leaves a card sparse or
+  crowded; it cannot overflow, because both axes use `minmax(0,1fr)` and `.fv`
+  ellipsizes.
