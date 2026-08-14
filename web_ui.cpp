@@ -1,14 +1,17 @@
 #include "web_ui.h"
 
+#include <ArduinoJson.h>
 #include <ArduinoLog.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <errno.h>
 #include <lwip/sockets.h>
 
+#include "alias_store.h"
 #include "cards_html.h"
 #include "index_html.h"
 #include "signal_store.h"
+#include "topic.h"
 
 extern bool wifiReady();
 
@@ -175,8 +178,10 @@ class FrameBuffer : public Print {
   // Frame text including the telemetry marker, two millis() values, rssi,
   // count, and a key and payload that both double under writeJsonString's
   // escaping, plus a byte of headroom.
+  // Zero-initialized so the untouched byte past the last write is always the
+  // null terminator data() promises.
   char _buf[80 + 10 + 10 + (2 * (SIGNAL_KEY_MAX - 1) + 2) + 11 + 10 +
-            (2 * SIGNAL_PAYLOAD_MAX + 2) + 1];
+            (2 * SIGNAL_PAYLOAD_MAX + 2) + 1] = {};
   size_t _len      = 0;
   bool   _overflow = false;
 };
@@ -227,56 +232,76 @@ static void handleRoot() {
   out.finish();
 }
 
-static void handleState() {
-  WiFiClient client = _server.client();
-  _server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+static void sendStatus(int code, const char* body) {
   _server.sendHeader("Cache-Control", "no-store");
-  _server.send(200, "application/json", "");
-
-  ChunkedResponse out(_server, client);
-
-  char head[112];
-  snprintf(head, sizeof(head),
-           "{\"now\":%lu,\"build\":\"" BUILD_ID "\",\"total\":%lu,\"dropped\":%lu,\"devices\":[",
-           millis(), (unsigned long)signal_store::totalRecorded(),
-           (unsigned long)signal_store::droppedCount());
-  out.print(head);
-
-  uint8_t devices = signal_store::deviceCount();
-  for (uint8_t i = 0; i < devices; i++) {
-    const DeviceSlot& d = signal_store::device(i);
-    if (i) {
-      out.print(',');
-    }
-    out.print("{\"key\":");
-    writeJsonString(out, d.key);
-    char nums[64];
-    snprintf(nums, sizeof(nums), ",\"lastSeen\":%lu,\"count\":%lu,\"payload\":",
-             d.lastSeen, (unsigned long)d.count);
-    out.print(nums);
-    writeJsonString(out, d.payload);
-    out.print('}');
-  }
-
-  out.print("]}");
-  out.finish();
+  _server.send(code, "text/plain", body);
 }
 
-static void handleStatus() {
-  if (!_server.client().connected()) {
+static void handleAliasPost(const char* path) {
+  const char* src = signal_store::source();
+  size_t      srcLen = strlen(src);
+  bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
+  if (!topic::isAlias(path) || !ownSource) {
+    sendStatus(405, "not allowed");
     return;
   }
-  char body[192];
-  snprintf(body, sizeof(body),
-           "{\"uptime\":%lu,\"build\":\"" BUILD_ID "\",\"heap\":%lu,\"rssi\":%d,"
-           "\"ip\":\"%s\",\"total\":%lu,\"dropped\":%lu}",
-           millis() / 1000, (unsigned long)ESP.getFreeHeap(),
-           wifiReady() ? WiFi.RSSI() : 0,
-           wifiReady() ? WiFi.localIP().toString().c_str() : "",
-           (unsigned long)signal_store::totalRecorded(),
-           (unsigned long)signal_store::droppedCount());
+  String body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<const char*>()) {
+    sendStatus(400, "body must be a JSON string");
+    return;
+  }
+  const char* name = doc.as<const char*>();
+  if (*name == '\0') {
+    alias_store::remove(path);
+  } else if (!alias_store::set(path, name)) {
+    sendStatus(503, "alias store full");
+    return;
+  }
+  web_ui::broadcastAlias(path, name);
   _server.sendHeader("Cache-Control", "no-store");
-  _server.send(200, "application/json", body);
+  _server.send(204, "text/plain", "");
+}
+
+static void handleTopic() {
+  String      uri = _server.uri();
+  const char* path = uri.c_str();
+  if (*path == '/') {
+    path++;
+  }
+  if (!topic::validTopic(path)) {
+    sendStatus(400, "malformed topic");
+    return;
+  }
+  if (_server.method() == HTTP_POST) {
+    handleAliasPost(path);
+    return;
+  }
+  if (_server.method() != HTTP_GET) {
+    sendStatus(405, "not allowed");
+    return;
+  }
+  if (topic::isAlias(path)) {
+    const char* name = alias_store::get(path);
+    if (name == NULL) {
+      sendStatus(404, "no message");
+      return;
+    }
+    FrameBuffer json;
+    writeJsonString(json, name);
+    _server.sendHeader("Cache-Control", "no-store");
+    _server.send(200, "application/json", String(json.data()));
+    return;
+  }
+  for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
+    const DeviceSlot* slot = signal_store::slotAt(i);
+    if (slot != NULL && strcmp(slot->key, path) == 0) {
+      _server.sendHeader("Cache-Control", "no-store");
+      _server.send(200, "application/json", slot->payload);
+      return;
+    }
+  }
+  sendStatus(404, "no message");
 }
 
 static void handleEvents() {
@@ -320,10 +345,9 @@ static void handleEvents() {
 
 void begin() {
   _server.on("/", HTTP_GET, handleRoot);
-  _server.on("/api/state", HTTP_GET, handleState);
-  _server.on("/api/status", HTTP_GET, handleStatus);
   _server.on("/events", HTTP_GET, handleEvents);
-  _server.onNotFound([]() { _server.send(404, "text/plain", "not found"); });
+  // Topics are arbitrary paths, so every other request is dispatched here.
+  _server.onNotFound(handleTopic);
   _server.begin();
   _started = true;
   Log.notice(F("web server listening on port 80" CR));
@@ -392,6 +416,11 @@ void broadcast(const DeviceSlot& slot, bool isDecode) {
     }
     sendFrameOrDrop(c, frame.data(), frame.length());
   }
+}
+
+void broadcastAlias(const char* topic, const char* name) {
+  (void)topic;
+  (void)name;
 }
 
 } // namespace web_ui

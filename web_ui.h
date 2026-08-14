@@ -10,5 +10,6 @@ void loop();
 // isDecode false marks the frame as the receiver's own telemetry, which the
 // page applies to the device but keeps out of its raw log.
 void broadcast(const DeviceSlot& slot, bool isDecode = true);
+void broadcastAlias(const char* topic, const char* name);
 void writeJsonString(Print& out, const char* s);
 } // namespace web_ui
