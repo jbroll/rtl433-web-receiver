@@ -17,6 +17,9 @@ const broker = connectBroker({
   onMessage: (topic, payload) => bridge?.broadcast(topic, payload),
   username: config.username,
   password: config.password,
+  onConnect: () => console.log(`broker ${config.mqttUrl} connected`),
+  onDisconnect: () => console.error(`broker ${config.mqttUrl} disconnected, retrying`),
+  onError: (err) => console.error(`broker ${config.mqttUrl}: ${err.message}`),
 })
 bridge = createBridge({ broker, cache })
 

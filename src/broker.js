@@ -26,9 +26,9 @@ export function connectBroker({
     resubscribe: true,
   })
 
-  // The client retries on its own, so a failed connection needs no handling
-  // here. The listener stays because an 'error' event without one is thrown,
-  // taking the process down whenever the broker refuses a connection.
+  // Swallowing these left a bridge that answered 503 to everything and said
+  // nothing about why, for a wrong password as much as a missing broker. The
+  // listener also has to exist: an 'error' event with none is thrown.
   client.on('error', (err) => onError?.(err))
 
   let subscribed

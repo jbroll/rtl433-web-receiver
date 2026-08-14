@@ -8,8 +8,14 @@ import Aedes from 'aedes'
 // tells a timing-dependent test from a correct one.
 const DEFAULT_DELAY_MS = Number(process.env.MQTT_TEST_LATENCY_MS ?? 0)
 
-export async function startBroker(listenPort = 0, { delayMs = DEFAULT_DELAY_MS } = {}) {
+export async function startBroker(
+  listenPort = 0,
+  { delayMs = DEFAULT_DELAY_MS, refuseSubscribe = false } = {},
+) {
   const aedes = new Aedes()
+  if (refuseSubscribe) {
+    aedes.authorizeSubscribe = (client, sub, done) => done(new Error('subscription refused'))
+  }
   const server = net.createServer(aedes.handle)
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 

@@ -68,3 +68,48 @@ test('a zero-length publish deletes the cached message only when it is retained'
   cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: true })
   assert.equal(cache.get('src/Acurite/1'), undefined)
 })
+
+test('a broker that refuses the subscription is reported, and is not ready', async () => {
+  const broker = await startBroker(0, { refuseSubscribe: true })
+  try {
+    const errors = []
+    const client = connectBroker({
+      url: broker.url,
+      cache: createCache(),
+      onMessage: () => {},
+      onError: (err) => errors.push(err),
+    })
+    try {
+      await waitFor(() => errors.length > 0)
+      const ready = await Promise.race([
+        client.subscribed.then(() => 'subscribed'),
+        new Promise((resolve) => setTimeout(() => resolve('not subscribed'), 200)),
+      ])
+      assert.equal(ready, 'not subscribed')
+    } finally {
+      await client.end()
+    }
+  } finally {
+    await broker.close()
+  }
+})
+
+test('a broker that refuses the connection is reported rather than swallowed', async () => {
+  const broker = await startBroker()
+  const url = broker.url
+  await broker.close()
+
+  const errors = []
+  const client = connectBroker({
+    url,
+    cache: createCache(),
+    onMessage: () => {},
+    onError: (err) => errors.push(err),
+  })
+  try {
+    await waitFor(() => errors.length > 0, 5000)
+    assert.match(errors[0].message, /ECONNREFUSED/)
+  } finally {
+    await client.end()
+  }
+})

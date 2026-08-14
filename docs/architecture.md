@@ -84,8 +84,15 @@ Waiting for the first connection instead would leave a bridge supervised by
 runit crash-looping until its broker came up.
 
 The `#` subscription is made on every `connect` event. `broker.subscribed`
-resolves the first time it succeeds; tests await it before publishing so the
-echo they are waiting for cannot be missed.
+resolves the first time it succeeds; a broker that refuses the subscription
+leaves it pending and reports the error, rather than leaving a bridge that
+looks ready and caches nothing. Tests await it before publishing so the echo
+they are waiting for cannot be missed.
+
+Connect, disconnect, and error are handed to `bin/mqtt-http-bridge.js`, the
+one file that writes to the console. Without them a bridge whose password is
+wrong answers `503` to every request and prints nothing after its startup
+line.
 
 ## Filters are fixed per connection
 

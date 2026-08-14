@@ -2,6 +2,9 @@
 
 - Caching every topic through a `#` subscription does not scale to a busy
   broker. See [`docs/architecture.md`](architecture.md#caching-everything).
+- Broker connect, disconnect, and error are printed but nothing exposes them
+  over HTTP; there is no status endpoint to ask why the bridge is answering
+  `503`.
 - No authentication on the HTTP side. Anyone who can reach the port can
   publish, including to `$alias` topics.
 - `readBody` in `src/server.js` buffers a request body with no size cap and
