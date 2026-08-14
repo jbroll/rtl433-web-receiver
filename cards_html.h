@@ -17,16 +17,21 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
 .card.v { grid-row:span 2; }
 .card.wide { grid-column:span 2; grid-row:span 2; }
 .card.flash { animation:flash 1s ease-out; }
-.card .lbl { position:absolute; top:-.65em; right:.7rem; padding:0 .4rem;
-             background:Canvas; font-size:.75rem; white-space:nowrap; }
-.card .lbl .rs { opacity:.6; margin-left:.35rem; font-variant-numeric:tabular-nums; }
+.card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
+             padding:0 .4rem; background:Canvas; font-size:.75rem;
+             display:flex; align-items:baseline; overflow:hidden; }
+.card .lbl .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;
+                 flex:1 1 auto; }
+.card .lbl .rs { opacity:.6; margin-left:.35rem; flex:0 0 auto; white-space:nowrap;
+                 font-variant-numeric:tabular-nums; }
 .card .age { position:absolute; right:.5rem; bottom:.25rem; font-size:.65rem; opacity:.5;
              font-variant-numeric:tabular-nums; }
-.card .body { display:flex; flex-wrap:wrap; align-content:flex-start; gap:.2rem .9rem;
+.card .body { display:grid; grid-auto-rows:minmax(0,1fr); align-items:stretch; gap:.2rem .9rem;
               height:100%; overflow:hidden; }
-.card .val { line-height:1.05; }
+.card .val { line-height:1.05; min-width:0; align-self:center; }
 .card .fn { font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; opacity:.6; }
-.card .fv { font-variant-numeric:tabular-nums; white-space:nowrap; }
+.card .fv { font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
+            text-overflow:ellipsis; display:block; }
 .card .fv .u { font-size:.5em; opacity:.65; margin-left:.12em; }
 @media (max-width:520px) {
   #cards { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); }
@@ -161,9 +166,22 @@ function cardCells(key, visibleCount) {
   return 2;
 }
 
+// Column count that best matches the card's own width:height ratio, so the
+// value grid fills the card on both axes instead of just the top-left.
+function bodyCols(aspect, count) {
+  const ratio = aspect === "h" ? 2.2 : aspect === "v" ? 0.5 : aspect === "wide" ? 1.1 : 1;
+  return Math.max(1, Math.min(count, Math.round(Math.sqrt(count * ratio))));
+}
+
 function valueFont(cells, visibleCount) {
-  const raw = 2.4 * Math.sqrt(cells / Math.max(1, visibleCount));
-  return Math.min(2.6, Math.max(0.9, Math.round(raw * 1000) / 1000)) + "rem";
+  const raw = 1.9 * Math.sqrt(cells / Math.max(1, visibleCount));
+  return Math.min(2.6, Math.max(0.7, Math.round(raw * 1000) / 1000)) + "rem";
+}
+
+// rtl_433 sends full float precision; the card only needs enough to read at a glance.
+function fmtValue(v) {
+  if (typeof v !== "number") return String(v);
+  return String(parseFloat(v.toFixed(Math.abs(v) >= 10 ? 1 : 2)));
 }
 
 function el(tag, cls, text) {
@@ -193,6 +211,8 @@ function buildCard(rec, c) {
 
   const body = el("div", "body");
   const shown = editing ? c.valueOrder.filter(f => rec.merged[f] !== undefined) : vis;
+  const gridAspect = c.aspect === "sq" && cells === 4 ? "wide" : c.aspect;
+  body.style.gridTemplateColumns = "repeat(" + bodyCols(gridAspect, shown.length) + ",minmax(0,1fr))";
   const font = valueFont(cells, vis.length);
   for (const f of shown) {
     const v = el("div", "val");
@@ -200,7 +220,7 @@ function buildCard(rec, c) {
     v.dataset.f = f;
     const parts = splitUnit(f);
     v.append(el("div", "fn", parts.name));
-    const fv = el("div", "fv", String(rec.merged[f]));
+    const fv = el("div", "fv", fmtValue(rec.merged[f]));
     fv.style.fontSize = font;
     if (parts.unit) fv.append(el("span", "u", parts.unit));
     v.append(fv);

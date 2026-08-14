@@ -14,4 +14,13 @@ const THERMO = {
   battery_ok: 0, temperature_C: 4.1, humidity: 91, mic: "CRC",
 };
 
-module.exports = { ACURITE, OREGON, THERMO };
+// A long model name and full rtl_433 float precision, for the card overflow
+// and rounding tests.
+const LONGNAME = {
+  model: "Fineoffset-WH65B-AggregateWeatherStationLongModelName", id: 174, channel: 3, protocol: 55,
+  battery_ok: 1, temperature_F: 71.23456789, humidity: 38, wind_avg_mi_h: 4.6,
+  wind_max_mi_h: 9.123456, wind_direction_deg: 180.5, rain_mm: 0.0300,
+  pressure_hPa: 1013.25, mic: "CHECKSUM",
+};
+
+module.exports = { ACURITE, OREGON, THERMO, LONGNAME };

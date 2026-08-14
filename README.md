@@ -86,8 +86,11 @@ therefore be older than the age column, which tracks the newest message.
 The Cards tab shows each tracked device as a card. The pencil button opens edit
 mode, where cards drag to reorder, values drag to reorder within their card,
 clicking a value hides it, ✕ hides the card, the ▭ button cycles square,
-horizontal, and vertical, and double-clicking the label renames it. Values grow
-as fewer of them share a card and as the card grows.
+horizontal, and vertical, and double-clicking the label renames it. Values lay
+out in a grid that fills the card and grow as fewer of them share a card and as
+the card grows. A long device name in the label ellipsizes rather than
+overflowing the card; readings round to one or two decimal places for display,
+without changing the stored values.
 
 Layout is per browser, in localStorage under `rtl433.cards.v1`. It is never
 sent to the device, so two browsers can arrange the same receiver differently.

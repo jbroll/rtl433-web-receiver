@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { startServer } = require("./harness");
-const { ACURITE, OREGON, THERMO } = require("./fixtures");
+const { ACURITE, OREGON, THERMO, LONGNAME } = require("./fixtures");
 
 let server;
 
@@ -136,10 +136,10 @@ test("value font follows cells over visible count", async ({ page }) => {
   const sizes = await page.evaluate(() => ({
     one: valueFont(1, 1), three: valueFont(1, 3), big: valueFont(4, 8), floor: valueFont(1, 40),
   }));
-  expect(sizes.one).toBe("2.4rem");
-  expect(sizes.three).toBe("1.386rem");
-  expect(sizes.big).toBe("1.697rem");
-  expect(sizes.floor).toBe("0.9rem");
+  expect(sizes.one).toBe("1.9rem");
+  expect(sizes.three).toBe("1.097rem");
+  expect(sizes.big).toBe("1.344rem");
+  expect(sizes.floor).toBe("0.7rem");
 });
 
 test("a card with more than six visible values spans 2x2", async ({ page }) => {
@@ -406,4 +406,78 @@ test("a live signal does not re-render mid-drag", async ({ page }) => {
   await page.mouse.up();
   await expect(page.locator(".ghostcard")).toHaveCount(0);
   await expect(page.locator(CARD)).not.toHaveClass(/lifting/);
+});
+
+const LONG_KEY = LONGNAME.model + "/" + LONGNAME.id;
+const LONG_CARD = `.card[data-key="${LONG_KEY}"]`;
+
+test("a long device name ellipsizes instead of clipping, and rssi stays whole", async ({ page }) => {
+  await open(page, [LONGNAME]);
+  await page.click("#tab-cards");
+
+  const card = page.locator(LONG_CARD);
+  const cardBox = await card.boundingBox();
+  const lblBox = await card.locator(".lbl").boundingBox();
+  expect(lblBox.x).toBeGreaterThanOrEqual(cardBox.x - 2);
+  expect(lblBox.x + lblBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 2);
+
+  // The fixture's model name is long enough that the label box alone (proven
+  // above to fit) could not hold it without eliding the name.
+  const nmOverflows = await card.locator(".nm")
+    .evaluate(n => n.scrollWidth > n.clientWidth);
+  expect(nmOverflows).toBe(true);
+
+  const rsOverflows = await card.locator(".rs")
+    .evaluate(n => n.scrollWidth > n.clientWidth);
+  expect(rsOverflows).toBe(false);
+  await expect(card.locator(".rs")).toHaveText("-72");
+});
+
+test("values spread across the card without overflowing it", async ({ page }) => {
+  await open(page, [LONGNAME]);
+  await page.click("#tab-cards");
+
+  const card = page.locator(LONG_CARD);
+  const body = card.locator(".body");
+  const bodyBox = await body.boundingBox();
+  const boxes = await body.locator(".val").evaluateAll(nodes => nodes.map(n => {
+    const r = n.getBoundingClientRect();
+    return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+  }));
+  expect(boxes.length).toBeGreaterThan(3);
+  const spanX = Math.max(...boxes.map(b => b.right)) - Math.min(...boxes.map(b => b.left));
+  const spanY = Math.max(...boxes.map(b => b.bottom)) - Math.min(...boxes.map(b => b.top));
+  expect(spanX).toBeGreaterThan(bodyBox.width * 0.8);
+  expect(spanY).toBeGreaterThan(bodyBox.height * 0.7);
+
+  const overflow = await card.evaluate(n => ({
+    w: n.scrollWidth - n.clientWidth, h: n.scrollHeight - n.clientHeight,
+  }));
+  expect(overflow.w).toBeLessThanOrEqual(0);
+  expect(overflow.h).toBeLessThanOrEqual(0);
+});
+
+test("displayed values are rounded and trimmed, without touching stored data", async ({ page }) => {
+  await open(page, [LONGNAME]);
+  await page.click("#tab-cards");
+
+  const card = page.locator(LONG_CARD);
+  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("71.2°F");
+  await expect(card.locator('.val[data-f="wind_avg_mi_h"] .fv')).toHaveText("4.6mi/h");
+  await expect(card.locator('.val[data-f="rain_mm"] .fv')).toHaveText("0.03mm");
+  await expect(card.locator('.val[data-f="pressure_hPa"] .fv')).toHaveText("1013.3hPa");
+  await expect(card.locator('.val[data-f="humidity"] .fv')).toHaveText("38%");
+
+  const stored = await page.evaluate(k => devices.get(k).merged.temperature_F, LONG_KEY);
+  expect(stored).toBeCloseTo(71.23456789, 6);
+});
+
+test("fmtValue rounds by magnitude and leaves non-numbers untouched", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  const out = await page.evaluate(() => [
+    fmtValue(71.234), fmtValue(4.6), fmtValue(0.0300), fmtValue(1013.25),
+    fmtValue(38), fmtValue("CHECKSUM"), fmtValue(true),
+  ]);
+  expect(out).toEqual(["71.2", "4.6", "0.03", "1013.3", "38", "CHECKSUM", "true"]);
 });
