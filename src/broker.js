@@ -34,13 +34,17 @@ export function connectBroker({
   // listener also has to exist: an 'error' event with none is thrown.
   // Reporting each retry instead filled a log with the same line every two
   // seconds, so an error is reported only when it is not the one already
-  // reported, and a connection clears what was.
+  // reported, and a successful subscription clears what was. A subscribe
+  // failure goes through the same path: TCP connects fine on every retry, so
+  // clearing on 'connect' instead would let an unchanging subscribe refusal
+  // print once per reconnect forever.
   let reported = null
-  client.on('error', (err) => {
+  const report = (err) => {
     if (ending || err.message === reported) return
     reported = err.message
     onError?.(err)
-  })
+  }
+  client.on('error', report)
 
   let subscribed
   const ready = new Promise((resolve) => {
@@ -52,14 +56,16 @@ export function connectBroker({
 
   client.on('connect', () => {
     up = true
-    reported = null
     // What the cache holds came from the last connection. This one has its own
     // retained set, and anything missing from it no longer exists.
     cache.clear()
     onConnect?.()
     client.subscribe('#', { qos: 0 }, (err) => {
-      if (err) onError?.(err)
-      else subscribed()
+      if (err) report(err)
+      else {
+        reported = null
+        subscribed()
+      }
     })
   })
 

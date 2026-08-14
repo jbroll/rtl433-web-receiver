@@ -96,6 +96,54 @@ test('a broker that refuses the subscription is reported, and is not ready', asy
   }
 })
 
+test('a subscribe error goes through the same dedup as any other error', async () => {
+  const broker = await startBroker(0, { refuseSubscribe: true })
+  try {
+    const errors = []
+    const client = connectBroker({
+      url: broker.url,
+      cache: createCache(),
+      onMessage: () => {},
+      onError: (err) => errors.push(err),
+      reconnectMs: 30,
+    })
+    try {
+      // aedes closes the connection outright on a refused subscription
+      // rather than sending a SUBACK failure, so the error the subscribe
+      // callback receives is the same 'Connection closed' the 'error' event
+      // would report on any other broken connection; one report for it is
+      // the same contract every other error gets.
+      await waitFor(() => errors.length > 0)
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      assert.equal(errors.length, 1)
+    } finally {
+      await client.end()
+    }
+  } finally {
+    await broker.close()
+  }
+})
+
+test('a subscribe error arriving after shutdown begins is not reported', async () => {
+  const broker = await startBroker(0, { refuseSubscribe: true })
+  try {
+    const errors = []
+    const client = connectBroker({
+      url: broker.url,
+      cache: createCache(),
+      onMessage: () => {},
+      // Fires before `client.subscribe` is called for this connection, so
+      // shutdown is already under way by the time the refusal comes back.
+      onConnect: () => client.end(),
+      onError: (err) => errors.push(err),
+    })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    assert.deepEqual(errors, [])
+  } finally {
+    await broker.close()
+  }
+})
+
 test('a broker that refuses the connection is reported rather than swallowed', async () => {
   const broker = await startBroker()
   const url = broker.url
