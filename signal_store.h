@@ -33,6 +33,7 @@ uint8_t            deviceCount();
 const DeviceSlot&  device(uint8_t i);
 uint8_t            eventCount();
 const SignalEvent& event(uint8_t i);
+void               sweepStale(unsigned long now, unsigned long staleMs);
 uint32_t           totalRecorded();
 uint32_t           droppedCount();
 #ifdef FAKE_SIGNALS

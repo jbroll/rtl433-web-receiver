@@ -91,7 +91,7 @@ update ages in place rather than rebuild.
 - `platformio.ini:46` still labels the pin map "ESP32-S3-CAM", copied from the
   upstream example. The pins are right; the board name is not.
 - `signal_store` has a `FAKE_SIGNALS` self-test that also compiles and runs on
-  the host against real ArduinoJson, which is how its 17 checks are verified.
+  the host against real ArduinoJson, which is how its 23 checks are verified.
   The page has Playwright tests under `test/`. The firmware itself is still
   compile plus hardware; a PlatformIO `native` environment would make the
   store's tests a normal `pio test`.

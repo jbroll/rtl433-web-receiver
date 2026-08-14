@@ -91,12 +91,17 @@ as fewer of them share a card and as the card grows.
 
 Layout is per browser, in localStorage under `rtl433.cards.v1`. It is never
 sent to the device, so two browsers can arrange the same receiver differently.
-Clearing site data restores the defaults: every device visible, readings shown,
-status flags such as `battery_ok` hidden.
+Layouts are never dropped on their own, so a sensor that goes quiet and returns
+keeps its card. Forget layouts, in edit mode, clears them all.
 
 ## Limits
 
-- 24 devices tracked; a new decode evicts the least recently seen device once the table is full
+- 24 devices tracked; a new decode evicts the least recently seen device once
+  the table is full, and a slot unheard from for `DEVICE_STALE_HOURS` (72 by
+  default, `0` to disable) is freed on its own. Weather sensors transmit every
+  16–60 seconds, so the default only clears a genuinely dead one. Raise it if
+  you receive TPMS, which is silent while a car is parked, or door contacts and
+  remotes, which transmit only when triggered.
 - 40 events retained on the device, 200 in the browser
 - payloads kept whole up to 512 characters
 - 4 concurrent SSE clients; a fifth evicts the longest-attached one, whose

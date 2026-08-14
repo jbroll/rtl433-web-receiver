@@ -171,6 +171,22 @@ uint32_t droppedCount() {
   return _dropped;
 }
 
+// now is a parameter rather than a millis() call so the self-test can drive
+// the clock. Unsigned subtraction makes the comparison rollover-correct as
+// long as the sweep runs more often than millis() wraps.
+void sweepStale(unsigned long now, unsigned long staleMs) {
+  if (staleMs == 0) {
+    return;
+  }
+  for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
+    if (_devices[i].used && (unsigned long)(now - _devices[i].lastSeen) > staleMs) {
+      _devices[i].used = false;
+      _seq[i] = 0;
+      _deviceCount--;
+    }
+  }
+}
+
 #ifdef FAKE_SIGNALS
 static bool check(const char* what, bool ok) {
   Log.notice(F("selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
@@ -230,6 +246,30 @@ bool selfTest() {
   snprintf(buf, sizeof(buf), "{\"model\":\"Long\",\"id\":1,\"note\":\"%s\"}", note);
   ok &= check("long payload is kept and truncated",
               record(buf, -70) && strlen(device(0).payload) == SIGNAL_PAYLOAD_MAX);
+
+  reset();
+  record("{\"model\":\"Stale\",\"id\":1,\"temperature_C\":1}", -50);
+  record("{\"model\":\"Fresh\",\"id\":2,\"temperature_C\":2}", -50);
+  ok &= check("both devices present before sweep", deviceCount() == 2);
+
+  // Both slots share a lastSeen from this run's millis(), so age them by
+  // sweeping from a point far enough ahead that only a longer window spares
+  // them; a zero window must spare both.
+  unsigned long base = _devices[0].lastSeen;
+  sweepStale(base + 1000, 0);
+  ok &= check("a zero window sweeps nothing", deviceCount() == 2);
+  sweepStale(base + 1000, 60000);
+  ok &= check("a fresh device survives the sweep", deviceCount() == 2);
+  sweepStale(base + 120000, 60000);
+  ok &= check("a stale device is swept", deviceCount() == 0);
+
+  reset();
+  record("{\"model\":\"Wrap\",\"id\":3,\"temperature_C\":3}", -50);
+  unsigned long wrapBase = _devices[0].lastSeen;
+  ok &= check("unsigned subtraction survives a millis rollover",
+              (unsigned long)(wrapBase - 10) - wrapBase > 60000);
+  sweepStale(wrapBase + 1, 60000);
+  ok &= check("a device seen just now survives near rollover", deviceCount() == 1);
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

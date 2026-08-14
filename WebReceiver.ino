@@ -27,6 +27,10 @@
 #  define RF_MODULE_FREQUENCY 433.92
 #endif
 
+#ifndef DEVICE_STALE_HOURS
+#define DEVICE_STALE_HOURS 72
+#endif
+
 #define JSON_MSG_BUFFER   512
 #define WIFI_CONNECT_MS   20000
 #define WIFI_RETRY_MS     30000
@@ -193,4 +197,10 @@ void loop() {
 #ifdef FAKE_SIGNALS
   fakeSignalTick();
 #endif
+
+  static unsigned long lastSweep = 0;
+  if (millis() - lastSweep >= 60000) {
+    lastSweep = millis();
+    signal_store::sweepStale(millis(), (unsigned long)DEVICE_STALE_HOURS * 3600000UL);
+  }
 }
