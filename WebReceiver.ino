@@ -76,8 +76,9 @@ rtl_433_ESP rf;
 // only hands the payload off through this queue.
 #define RTL433_QUEUE_LEN 8
 
-// Carries the whole message, not a SIGNAL_PAYLOAD_MAX-truncated copy: the store
-// truncates after parsing, and truncated JSON would fail to parse at all.
+// Carries the whole message, not a SIGNAL_PAYLOAD_MAX-truncated copy: the
+// store drops an over-long message rather than truncating it, and truncated
+// JSON would fail to parse at all.
 struct SignalQueueItem {
   char payload[JSON_MSG_BUFFER];
   int  rssi;

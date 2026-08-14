@@ -32,8 +32,8 @@ stamped fields add. A message that still doesn't fit is dropped rather than
 truncated: the SSE frame embeds a device's payload as the JSON object it
 already is, not as an escaped string, so a payload cut mid-object would put
 unparseable JSON on the wire. Truncating and then fixing up the JSON is not
-attempted; dropping the message and counting it is simpler and the case is
-already rare enough that `droppedCount()` is the mechanism for noticing it.
+attempted; dropping the message and counting it in `droppedCount()` is
+simpler.
 
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. Only `/` and
 `/events` are registered routes; every topic is an arbitrary path, so `GET`
@@ -45,17 +45,18 @@ is no dynamic connection list.
 
 ## Data flow
 
-The decoder runs on `rtl_433_ReceiverTask`, not the loop task, so
+The decoder runs on `rtl_433_DecoderTask`, not the loop task, so
 `rtl_433_Callback` cannot touch `signal_store` or `web_ui` directly — both
 assume single-threaded access from `loop()`. The callback instead copies the
 message and RSSI into an 8-deep FreeRTOS queue. `loop()` drains it:
 
     rtl_433_Callback → queue → loop() → signal_store::record() → web_ui::broadcast() → subscribers
 
-A successful `record()` returns the freshest device (`signal_store::device(0)`,
-recency order) to `broadcast()`, which builds one SSE frame and sends it to
-every subscriber whose filters match and whose replay cursor has already
-passed that device's slot.
+`record()` returns whether the message was stored. On success, `loop()` calls
+`signal_store::device(0)` — the freshest device in recency order — and passes
+it to `broadcast()`, which builds one SSE frame and sends it to every
+subscriber whose filters match and whose replay cursor has already passed
+that device's slot.
 
 ## The replay design
 
@@ -99,6 +100,45 @@ in practice it resolves through the last two steps: `cardLabel()` is
 `aliasOf(key) || shortKey(key)`. The first step exists in the binding for a
 client, such as the planned standalone dashboard, that keeps its own naming
 independent of what any one source publishes.
+
+## The receiver's own card
+
+The firmware records itself as a device named `Receiver` once a minute, so the
+page renders it with everything it already does for a sensor. It is the one
+device that starts with its card shown, since it cannot be a false decode.
+`RECEIVER_TELEMETRY_MS` sets the interval.
+
+| Field | Source |
+|---|---|
+| `temperature_C` | ESP32-S3 die, `temperatureRead()`. Runs well above ambient with WiFi up |
+| `radio_C` | SX1231 die. RadioLib returns the register negated and uncalibrated; `RADIO_TEMP_OFFSET` (91) corrects it, and the part is only good to ±5 °C, so read it as a trend |
+| `noise_dBm` | `rtl_433_ESP::averageRssi`, the receiver task's mean RSSI. Absent until it has averaged its first batch |
+| `heap_kB` | `ESP.getFreeHeap()` |
+
+The card's corner reading is the WiFi RSSI rather than a decode's. The
+receiver takes one of the 24 device slots, and it is the only device keyed on
+its model alone, with no id.
+
+Reading the radio's temperature parks it in standby, so the sketch stops
+reception, reads the register directly with a bounded poll, restarts reception
+with `receiveDirect()`, and re-enables the interrupt. RadioLib's own
+`getTemperature()` is not used: it polls without a bound, and a lost SPI
+transaction there would hang the loop with the radio deaf. The read is skipped
+while RSSI is above the decode threshold or within `RECEIVER_QUIET_MS` of the
+last decode, rather than cutting a signal in half; a skipped read repeats the
+previous value, and the field is absent until the first one succeeds.
+
+The record does not enter the raw log or the decode count: `signal_store::record`
+takes `isDecode=false` for it, and the page recognises its topic's model
+segment, `Receiver`, and skips the Log tab entry it would otherwise add.
+
+## The build id
+
+`load_env.py` sets `BUILD_ID` to `git describe --always --dirty --exclude "*"`
+at build time. The receiver's telemetry carries it as `build`; the page keeps
+the first value it sees and reloads when a later one differs. A rebuild with
+no new commit keeps the same id, so uncommitted work needs a manual reload —
+the page has no way to tell that binary apart from the one already running.
 
 ## The clock
 

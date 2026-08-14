@@ -84,73 +84,14 @@ See [docs/user-manual.md](docs/user-manual.md) for the routes, their statuses,
 and the filter syntax, and [docs/architecture.md](docs/architecture.md) for the
 module boundaries and the replay design.
 
-## Cards
+## The page
 
-Cards is the tab the page opens on. It lays every device whose card is checked
-in the device table on a grid of square cells. Two number inputs in edit mode
-set the columns and rows, 6 × 4 by default and
-1–24 each; the cell side is whichever of width ÷ columns and height ÷ rows
-is smaller, so the grid fits on screen with margin on the other axis.
-Nothing narrows the default for a small screen, so a phone gets the full
-6 × 4 grid of very small cells until the user sets smaller numbers.
-
-A card spans whole cells. On first detection it is sized to hold its
-visible readings one per cell, in the most compact rectangle: one reading
-gives 1×1, three or four give 2×2, seven through nine give 3×3. Dragging
-the corner handle in edit mode resizes it, snapped to whole cells, from
-1×1 up to the grid's own dimensions. Type size follows the measured cell,
-so a bigger card reads bigger, and shrinks further where a reading is too
-wide to fit at that size. Every reading on a card takes the same size, the
-one its widest needs. Cards that do not fit in the set number of rows
-render below the fold.
-
-Layout is per browser, in localStorage under `rtl433.cards.v2`: the grid size,
-the card order, which cards are hidden, and per card a size in cells, the value
-order, and which values are hidden or at the bottom. No name is stored there;
-a card's name is the published alias, or the device's key if none is set.
-Layout is never sent to the device, so two browsers can arrange the same
-receiver differently.
-
-A card the user showed or renamed is kept even after its device goes quiet, so a
-sensor that returns finds its card as it left it. A card that was never shown is
-dropped once its device is gone from the table, which is what keeps a band full
-of one-off false decodes from growing the stored layout without limit.
-
-Forget layouts, in edit mode, clears the lot after a confirmation prompt. The
-devices on screen at the time keep their cards; only ones seen afterwards start
-hidden.
-
-## The receiver's own card
-
-The firmware records itself as a device named `Receiver` once a minute, so the
-page renders it with everything it already does for a sensor. It is the one
-device that starts with its card shown, since it cannot be a false decode.
-
-| Field | Source |
-|---|---|
-| `temperature_C` | ESP32-S3 die, `temperatureRead()`. Runs well above ambient with WiFi up |
-| `radio_C` | SX1231 die. RadioLib returns the register negated and uncalibrated; `RADIO_TEMP_OFFSET` (91) corrects it, and the part is only good to ±5 °C, so read it as a trend |
-| `noise_dBm` | `rtl_433_ESP::averageRssi`, the receiver task's mean RSSI. Absent until it has averaged its first batch |
-
-| `heap_kB` | `ESP.getFreeHeap()` |
-
-The card's corner reading is the WiFi RSSI rather than a decode's. The receiver
-takes one of the 24 device slots, and it is the only device keyed on its model
-alone, with no id.
-
-Reading the radio's temperature parks it in standby, so the sketch stops
-reception, reads the register directly with a bounded poll, restarts reception
-with `receiveDirect()`, and re-enables the interrupt. RadioLib's own
-`getTemperature()` is not used: it polls without a bound, and a lost SPI
-transaction there would hang the loop with the radio deaf. The read is skipped
-while RSSI is above the decode threshold or within `RECEIVER_QUIET_MS` of the
-last decode, rather than cutting a signal in half; a skipped read repeats the
-previous value, and the field is absent until the first one succeeds.
-
-The record does not enter the raw log or the decode count: `signal_store::record`
-takes `isDecode=false` for it, and the page recognises its topic's model
-segment, `Receiver`, and skips the Log tab entry it would otherwise add.
-`RECEIVER_TELEMETRY_MS` sets the interval.
+The page opens on Cards, a grid of one card per device, and also has a
+Devices table and a raw Log, behind tabs. See
+[docs/user-manual.md](docs/user-manual.md) for the tabs, the card grid and
+its persistence, and edit mode, and
+[docs/architecture.md](docs/architecture.md) for the receiver's own card and
+its telemetry fields.
 
 ## Limits
 

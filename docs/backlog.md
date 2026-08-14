@@ -9,9 +9,9 @@ receiver is one. The gaps below are about the receiver as it exists today.
 # Roadmap: splitting the receiver into a source, a bridge, and a dashboard
 
 The receiver decodes, holds state, and serves a page shaped around its own
-device table, all in one firmware image. Naming is stable now — device keys
-are `<source>/<model>/<id>` topics, matching what a bridge or a second
-receiver would publish — but nothing else can feed this page yet, and it
+device table, all in one firmware image. Device keys are
+`<source>/<model>/<id>` topics, matching what a bridge or a second receiver
+would publish, but nothing else can feed this page yet, and it
 cannot read anything else. A wired sensor or a real broker still has no way
 in.
 
@@ -115,8 +115,9 @@ to generate the constant into the page at build time.
 
 ## Heap allocation on the decode path
 
-`signal_store::record()` builds a `JsonDocument` (`signal_store.cpp:90`) and
-calls `doc["id"].as<String>()` (`:45`, `:47`) for every decode. ArduinoJson 7
+`signal_store::record()` builds a `JsonDocument` (`signal_store.cpp:116`) and
+calls `.as<String>()` on `doc["id"]` and `doc["channel"]` (`:64`, `:66`) for
+every decode. ArduinoJson 7
 pools and reallocates, and `String` allocates outright, so both run against the
 project's "static allocation only" rule. They are transient and uniformly sized,
 so the footprint stays flat — free heap held steady across a 4 minute sample —
@@ -126,7 +127,7 @@ and falling back only when it is genuinely a string.
 ## A slow HTTP client can still stall the receive path
 
 `ChunkedResponse::flush()` waits up to `CHUNK_WAIT_US` 150 ms per chunk with a
-`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:94-95`) before dropping the
+`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:111-112`) before dropping the
 client. That bound exists because aborting on the first not-ready probe
 truncated the page and left the browser running no script at all. The cost is
 that a genuinely slow reader can hold `loop()` for up to 1.5 s, and the
@@ -138,7 +139,8 @@ avoids.
 ## SSE eviction and auto-reconnect can churn
 
 With all four stream slots busy, a new viewer evicts the longest-attached one,
-whose browser reconnects five seconds later and evicts the next. Observed while
+whose browser reconnects three seconds later on the server-sent `retry` and
+evicts the next. Observed while
 testing with five clients plus an open tab. It is self-limiting and only happens
 when oversubscribed, but a viewer in that state sees the table reload
 repeatedly. Raising the slot count or backing off the page's reconnect would
@@ -150,14 +152,14 @@ The Cards tab cost 21,876 bytes against a design expectation of under 15 KB
 when that was last measured as a linked-size difference across three commits
 with `pio run -e esp32s3-generic`. The `CARDS_HTML` literal is 26,162 bytes
 today and `INDEX_HTML` 11,190, so the page is 37 KB of the image. The build
-sits at 88.8% of flash, so nothing is at risk today, but the figure was never
+sits at 90.3% of flash, so nothing is at risk today, but the figure was never
 brought back under the number it was written against. `CARDS_HTML` is not the
 obvious target: comments are 5 KB of the 37 and leading indentation another 2,
 both of which the project's own rules require, so the levers left are
 gzip-encoding the page or minifying it, and each needs the build step the
 design deliberately avoids. The bigger lever is elsewhere: the 319 compiled
-decoders are 172,009 bytes of `.flash.text`, 15% of the image, and `MY_DEVICES`
-in the fork's `rtl_433_devices.h` is what narrows them.
+decoders are 172,009 bytes of `.flash.text`, 15% of the image, and `MY_DEVICES` in the
+fork's `rtl_433_devices.h` is what narrows them.
 
 ## The grid floors cells at 20px and can overflow the viewport
 

@@ -6,7 +6,7 @@
 |---|---|
 | `GET /` | The live page. `200`, `text/html` |
 | `GET /<topic>` | The stored message. `200`, `application/json`, `Cache-Control: no-store`. `404` if there is none |
-| `POST /<topic>` | Publish. Body is JSON. `204` on success |
+| `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `200`, `text/event-stream` |
 
 `GET` and `POST` share one handler, so a malformed topic is `400` regardless of
@@ -93,8 +93,10 @@ bridge alike — and a filter segment holding a space is invalid. A client that
 wants a single-segment wildcard has to send `%2B`, not a bare `+`.
 
 With all four stream slots in use, a new connection evicts the longest-attached
-one; the evicted browser's `EventSource` reconnects on its own five seconds
-later.
+one by closing its socket. The evicted browser's `EventSource` reconnects on
+the server-sent `retry: 3000`, three seconds later. The five-second timer in
+the page's own reconnect logic is a separate fallback for a non-200 response,
+which eviction does not produce.
 
 ## Topics
 
@@ -125,7 +127,11 @@ frames already sent or still to come.
 Aliases live at the source, device, and reading level, and round-trip through
 `GET`, `POST`, and a `#` subscription like anything else. A missing `$alias`ed
 topic is not an error; it means no alias is set. An alias set through `POST`
-survives a reboot — it is written to NVS, not just held in RAM.
+is written to NVS and survives a reboot — unless the receiver's NVS partition
+did not open at startup, in which case a rename still returns `204` and holds
+for the session, but is never written and is gone at the next reboot. That
+case logs a warning to the serial console at startup; there is no way to tell
+it apart from a normal `204` over HTTP.
 
 An alias name longer than 31 bytes is truncated when stored, rather than
 rejected.
@@ -146,6 +152,13 @@ indicator in the header reads `connecting`, `live`, or `reconnecting`.
 One row per device: Model, ID, Reading (every field merged from messages seen
 so far, since a device like the Acurite 5n1 splits its data across message
 types), RSSI, Msgs, Age, an Alias box, and a Card checkbox.
+
+The Reading column excludes the fields the page treats as metadata rather than
+a sensor value: `model`, `id`, `channel`, `protocol`, `rssi`, `duration`,
+`mic`, `message_type`, `sequence_num`, `time`, `count`, and `build`. A value in
+the merge can come from an earlier message than the row's own Age, which
+tracks the newest message regardless of which fields it carried; a value can
+therefore be older than the age column shows.
 
 The Alias box names that device's card, the same name double-clicking the card
 label sets; both post to `<topic>/$alias`, so a name assigned in either place
@@ -176,6 +189,42 @@ rest) start at Bottom; everything else starts Shown.
 Raw messages as they arrive, newest first, capped at 200 rows in the browser.
 The device keeps no history of its own, so the Log starts empty on every page
 load — nothing before the page connected can be replayed into it.
+
+### Cards
+
+Cards is the tab the page opens on. It lays every device whose card is checked
+in the device table on a grid of square cells. Two number inputs in edit mode
+set the columns and rows, 6 × 4 by default and 1–24 each; the cell side is
+whichever of width ÷ columns and height ÷ rows is smaller, so the grid fits on
+screen with margin on the other axis. Nothing narrows the default for a small
+screen, so a phone gets the full 6 × 4 grid of very small cells until the user
+sets smaller numbers.
+
+A card spans whole cells. On first detection it is sized to hold its visible
+readings one per cell, in the most compact rectangle: one reading gives 1×1,
+three or four give 2×2, seven through nine give 3×3. Dragging the corner
+handle in edit mode resizes it, snapped to whole cells, from 1×1 up to the
+grid's own dimensions. Type size follows the measured cell, so a bigger card
+reads bigger, and shrinks further where a reading is too wide to fit at that
+size. Every reading on a card takes the same size, the one its widest needs.
+Cards that do not fit in the set number of rows render below the fold.
+
+Layout is per browser, in localStorage under `rtl433.cards.v2`: the grid size,
+the card order, which cards are hidden, and per card a size in cells, the
+value order, and which values are hidden or at the bottom. No name is stored
+there; a card's name is the published alias, or the device's key if none is
+set. Layout is never sent to the device, so two browsers can arrange the same
+receiver differently.
+
+A card the user showed or renamed is kept even after its device goes quiet, so
+a sensor that returns finds its card as it left it. A card that was never
+shown is dropped once its device is gone from the table, which is what keeps a
+band full of one-off false decodes from growing the stored layout without
+limit.
+
+Forget layouts, in edit mode, clears the lot after a confirmation prompt. The
+devices on screen at the time keep their cards; only ones seen afterwards
+start hidden.
 
 ### Cards edit mode
 
