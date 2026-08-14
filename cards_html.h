@@ -6,6 +6,11 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
 <section id="view-cards" hidden>
   <button id="edit-cards" title="Edit layout">&#9998;</button>
   <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
+  <span id="grid-size" title="Grid columns and rows">
+    <input id="grid-cols" type="number" min="1" max="24" aria-label="Grid columns">
+    <span>&times;</span>
+    <input id="grid-rows" type="number" min="1" max="24" aria-label="Grid rows">
+  </span>
   <div id="cards"></div>
 </section>
 <style>
@@ -39,6 +44,12 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
                 font-size:.75rem; padding:.4rem .7rem; border-radius:1.2rem; cursor:pointer;
                 border:1px solid var(--line); background:Canvas; color:inherit; display:none; }
 #view-cards.editing #forget-cards { display:block; }
+#grid-size { position:fixed; right:12rem; bottom:1rem; z-index:2; font-size:.75rem;
+             display:none; align-items:center; gap:.25rem; }
+#view-cards.editing #grid-size { display:flex; }
+#grid-size input { font:inherit; font-size:.75rem; width:3.2rem; padding:.3rem .35rem;
+                   border-radius:1.2rem; border:1px solid var(--line); background:Canvas;
+                   color:inherit; text-align:center; }
 #view-cards.editing .card { cursor:grab; touch-action:none; }
 #view-cards.editing .val { cursor:pointer; }
 .card.ghost, .val.ghost { opacity:.35; }
@@ -361,6 +372,8 @@ function startRename(key, lbl) {
 function forgetLayouts() {
   try { localStorage.removeItem(CARDS_KEY); } catch (e) { storageBroken = true; }
   cardState = blankState();
+  syncGridInputs();
+  measureGrid();
   renderCards();
 }
 
@@ -373,6 +386,26 @@ document.getElementById("edit-cards").onclick = () => {
 document.getElementById("forget-cards").onclick = () => {
   if (confirm("Forget every saved card layout in this browser?")) forgetLayouts();
 };
+
+function syncGridInputs() {
+  document.getElementById("grid-cols").value = String(cardState.grid.cols);
+  document.getElementById("grid-rows").value = String(cardState.grid.rows);
+}
+
+function applyGridInput(input, key) {
+  const n = gridNum(parseInt(input.value, 10), 0);
+  if (n) {
+    cardState.grid[key] = n;
+    saveCardState();
+  }
+  input.value = String(cardState.grid[key]);
+  measureGrid();
+  renderCards();
+}
+
+document.getElementById("grid-cols").onchange = ev => applyGridInput(ev.target, "cols");
+document.getElementById("grid-rows").onchange = ev => applyGridInput(ev.target, "rows");
+syncGridInputs();
 
 const CLICK_SLOP = 6;
 let dragging = null;

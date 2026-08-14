@@ -559,3 +559,57 @@ test("fmtValue rounds by magnitude and leaves non-numbers untouched", async ({ p
   ]);
   expect(out).toEqual(["71.2", "4.6", "0.03", "1013.3", "38", "CHECKSUM", "true"]);
 });
+
+test("the grid inputs are hidden until edit mode and set the tracks", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  await expect(page.locator("#grid-size")).toBeHidden();
+
+  await page.click("#edit-cards");
+  await expect(page.locator("#grid-size")).toBeVisible();
+  await expect(page.locator("#grid-cols")).toHaveValue("6");
+  await expect(page.locator("#grid-rows")).toHaveValue("4");
+
+  await page.fill("#grid-cols", "8");
+  await page.locator("#grid-cols").blur();
+  await page.fill("#grid-rows", "3");
+  await page.locator("#grid-rows").blur();
+
+  expect((await cardState(page)).grid).toEqual({ cols: 8, rows: 3 });
+  const tracks = await page.locator("#cards").evaluate(n => ({
+    cols: getComputedStyle(n).gridTemplateColumns.split(" ").length,
+    rows: getComputedStyle(n).gridTemplateRows.split(" ").length,
+  }));
+  expect(tracks).toEqual({ cols: 8, rows: 3 });
+});
+
+test("an out-of-range or non-numeric input reverts to the last good value", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.fill("#grid-cols", "9");
+  await page.locator("#grid-cols").blur();
+  expect((await cardState(page)).grid.cols).toBe(9);
+
+  for (const bad of ["0", "25", "-3", ""]) {
+    await page.fill("#grid-cols", bad);
+    await page.locator("#grid-cols").blur();
+    await expect(page.locator("#grid-cols")).toHaveValue("9");
+    expect((await cardState(page)).grid.cols).toBe(9);
+  }
+});
+
+test("the grid size survives a reload and Forget layouts resets it", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.fill("#grid-rows", "7");
+  await page.locator("#grid-rows").blur();
+
+  await page.reload();
+  await edit(page);
+  await expect(page.locator("#grid-rows")).toHaveValue("7");
+
+  page.once("dialog", d => d.accept());
+  await page.click("#forget-cards");
+  await expect(page.locator("#grid-rows")).toHaveValue("4");
+  expect(await cardState(page)).toBeNull();
+});
