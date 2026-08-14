@@ -87,6 +87,8 @@ The Cards tab lays each tracked device on a grid of square cells. Two
 number inputs in edit mode set the columns and rows, 6 × 4 by default and
 1–24 each; the cell side is whichever of width ÷ columns and height ÷ rows
 is smaller, so the grid fits on screen with margin on the other axis.
+Nothing narrows the default for a small screen, so a phone gets the full
+6 × 4 grid of very small cells until the user sets smaller numbers.
 
 A card spans whole cells. On first detection it is sized to hold its
 visible readings one per cell, in the most compact rectangle: one reading

@@ -85,11 +85,40 @@ update ages in place rather than rebuild.
 ## The card page costs more flash than budgeted
 
 The Cards tab now costs 21,876 bytes against a design expectation of under
-15 KB. The grid redesign moved it by 4,192 bytes. The build sits at 86% of
-flash, so nothing is at risk today, but the figure was never
-brought back under the number it was written against. Either the budget was
-wrong or the page needs trimming; `CARDS_HTML` is the obvious target, being
-mostly CSS and hand-rolled pointer handling.
+15 KB. The grid redesign moved it by 4,192 bytes. Both figures are linked
+firmware sizes from `pio run -e esp32s3-generic`, differenced across three
+commits, not the size of the literal; rerunning that diff reproduces them.
+For reference, the `CARDS_HTML` literal itself is about 21.5 KB now, against
+about 17.3 KB before this work. The build sits at 86% of flash, so nothing
+is at risk today, but the figure was never brought back under the number it
+was written against. `CARDS_HTML` is no longer the obvious target: of its
+bytes roughly 4 KB is CSS and roughly 2 KB is the explanatory comments the
+project's own rules require, so the only real lever left is gzip-encoding
+the page, which needs the build step the design deliberately avoids.
+
+## The grid floors cells at 20px and can overflow the viewport
+
+`measureGrid()` (`cards_html.h`) floors the cell side at 20px, which breaks
+the letterboxing the README promises. At 24 columns on a 360px-wide phone
+viewport the grid comes out 480px wide and the page scrolls sideways.
+
+## Cards that overflow the row count jitter the grid
+
+When cards overflow the set row count, the page grows a vertical scrollbar,
+which shrinks `#cards`'s `clientWidth` and so the next cell `measureGrid()`
+computes. It settles rather than looping, but the grid visibly jitters
+between two sizes as it does. Fixing it means measuring against
+`documentElement.clientWidth` or reserving the scrollbar gutter.
+
+## A second pointer can still write layout mid-gesture
+
+`toggleValue`, `toggleCardHidden`, `applyGridInput`, and a rename committed
+with Enter all call `saveCardState()`, and all are reachable with a second
+finger while a resize is in flight, which the project's rules say must not
+write. No corruption results today: the in-flight resize has written nothing
+yet, and `endResize` re-renders over whatever the second finger did. The
+drag and resize entry points already guard against each other; these four
+do not guard against either.
 
 ## The firmware self-test has never been read on a device
 
@@ -105,6 +134,20 @@ compilation and by reasoning, not by execution.
 
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the
   Escape path out of a rename.
+- The cell-side test re-derives `measureGrid()`'s own arithmetic inside the
+  page and compares `--cell` against the global that arithmetic wrote, so a
+  mistake mirrored in both places would still pass, and the 20px floor is
+  never exercised. Measuring a rendered 1×1 card's box instead would test the
+  arithmetic independently of it.
+- The test named "no card overflows its box at any size or value count" can
+  only catch overflow to the right and below: `scrollWidth`/`scrollHeight`
+  don't account for content above or left of the box, and `.lbl` sits at
+  `top:-.65em` by design. The name overclaims what the test checks.
+- Nothing drives the two-pointer case where a card drag and a corner resize
+  are in flight at once, which is the only way to reach the mutual-exclusion
+  guards between them. It is testable: the suite already dispatches synthetic
+  bubbling events from `page.evaluate`, and Chromium exposes real multi-touch
+  through `Input.dispatchTouchEvent` over a CDP session.
 
 ## Smaller items
 
@@ -123,3 +166,16 @@ compilation and by reasoning, not by execution.
   against a handful of synthetic devices. A wrong factor leaves a card sparse or
   crowded; it cannot overflow, because both axes use `minmax(0,1fr)` and `.fv`
   ellipsizes.
+- `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid
+  has no `gap`; the spacing moved to `.card { margin:.35rem }`. Re-adding a
+  `gap` would overflow the grid by `(cols-1) × gap`. Nothing in the file says
+  so, and no test guards it.
+- `valueRows` is computed from the values currently shown, and edit mode
+  shows hidden values too, so opening edit mode shrinks the type and closing
+  it grows it back. One test works around this by toggling edit off before
+  measuring.
+- A stored `w` or `h` outside 1–24 is discarded rather than clamped, so the
+  card is re-sized from its value count instead of pinned to 24.
+- `#grid-size` is fixed at `right:12rem` and is about 7rem wide, so below
+  roughly 320px of viewport width it reaches the left edge and overlaps the
+  grid in edit mode.
