@@ -119,7 +119,11 @@ function migrateSize(c) {
 function loadCardState() {
   cardState = blankState();
   let raw;
-  try { raw = localStorage.getItem(CARDS_KEY); } catch (e) { storageBroken = true; return; }
+  try {
+    // No v2 field carries a name to migrate, so a v1 entry is dropped rather than read.
+    localStorage.removeItem("rtl433.cards.v1");
+    raw = localStorage.getItem(CARDS_KEY);
+  } catch (e) { storageBroken = true; return; }
   if (!raw) return;
   let s;
   try { s = JSON.parse(raw); } catch (e) { return; }

@@ -138,10 +138,12 @@ own controls, and hidden cards as ghosts. A long device name in the
 label ellipsizes rather than overflowing the card; readings round to one
 or two decimal places for display, without changing the stored values.
 
-Layout is per browser, in localStorage under `rtl433.cards.v1`: the grid size,
-the card order, which cards are hidden, and per card a name, a size in cells,
-the value order, and which values are hidden or at the bottom. It is never sent
-to the device, so two browsers can arrange the same receiver differently.
+Layout is per browser, in localStorage under `rtl433.cards.v2`: the grid size,
+the card order, which cards are hidden, and per card a size in cells, the value
+order, and which values are hidden or at the bottom. A card's name is not
+stored here; it is the published alias, or the device's key if none is set.
+Layout is never sent to the device, so two browsers can arrange the same
+receiver differently.
 
 A card the user showed or renamed is kept even after its device goes quiet, so a
 sensor that returns finds its card as it left it. A card that was never shown is

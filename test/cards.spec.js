@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { startServer } = require("./harness");
-const { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, SOURCE, topicOf } = require("./fixtures");
+const { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, topicOf } = require("./fixtures");
 
 const ACURITE_KEY = topicOf(ACURITE);
 const OREGON_KEY = topicOf(OREGON);
@@ -44,6 +44,26 @@ test("the served page lists devices and streams live signals", async ({ page }) 
   await expect(page.locator("#devices tr:not(.vrow)")).toHaveCount(2);
 });
 
+test("a message with no time still renders, ages from arrival, and reaches the log", async ({ page }) => {
+  await open(page, [ACURITE]);
+  server.emit(OREGON, { time: null });
+
+  await page.click("#tab-devices");
+  const ageCell = page.locator(`#devices tr[data-key="${OREGON_KEY}"] td`).nth(5);
+  await expect(ageCell).not.toContainText("NaN");
+  await expect(ageCell).not.toContainText("Invalid");
+
+  await page.click("#tab-cards");
+  const cardAge = page.locator(`.card[data-key="${OREGON_KEY}"] .age`);
+  await expect(cardAge).not.toContainText("NaN");
+  await expect(cardAge).not.toContainText("Invalid");
+
+  await page.click("#tab-log");
+  const logTime = page.locator("#logrows tr").first().locator("td").first();
+  await expect(logTime).not.toContainText("NaN");
+  await expect(logTime).not.toContainText("Invalid");
+});
+
 test("the page opens on Cards and switches views", async ({ page }) => {
   await open(page, [ACURITE]);
   await expect(page.locator("#view-cards")).toBeVisible();
@@ -62,7 +82,7 @@ test("the page reloads when the device reports a different build", async ({ page
   await open(page, [RECEIVER]);
   await page.evaluate(() => { window.marker = 1; });
   server.emit(RECEIVER);
-  await expect(page.locator("#status")).toHaveText("live");
+  await page.waitForFunction(key => devices.get(key).count === 2, RECEIVER_KEY);
   expect(await page.evaluate(() => window.marker)).toBe(1);
 
   server.setBuild("other");
@@ -538,6 +558,16 @@ test("an open rename survives the render tick", async ({ page }) => {
   await page.waitForTimeout(1300); // longer than the one second render tick
   await expect(input).toBeVisible();
   await expect(input).toHaveValue("Roof");
+});
+
+test("committing a rename closes the input and shows the stream-derived name", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.dblclick(CARD + " .lbl");
+  await page.fill(CARD + " .lbl input", "Roof station");
+  await page.press(CARD + " .lbl input", "Enter");
+  await expect(page.locator(CARD + " .lbl input")).toHaveCount(0);
+  await expect(page.locator(CARD + " .nm")).toHaveText("Acurite-5n1/396");
 });
 
 test("the device table keeps up after a checkbox takes focus", async ({ page }) => {

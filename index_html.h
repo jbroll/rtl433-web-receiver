@@ -62,7 +62,6 @@ const DEVICE_MAX = 24;
 const ALIAS_SUFFIX = "/$alias";
 const devices = new Map();
 const aliases = new Map();
-let source = null;
 let logRows = [];
 let build = null;
 // CARDS_HTML is streamed after this script and reassigns these.
@@ -227,7 +226,8 @@ function shortKey(topic) { return topic.split("/").slice(1).join("/"); }
 
 function aliasOf(topic) { return aliases.get(topic) || ""; }
 
-function postAlias(topic, name) {}
+// Task 9 posts the alias asynchronously; the render must not wait on that.
+function postAlias(topic, name) { renderCards(); renderDevices(); }
 
 function applyAlias(topic, payload) {
   const key = topic.slice(0, -ALIAS_SUFFIX.length);
@@ -239,7 +239,6 @@ function applyAlias(topic, payload) {
 
 function applyMessage(topic, obj) {
   if (!obj || typeof obj !== "object") return;
-  if (source === null) source = topic.split("/")[0];
   // A message stamped before the device's clock was set has no time, so it ages
   // from its arrival instead.
   const stamped = obj.time ? Date.parse(obj.time) : NaN;
