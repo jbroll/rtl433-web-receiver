@@ -186,3 +186,17 @@ function freePort() {
     })
   })
 }
+
+test('a zero-length retained publish deletes the message, so GET is 404 again', async () => {
+  const bridge = await startBridge()
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 200)
+
+    await bridge.broker.publish('src/Acurite/1234', '')
+    // The deletion is only known when the broker echoes the empty publish.
+    await waitFor(async () => (await fetch(`${bridge.base}/src/Acurite/1234`)).status === 404)
+  } finally {
+    await bridge.close()
+  }
+})

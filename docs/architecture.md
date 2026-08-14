@@ -27,6 +27,11 @@ subscription, but that takes a round trip, and until it lands a `GET` of the
 topic just written would answer `404`. The binding's first test case is that
 it does not.
 
+An incoming message with a zero-length payload deletes the cache entry
+instead of replacing it, matching what the broker does with its own retain:
+a zero-length retained publish is how MQTT removes a retained message. A
+`GET` of that topic goes back to `404`.
+
 On a broker with a large topic space this is a real memory cost: the cache
 holds one entry per topic ever seen, for the life of the process, whether or
 not anyone is watching it. It is the first thing to revisit if the bridge

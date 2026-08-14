@@ -7,6 +7,9 @@ export function createCache() {
     set(topic, payload) {
       messages.set(topic, payload)
     },
+    delete(topic) {
+      messages.delete(topic)
+    },
     get(topic) {
       return messages.get(topic)
     },

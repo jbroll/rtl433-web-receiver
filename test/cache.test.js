@@ -34,3 +34,12 @@ test('a filter matching nothing returns an empty list', () => {
   cache.set('a/b/c', '1')
   assert.deepEqual(cache.match('x/#'), [])
 })
+
+test('delete removes the topic rather than emptying it', () => {
+  const cache = createCache()
+  cache.set('a/b/c', '{"t":1}')
+  cache.delete('a/b/c')
+  assert.equal(cache.get('a/b/c'), undefined)
+  assert.equal(cache.size(), 0)
+  assert.deepEqual(cache.match('#'), [])
+})
