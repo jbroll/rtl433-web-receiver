@@ -254,21 +254,25 @@ test('an error is reported again once something has changed', async () => {
   }
 })
 
-test('a shutdown does not report the disconnect it causes', async () => {
+test('a shutdown reports neither the disconnect nor the error it causes', async () => {
   const broker = await startBroker()
   try {
     const disconnects = []
+    const errors = []
     const client = connectBroker({
       url: broker.url,
       cache: createCache(),
       onMessage: () => {},
       onDisconnect: () => disconnects.push(Date.now()),
+      onError: (err) => errors.push(err),
     })
     await client.subscribed
     await client.end()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await broker.close()
+    await new Promise((resolve) => setTimeout(resolve, 200))
 
     assert.deepEqual(disconnects, [])
+    assert.deepEqual(errors, [])
   } finally {
     await broker.close()
   }

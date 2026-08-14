@@ -27,6 +27,8 @@ export function connectBroker({
     resubscribe: true,
   })
 
+  let ending = false
+
   // Swallowing these left a bridge that answered 503 to everything and said
   // nothing about why, for a wrong password as much as a missing broker. The
   // listener also has to exist: an 'error' event with none is thrown.
@@ -35,7 +37,7 @@ export function connectBroker({
   // reported, and a connection clears what was.
   let reported = null
   client.on('error', (err) => {
-    if (err.message === reported) return
+    if (ending || err.message === reported) return
     reported = err.message
     onError?.(err)
   })
@@ -47,7 +49,6 @@ export function connectBroker({
 
   const waiting = new Map()
   let up = false
-  let ending = false
 
   client.on('connect', () => {
     up = true
