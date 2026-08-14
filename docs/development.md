@@ -41,6 +41,11 @@ runs the whole suite over a slow link. That is the check that a test passes
 by construction rather than because loopback is faster than an HTTP connect;
 two SSE tests used to depend on the difference.
 
+The setting is a floor, not an override: a test that asks for `delayMs: 40`
+because it needs a message still in flight — the two `POST`s to one topic in
+`test/broker.test.js` and `test/http.test.js`, and the late subscriber in
+`test/events.test.js` — gets 40 ms, or the setting if it is higher.
+
 ## Adding a test
 
 Match the existing file per module: `test/topic.test.js` for

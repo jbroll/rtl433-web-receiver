@@ -8,10 +8,11 @@ import Aedes from 'aedes'
 // tells a timing-dependent test from a correct one.
 const DEFAULT_DELAY_MS = Number(process.env.MQTT_TEST_LATENCY_MS ?? 0)
 
-export async function startBroker(
-  listenPort = 0,
-  { delayMs = DEFAULT_DELAY_MS, refuseSubscribe = false } = {},
-) {
+// A test that names its own delay needs at least that much; the setting is a
+// floor under the whole suite, so no test runs on a faster link than it asks
+// for.
+export async function startBroker(listenPort = 0, { delayMs = 0, refuseSubscribe = false } = {}) {
+  const delay = Math.max(delayMs, DEFAULT_DELAY_MS)
   const aedes = new Aedes()
   if (refuseSubscribe) {
     aedes.authorizeSubscribe = (client, sub, done) => done(new Error('subscription refused'))
@@ -19,7 +20,7 @@ export async function startBroker(
   const server = net.createServer(aedes.handle)
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
 
-  const proxy = await startProxy({ target: server.address().port, listenPort, delayMs })
+  const proxy = await startProxy({ target: server.address().port, listenPort, delayMs: delay })
 
   return {
     url: `mqtt://127.0.0.1:${proxy.port}`,

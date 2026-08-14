@@ -6,7 +6,7 @@ import { startBroker } from './broker.js'
 // Given a url, the bridge is pointed at that address and started without
 // waiting for anything there: that is the unreachable-broker case.
 export async function startBridge({ url, delayMs, echoTimeoutMs } = {}) {
-  let mqttBroker = url ? null : await startBroker(0, delayMs === undefined ? {} : { delayMs })
+  let mqttBroker = url ? null : await startBroker(0, { delayMs })
   const cache = createCache()
   let bridge
   const broker = connectBroker({
@@ -41,7 +41,7 @@ export async function startBridge({ url, delayMs, echoTimeoutMs } = {}) {
     restartBroker: async () => {
       const brokerPort = mqttBroker.port
       await stopBroker()
-      mqttBroker = await startBroker(brokerPort, delayMs === undefined ? {} : { delayMs })
+      mqttBroker = await startBroker(brokerPort, { delayMs })
       brokerStopped = false
     },
     close: async () => {

@@ -84,6 +84,12 @@ request is sent, so it must be percent-encoded as `%23`.
 Filters are fixed for the life of the connection. To change what a client
 watches, it reconnects with new `f` parameters.
 
+A client must tolerate the same message arriving more than once. When the
+bridge's own connection to the broker drops and is remade, it is replayed
+every retained message and passes each one on, so an open stream is re-sent
+every topic it matches, unchanged values included. Nothing marks these as a
+replay; a client that acts on each event should be able to act on a repeat.
+
 ## Other status codes
 
 - `405` — a method other than GET/POST on a topic path, or anything but GET

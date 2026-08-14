@@ -14,8 +14,10 @@
 - A slow SSE reader is never dropped; `res.write` in `src/sse.js` buffers
   without bound.
 - Clearing the cache on reconnect is invisible to an SSE subscriber: it is
-  told nothing about the topics that went away, and is not replayed the ones
-  that come back.
+  told nothing about the topics that went away, and the ones that come back
+  arrive as ordinary messages, so a subscriber is re-sent every matching
+  retained topic on every reconnect whether or not its value changed. See
+  [`docs/user-manual.md`](user-manual.md#get-events--subscribe).
 - `503` is decided from `broker.connected()` at request time, so a request
   in flight when the broker drops can still get a `404` or a stale `200`.
 - A `POST` is held for the broker's round trip, so a publisher's throughput
@@ -46,4 +48,9 @@
   cannot reproduce the startup ordering the `bridge?.broadcast` guard in
   `bin/mqtt-http-bridge.js` exists for. That guard is untested.
 - The package is not published to a registry, so there is no `npx` or
-  `npm install -g` path; it runs from a clone.
+  `npm install -g` path; it runs from a clone. `package.json` declares a
+  `bin` entry for a command nothing installs.
+- `SIGTERM` while a `POST` is waiting for its echo drops the request with no
+  HTTP status at all: the streams and the server are closed and the broker
+  connection ended without waiting for the publish to come back. The client
+  sees the connection go away and cannot tell whether the message was taken.
