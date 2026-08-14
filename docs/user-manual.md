@@ -45,7 +45,12 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
 
 - `204` on success, empty body.
 - `400` if the body is not valid JSON, or the topic is malformed.
-- `503` if the bridge is not currently connected to the broker.
+- `503` if the bridge is not currently connected to the broker, or the
+  publish itself fails.
+
+A `204` means the message is readable: a `GET` of the same topic immediately
+after returns the body byte for byte, without waiting for the broker to echo
+the publish back.
 
 Publishing to a `$alias` topic works the same way; see
 [`docs/binding.md`](binding.md#aliases).
@@ -78,5 +83,6 @@ watches, it reconnects with new `f` parameters.
 
 - `405` — a method other than GET/POST on a topic path, or anything but GET
   on `/events`.
-- `500` — an unhandled error inside the bridge; the response carries no
-  detail.
+
+`400`, `404`, `405`, and `503` are the only statuses the binding defines. A
+`500` means an unforeseen error inside the bridge, which is a bug.

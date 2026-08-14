@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 
+import { createCache } from '../src/cache.js'
+import { createBridge } from '../src/server.js'
 import { startBridge, waitFor } from './helpers/bridge.js'
 
 test('a topic with no message is 404, and a POST makes it readable byte for byte', async () => {
@@ -131,5 +133,25 @@ test('a malformed percent-escape is 400 even when the broker is down', async () 
     assert.equal(malformed.status, 400)
   } finally {
     await bridge.close()
+  }
+})
+
+test('a publish the broker rejects is 503, and caches nothing', async () => {
+  const cache = createCache()
+  const bridge = createBridge({
+    broker: {
+      connected: () => true,
+      publish: () => Promise.reject(new Error('broker went away mid-publish')),
+    },
+    cache,
+  })
+  await new Promise((resolve) => bridge.httpServer.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${bridge.httpServer.address().port}`
+  try {
+    const posted = await fetch(`${base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+    assert.equal(posted.status, 503)
+    assert.equal((await fetch(`${base}/src/Acurite/1234`)).status, 404)
+  } finally {
+    await new Promise((resolve) => bridge.httpServer.close(resolve))
   }
 })
