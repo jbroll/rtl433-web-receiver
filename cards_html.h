@@ -287,7 +287,9 @@ function buildCard(rec, c) {
   rz.onpointerdown = ev => {
     if (!editing || ev.button !== 0 || dragging) return;
     ev.stopPropagation();
-    beginResize(ev, card, w, h);
+    // c.w/c.h, not the clamped w/h this card is drawn at: a resize must move
+    // relative to the stored size, not destroy it by starting from a shrunk render.
+    beginResize(ev, card, c.w, c.h);
   };
 
   // dblclick/pointerdown stay wired to lbl for its whole lifetime, and both
@@ -494,8 +496,12 @@ function endResize(ev) {
   const r = resizing;
   if (!r || ev.pointerId !== r.pointerId) return;
   resizing = null;
-  const c = cardState.cards[r.key];
-  if (c) { c.w = r.w; c.h = r.h; saveCardState(); }
+  // A gesture that ends at the size it started from expressed no intent to
+  // resize, so it must not overwrite a stored size the current grid clamps.
+  if (r.w !== r.w0 || r.h !== r.h0) {
+    const c = cardState.cards[r.key];
+    if (c) { c.w = r.w; c.h = r.h; saveCardState(); }
+  }
   renderCards();
 }
 

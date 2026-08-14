@@ -658,6 +658,40 @@ test("the resize handle only appears in edit mode", async ({ page }) => {
   await expect(page.locator(CARD + " .rz")).toBeVisible();
 });
 
+test("a tap on the resize handle with no movement leaves the stored size untouched", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await setGrid(page, 3, 3);
+  await setSize(page, "Acurite-5n1/396", 6, 4);
+  await page.evaluate(() => saveCardState());
+  expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span 3 auto" });
+
+  const box = await page.locator(CARD + " .rz").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.up();
+
+  const c = (await cardState(page)).cards["Acurite-5n1/396"];
+  expect([c.w, c.h]).toEqual([6, 4]);
+});
+
+test("a resize starting from a clamped render moves relative to the stored size", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await setGrid(page, 3, 3);
+  await setSize(page, "Acurite-5n1/396", 6, 4);
+  await page.evaluate(() => saveCardState());
+  const cell = await page.evaluate(() => cellSide);
+
+  // Drawn width is clamped to 3; dragging left by one cell from a baseline of
+  // the stored 6 still clamps at the grid's 3 columns, not below it.
+  await dragHandle(page, CARD, -cell, 0);
+
+  const c = (await cardState(page)).cards["Acurite-5n1/396"];
+  expect(c.w).toBe(3);
+  expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span " + c.h + " auto" });
+});
+
 test("dragging the corner snaps to whole cells and persists", async ({ page }) => {
   await open(page, [ACURITE]);
   await edit(page);
