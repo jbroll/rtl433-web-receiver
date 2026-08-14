@@ -32,4 +32,11 @@ test('the environment overrides every field', () => {
 
 test('a PORT that is not a number is rejected rather than defaulted', () => {
   assert.throws(() => readConfig({ PORT: 'http' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '  ' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '8080.5' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '65536' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '-1' }), /PORT/)
+  assert.equal(readConfig({ PORT: '0' }).port, 0)
+  assert.equal(readConfig({ PORT: '65535' }).port, 65535)
 })
