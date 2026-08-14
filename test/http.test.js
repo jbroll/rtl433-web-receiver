@@ -60,6 +60,27 @@ test('an alias round-trips, and a device without one has no alias topic', async 
   await bridge.close()
 })
 
+test('a malformed percent-escape in the path is 400, and the bridge survives to serve the next request', async () => {
+  const bridge = await startBridge()
+
+  const malformed = await fetch(`${bridge.base}/%E0%A4%A`)
+  assert.equal(malformed.status, 400)
+
+  const missing = await fetch(`${bridge.base}/src/Acurite/1234`)
+  assert.equal(missing.status, 404)
+
+  await bridge.close()
+})
+
+test('a POST body that fails to parse as JSON is 400, not a thrown error', async () => {
+  const bridge = await startBridge()
+
+  const bad = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{not valid json' })
+  assert.equal(bad.status, 400)
+
+  await bridge.close()
+})
+
 test('every request is 503 once the broker is gone', async () => {
   const bridge = await startBridge()
   await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })

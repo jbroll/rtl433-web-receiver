@@ -4,7 +4,12 @@ import { validTopic } from './topic.js'
 
 export function createBridge({ broker, cache }) {
   const bridge = {
-    httpServer: http.createServer((req, res) => handle(req, res, { broker, cache })),
+    httpServer: http.createServer((req, res) => {
+      handle(req, res, { broker, cache }).catch(() => {
+        if (res.headersSent) return res.end()
+        send(res, 500, 'internal error')
+      })
+    }),
     clients: new Set(),
     broadcast() {},
   }
@@ -13,7 +18,13 @@ export function createBridge({ broker, cache }) {
 
 async function handle(req, res, { broker, cache }) {
   const url = new URL(req.url, 'http://bridge.invalid')
-  const topic = decodeURIComponent(url.pathname.slice(1))
+  let topic
+  try {
+    topic = decodeURIComponent(url.pathname.slice(1))
+  } catch (err) {
+    if (err instanceof URIError) return send(res, 400, 'malformed topic')
+    throw err
+  }
 
   if (!broker.connected()) return send(res, 503, 'broker unavailable')
   if (!validTopic(topic)) return send(res, 400, 'malformed topic')
@@ -26,7 +37,12 @@ async function handle(req, res, { broker, cache }) {
   }
 
   if (req.method === 'POST') {
-    const body = await readBody(req)
+    let body
+    try {
+      body = await readBody(req)
+    } catch {
+      return
+    }
     try {
       JSON.parse(body)
     } catch {
