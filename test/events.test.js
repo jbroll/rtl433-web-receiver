@@ -154,3 +154,30 @@ test('a subscriber whose connection dies does not take the bridge down with it',
     await bridge.close()
   }
 })
+
+test('a retained topic matching two filters is replayed once', async () => {
+  const bridge = await startBridge()
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
+
+    const stream = await fetch(`${bridge.base}/events?f=src/Acurite/%2B&f=src/%23`)
+    try {
+      const reading = readEvents(stream, 2)
+
+      await fetch(`${bridge.base}/src/Other/1`, { method: 'POST', body: '{"t":2}' })
+
+      assert.deepEqual(await reading, [
+        { topic: 'src/Acurite/1', payload: { t: 1 } },
+        { topic: 'src/Other/1', payload: { t: 2 } },
+      ])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
+  } finally {
+    await bridge.close()
+  }
+})

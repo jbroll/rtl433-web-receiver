@@ -11,10 +11,9 @@ let bridge
 const broker = connectBroker({
   url: config.mqttUrl,
   cache,
-  // A broker with retained messages can deliver a publish while the
-  // subscription await below is still pending, before `bridge` is assigned.
-  // The cache has already recorded the message, and any subscriber that
-  // connects later is replayed from it, so dropping this one is safe.
+  // A message delivered before `bridge` is assigned is already in the cache,
+  // and any subscriber connecting later is replayed from it, so it is safe
+  // to drop.
   onMessage: (topic, payload) => bridge?.broadcast(topic, payload),
   username: config.username,
   password: config.password,

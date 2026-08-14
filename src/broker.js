@@ -24,7 +24,7 @@ export function connectBroker({ url, cache, onMessage, username, password }) {
 
   client.on('message', (topic, payload) => {
     // A zero-length retained publish is how MQTT deletes a retained message.
-    // Caching the empty string would serve a 200 for something the broker no
+    // Caching the empty payload would serve a 200 for something the broker no
     // longer holds.
     if (payload.length === 0) cache.delete(topic)
     else cache.set(topic, payload)
