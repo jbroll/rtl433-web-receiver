@@ -60,24 +60,39 @@ export function connectBroker({
   client.on('message', (topic, payload, packet) => {
     cacheMessage(cache, topic, payload, packet)
     onMessage(topic, payload)
-    const waiters = waiting.get(topic)
-    if (!waiters) return
-    waiting.delete(topic)
-    for (const waiter of waiters) waiter()
+    // Waking on the topic alone answered a publish with someone else's
+    // message. The same bytes from another publisher are still an answer:
+    // the cache then holds exactly what this waiter published.
+    for (const waiter of waiting.get(topic) ?? []) {
+      if (waiter.payload.equals(payload)) waiter.arrived()
+    }
   })
 
-  function echo(topic) {
+  function echo(topic, payload) {
+    const expected = Buffer.isBuffer(payload) ? payload : Buffer.from(payload)
     return new Promise((resolve, reject) => {
+      const waiter = {
+        payload: expected,
+        arrived: () => {
+          clearTimeout(timer)
+          forget()
+          resolve()
+        },
+      }
       const timer = setTimeout(() => {
-        waiting.get(topic)?.delete(arrived)
+        forget()
         reject(new Error(`the broker did not echo ${topic} within ${echoTimeoutMs} ms`))
       }, echoTimeoutMs)
-      const arrived = () => {
-        clearTimeout(timer)
-        resolve()
+      // An empty Set left behind is a topic's worth of memory per publish
+      // that ever timed out.
+      const forget = () => {
+        const waiters = waiting.get(topic)
+        if (!waiters) return
+        waiters.delete(waiter)
+        if (waiters.size === 0) waiting.delete(topic)
       }
       const waiters = waiting.get(topic) ?? new Set()
-      waiters.add(arrived)
+      waiters.add(waiter)
       waiting.set(topic, waiters)
     })
   }
@@ -90,10 +105,11 @@ export function connectBroker({
     // when the client is offline, it queues the packet and calls back whenever
     // a broker reappears.
     publish: (topic, payload) => {
-      const echoed = echo(topic)
+      const echoed = echo(topic, payload)
       client.publish(topic, payload, { qos: 0, retain: true }, () => {})
       return echoed
     },
+    waiting: () => waiting.size,
     connected: () => client.connected,
     end: () => client.endAsync(),
   }

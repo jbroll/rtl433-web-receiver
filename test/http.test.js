@@ -268,3 +268,21 @@ test('a topic the old broker held is not served after a reconnect to an empty on
     await bridge.close()
   }
 })
+
+test('a POST the broker never took is 503, even when another publisher writes that topic', async () => {
+  const bridge = await startBridge({ echoTimeoutMs: 500 })
+  const foreign = await mqtt.connectAsync(bridge.directUrl())
+  try {
+    bridge.blackhole('up')
+    const posting = fetch(`${bridge.base}/src/Acurite/1234`, {
+      method: 'POST',
+      body: '{"mine":true}',
+    })
+    await foreign.publishAsync('src/Acurite/1234', '{"foreign":true}', { qos: 0, retain: true })
+
+    assert.equal((await posting).status, 503)
+  } finally {
+    await foreign.endAsync()
+    await bridge.close()
+  }
+})

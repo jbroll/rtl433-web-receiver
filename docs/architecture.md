@@ -27,6 +27,13 @@ answers `204`, so a `GET` right after a `204` reads what was posted, the
 cache stays in the broker's own order, and a subscriber that connects after a
 `POST` sees the message once rather than twice.
 
+An echo answers a `POST` only when its payload is the bytes that `POST`
+published. Matching on the topic alone let the first message on a topic answer
+every `POST` waiting on it, so two `POST`s in flight at once could each be
+answered by the other's echo, and a foreign publisher's message could answer a
+publish the broker never took. Identical bytes from another publisher still
+answer: the cache then holds exactly what the waiter published.
+
 Writing the payload locally as well was the alternative, and answers sooner.
 It also puts a second writer on the cache: a late echo of an earlier publish
 lands on top of a newer local write, and a `GET` after a `204` goes

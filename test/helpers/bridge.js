@@ -36,7 +36,8 @@ export async function startBridge({ url, delayMs, echoTimeoutMs } = {}) {
     broker,
     cache,
     stopBroker,
-    blackhole: () => mqttBroker?.blackhole(),
+    blackhole: (direction) => mqttBroker?.blackhole(direction),
+    directUrl: () => mqttBroker?.directUrl,
     restartBroker: async () => {
       const brokerPort = mqttBroker.port
       await stopBroker()

@@ -21,8 +21,11 @@
 - A `POST` is held for the broker's round trip, so a publisher's throughput
   is bounded by the link's latency rather than by the bridge. A publish the
   broker never echoes holds it for the full 5 seconds before the `503`.
-- Echoes are matched by topic only, so two `POST`s to one topic in flight at
-  once can each be answered by the other's echo.
+- An echo is matched by topic and payload, so a `204` is still possible for a
+  publish the broker lost on a half-open link: another publisher sending the
+  same bytes to that topic inside the wait answers it. The broker and the
+  cache then hold those bytes, so the client's next `GET` agrees with its
+  `204`; what it does not prove is that the bridge's own packet arrived.
 - A `500` is still possible for an error the bridge does not foresee. The
   binding defines no such status; reaching it is a bug, not a contract.
 - A retained message deleted by a zero-length publish reaches SSE

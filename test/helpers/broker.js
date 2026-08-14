@@ -23,6 +23,9 @@ export async function startBroker(
 
   return {
     url: `mqtt://127.0.0.1:${proxy.port}`,
+    // Reaches the broker without the proxy, so a client here keeps talking
+    // while the proxied one is cut off.
+    directUrl: `mqtt://127.0.0.1:${server.address().port}`,
     port: proxy.port,
     blackhole: proxy.blackhole,
     close: async () => {
@@ -34,22 +37,24 @@ export async function startBroker(
 
 async function startProxy({ target, listenPort, delayMs }) {
   const sockets = new Set()
-  let dropping = false
+  let dropping = 'nothing'
 
-  const relay = (from, to) => {
+  const drops = (direction) => dropping === 'both' || dropping === direction
+
+  const relay = (from, to, direction) => {
     from.on('data', (chunk) => {
-      if (dropping) return
+      if (drops(direction)) return
       // Equal delays fire in the order they were set, so the byte stream
       // stays in order.
-      if (delayMs > 0) setTimeout(() => forward(to, chunk), delayMs)
-      else forward(to, chunk)
+      if (delayMs > 0) setTimeout(() => forward(to, chunk, direction), delayMs)
+      else forward(to, chunk, direction)
     })
     from.on('error', () => to.destroy())
     from.on('close', () => to.destroy())
   }
 
-  const forward = (to, chunk) => {
-    if (!dropping && to.writable) to.write(chunk)
+  const forward = (to, chunk, direction) => {
+    if (!drops(direction) && to.writable) to.write(chunk)
   }
 
   const server = net.createServer((incoming) => {
@@ -57,15 +62,17 @@ async function startProxy({ target, listenPort, delayMs }) {
     sockets.add(incoming).add(outgoing)
     incoming.on('close', () => sockets.delete(incoming))
     outgoing.on('close', () => sockets.delete(outgoing))
-    relay(incoming, outgoing)
-    relay(outgoing, incoming)
+    relay(incoming, outgoing, 'up')
+    relay(outgoing, incoming, 'down')
   })
   await new Promise((resolve) => server.listen(listenPort, '127.0.0.1', resolve))
 
   return {
     port: server.address().port,
-    blackhole: () => {
-      dropping = true
+    // 'up' drops what the client sends and leaves what the broker sends
+    // coming, which is a publish the broker never took on a live connection.
+    blackhole: (direction = 'both') => {
+      dropping = direction
     },
     close: async () => {
       for (const socket of sockets) socket.destroy()
