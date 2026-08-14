@@ -263,13 +263,19 @@ bool selfTest() {
   sweepStale(base + 120000, 60000);
   ok &= check("a stale device is swept", deviceCount() == 0);
 
+  // A lastSeen set 100ms before millis() wraps, swept from a now that has
+  // already wrapped past zero: numerically now < lastSeen, but
+  // (unsigned long)(now - lastSeen) still yields the true elapsed time.
   reset();
   record("{\"model\":\"Wrap\",\"id\":3,\"temperature_C\":3}", -50);
-  unsigned long wrapBase = _devices[0].lastSeen;
-  ok &= check("unsigned subtraction survives a millis rollover",
-              (unsigned long)(wrapBase - 10) - wrapBase > 60000);
-  sweepStale(wrapBase + 1, 60000);
-  ok &= check("a device seen just now survives near rollover", deviceCount() == 1);
+  unsigned long nearWrap = (unsigned long)-1 - 100;
+  _devices[0].lastSeen = nearWrap;
+  sweepStale(nearWrap + 151, 60000); // wraps to 50; 151ms elapsed, inside the window
+  ok &= check("a device inside the window survives a millis rollover",
+              deviceCount() == 1);
+  sweepStale(nearWrap + 70000, 60000); // wraps to 69899; 70000ms elapsed, past the window
+  ok &= check("a device past the window is swept across a millis rollover",
+              deviceCount() == 0);
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
