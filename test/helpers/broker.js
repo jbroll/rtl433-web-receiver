@@ -12,7 +12,7 @@ export async function startBroker() {
     url: `mqtt://127.0.0.1:${port}`,
     close: () =>
       new Promise((resolve) => {
-        server.close(() => aedes.close(resolve))
+        aedes.close(() => server.close(resolve))
       }),
   }
 }
