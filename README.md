@@ -59,14 +59,21 @@ attempt times out after 20 seconds before the receiver starts.
 
 | Path | Returns |
 |---|---|
-| `/` | the live page: a device table, a raw log, and a card dashboard, behind tabs |
-| `/api/state` | snapshot of the device table and event ring |
+| `/` | the live page: a card dashboard, a device table, and a raw log, behind tabs; the page opens on Cards |
+| `/api/state` | build id and a snapshot of the device table and event ring |
 | `/events` | SSE stream; each `signal` event's `data` is JSON with `at`, `now`, `key`, `rssi`, `count`, and `payload`; a `:keepalive` comment every 15 s |
-| `/api/status` | uptime, free heap, WiFi RSSI, IP, total decodes, dropped count |
+| `/api/status` | uptime, build id, free heap, WiFi RSSI, IP, total decodes, dropped count |
 
 The page loads `/api/state`, then applies `signal` events as they arrive. On
 reconnect it re-fetches `/api/state`, so a missed event cannot leave the table
 stale.
+
+`build` is `git describe --always --dirty --exclude "*"` at compile time, set by
+`load_env.py`. The exclude suppresses tag names, so the id is always the
+abbreviated commit hash. The page keeps the id its first fetch returned and reloads
+itself when a later one differs, so a reflash reboots the device, the stream
+reconnects, and every open browser picks up the new page. A rebuild with no new
+commit keeps the same id, so uncommitted work needs a manual reload.
 
 Payloads are truncated to 512 characters and carried as JSON strings, so a
 truncated payload cannot break a response. The page shows the raw text when it
@@ -81,10 +88,26 @@ Acurite 5n1 splits its data across two message types, so a row keeps what
 earlier messages reported rather than showing only the latest half. A value can
 therefore be older than the age column, which tracks the newest message.
 
+A new device gets no card. The Card checkbox is how it gets one, and it is the
+same setting as ✕ on the card in edit mode, so a device hidden either way is
+unchecked here. Decodes from protocols nobody owns arrive on any 433 MHz
+receiver, and this keeps them off the dashboard.
+
+The Alias box names that device's card, the same name double-clicking the card
+label sets. Emptying it puts the key back. The table rebuilds every second but
+holds still while a text box or a select in it has focus, so an entry in
+progress is never interrupted. Only the tab on screen is rebuilt; switching to
+one draws it.
+
+Under each device is one row per reading, carrying that reading's current value
+and its display mode. This is where a card's contents are chosen; the card's own
+edit mode only arranges what is already there.
+
 ## Cards
 
-The Cards tab lays each tracked device on a grid of square cells. Two
-number inputs in edit mode set the columns and rows, 6 × 4 by default and
+Cards is the tab the page opens on. It lays every device whose card is checked
+in the device table on a grid of square cells. Two number inputs in edit mode
+set the columns and rows, 6 × 4 by default and
 1–24 each; the cell side is whichever of width ÷ columns and height ÷ rows
 is smaller, so the grid fits on screen with margin on the other axis.
 Nothing narrows the default for a small screen, so a phone gets the full
@@ -100,16 +123,65 @@ wide to fit at that size. Every reading on a card takes the same size, the
 one its widest needs. Cards that do not fit in the set number of rows
 render below the fold.
 
-The pencil button opens edit mode, where cards drag to reorder, values
-drag to reorder within their card, clicking a value hides it, ✕ hides the
-card, and double-clicking the label renames it. A long device name in the
+Every value has three display modes, set from its row in the device table.
+Shown puts it in the card body at full size. Bottom puts it small and labelled
+along the bottom-left edge, mirroring the age at bottom-right, which is where a
+battery flag belongs. Hidden drops it. rtl_433's status fields (`battery_ok`,
+`test`, `tamper`, and the rest) start at the bottom; everything else starts
+shown.
+
+The pencil button opens edit mode, which arranges the card and nothing else:
+cards drag to reorder, values drag to reorder within their card, the corner
+handle resizes, ✕ hides the card, and double-clicking the label renames it. A
+card shows the same values in edit mode as out of it; what appears is the card's
+own controls, and hidden cards as ghosts. A long device name in the
 label ellipsizes rather than overflowing the card; readings round to one
 or two decimal places for display, without changing the stored values.
 
-Layout is per browser, in localStorage under `rtl433.cards.v1`. It is never
-sent to the device, so two browsers can arrange the same receiver differently.
-Layouts are never dropped on their own, so a sensor that goes quiet and returns
-keeps its card. Forget layouts, in edit mode, clears them all.
+Layout is per browser, in localStorage under `rtl433.cards.v1`: the grid size,
+the card order, which cards are hidden, and per card a name, a size in cells,
+the value order, and which values are hidden or at the bottom. It is never sent
+to the device, so two browsers can arrange the same receiver differently.
+
+A card the user showed or renamed is kept even after its device goes quiet, so a
+sensor that returns finds its card as it left it. A card that was never shown is
+dropped once its device is gone from the table, which is what keeps a band full
+of one-off false decodes from growing the stored layout without limit.
+
+Forget layouts, in edit mode, clears the lot after a confirmation prompt. The
+devices on screen at the time keep their cards; only ones seen afterwards start
+hidden.
+
+## The receiver's own card
+
+The firmware records itself as a device named `Receiver` once a minute, so the
+page renders it with everything it already does for a sensor. It is the one
+device that starts with its card shown, since it cannot be a false decode.
+
+| Field | Source |
+|---|---|
+| `temperature_C` | ESP32-S3 die, `temperatureRead()`. Runs well above ambient with WiFi up |
+| `radio_C` | SX1231 die. RadioLib returns the register negated and uncalibrated; `RADIO_TEMP_OFFSET` (91) corrects it, and the part is only good to ±5 °C, so read it as a trend |
+| `noise_dBm` | `rtl_433_ESP::averageRssi`, the receiver task's mean RSSI. Absent until it has averaged its first batch |
+
+| `heap_kB` | `ESP.getFreeHeap()` |
+
+The card's corner reading is the WiFi RSSI rather than a decode's. The receiver
+takes one of the 24 device slots, and it is the only device keyed on its model
+alone, with no id.
+
+Reading the radio's temperature parks it in standby, so the sketch stops
+reception, reads the register directly with a bounded poll, restarts reception
+with `receiveDirect()`, and re-enables the interrupt. RadioLib's own
+`getTemperature()` is not used: it polls without a bound, and a lost SPI
+transaction there would hang the loop with the radio deaf. The read is skipped
+while RSSI is above the decode threshold or within `RECEIVER_QUIET_MS` of the
+last decode, rather than cutting a signal in half; a skipped read repeats the
+previous value, and the field is absent until the first one succeeds.
+
+The record does not enter the raw log or the decode count, on the device or in
+the browser: its SSE frame carries `"log":0` and the page applies it to the
+device without logging it. `RECEIVER_TELEMETRY_MS` sets the interval.
 
 ## Limits
 

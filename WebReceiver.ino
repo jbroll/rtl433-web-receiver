@@ -4,6 +4,8 @@
  Copy .env.example to .env and fill it in before building.
 */
 
+#include <stdarg.h>
+
 #include <ArduinoJson.h>
 #include <ArduinoLog.h>
 #include <ESPmDNS.h>
@@ -35,6 +37,31 @@
 #define WIFI_CONNECT_MS   20000
 #define WIFI_RETRY_MS     30000
 
+#ifndef RECEIVER_TELEMETRY_MS
+#define RECEIVER_TELEMETRY_MS 60000
+#endif
+
+// How long after a decode the radio is left alone. Signal gaps run to
+// MINIMUM_SIGNAL_LENGTH, so a burst can still be in progress after one.
+#define RECEIVER_QUIET_MS 500
+
+// RadioLib returns the SX1231's temperature register negated and otherwise
+// uncalibrated, which reads about 91 degrees high. The part is only specified
+// to +/-5C anyway, so this tracks change rather than absolute temperature; to
+// calibrate, set the flag to the reading it gives at a known ambient.
+#ifndef RADIO_TEMP_OFFSET
+#define RADIO_TEMP_OFFSET 91
+#endif
+
+// The library's radio object, file-scope in rtl_433_ESP.cpp and not exported by
+// its header. Reaching it is what gets the SX1231's own temperature. The guard
+// must match the library's: it defines the same name as an SX1231, CC1101 or
+// SX127x under sibling guards, and a mismatched extern would link and misbehave.
+#ifdef RF_RF69
+extern RF69 radio;
+#  define RADIO_TEMP_TRIES 20 // ~20ms; the measurement itself takes microseconds
+#endif
+
 char messageBuffer[JSON_MSG_BUFFER];
 
 rtl_433_ESP rf;
@@ -53,6 +80,9 @@ struct SignalQueueItem {
 
 static QueueHandle_t rtl433Queue         = nullptr;
 static uint32_t      rtl433QueueDropped  = 0;
+// Written from the decoder task, read from loop(); a stale read only delays a
+// telemetry sample by a minute.
+static volatile unsigned long lastDecodeAt = 0;
 
 bool wifiReady() {
   return WiFi.status() == WL_CONNECTED;
@@ -122,6 +152,7 @@ static void serviceWiFi() {
 
 void rtl_433_Callback(char* message) {
   Log.notice(F("Received message : %s" CR), message);
+  lastDecodeAt = millis();
   SignalQueueItem item;
   strncpy(item.payload, message, sizeof(item.payload) - 1);
   item.payload[sizeof(item.payload) - 1] = '\0';
@@ -142,6 +173,102 @@ static void drainSignalQueue() {
     if (signal_store::record(item.payload, item.rssi)) {
       web_ui::broadcast(signal_store::device(0));
     }
+  }
+}
+
+// Reading the temperature parks the radio in standby, so reception stops around
+// it and is restarted by hand. RadioLib's getTemperature() is not used: it polls
+// the measurement bit unbounded, and a lost SPI transaction there would hang
+// loop() with the radio deaf and the interrupt detached.
+static int radioTemperature() {
+#ifdef RF_RF69
+  // currentRssi is a 2ms peak hold, so quiet here can still be a gap inside a
+  // packet; lastDecodeAt catches the packet either side of that gap.
+  // currentRssi 0 is the value before the receiver task has taken a sample, not
+  // a signal 0 dBm strong.
+  if (rtl_433_ESP::currentRssi != 0 &&
+      rtl_433_ESP::currentRssi > rtl_433_ESP::rssiThreshold) {
+    return INT16_MIN;
+  }
+  if (millis() - lastDecodeAt < RECEIVER_QUIET_MS) {
+    return INT16_MIN;
+  }
+
+  rf.disableReceiver();
+  delay(5); // let an RSSI read already on the SPI bus finish
+  Module* mod = radio.getMod();
+  int    t = INT16_MIN;
+  if (radio.setMode(RADIOLIB_RF69_STANDBY) == RADIOLIB_ERR_NONE) {
+    mod->SPIsetRegValue(RADIOLIB_RF69_REG_TEMP_1, RADIOLIB_RF69_TEMP_MEAS_START, 3, 3);
+    for (int i = 0; i < RADIO_TEMP_TRIES; i++) {
+      if (mod->SPIgetRegValue(RADIOLIB_RF69_REG_TEMP_1, 2, 2) !=
+          RADIOLIB_RF69_TEMP_MEAS_RUNNING) {
+        int8_t raw = (int8_t)mod->SPIgetRegValue(RADIOLIB_RF69_REG_TEMP_2);
+        t = -(int)raw - RADIO_TEMP_OFFSET;
+        break;
+      }
+      delay(1);
+    }
+  }
+  // Silently leaving the part in standby would look exactly like a quiet band:
+  // the receiver task keeps sampling RSSI and no decode ever arrives again.
+  int state = radio.receiveDirect();
+  if (state != RADIOLIB_ERR_NONE) {
+    Log.warning(F("receiveDirect after temperature read failed: %d, retrying" CR), state);
+    state = radio.receiveDirect();
+  }
+  rf.enableReceiver();
+  return state == RADIOLIB_ERR_NONE ? t : INT16_MIN;
+#else
+  return INT16_MIN;
+#endif
+}
+
+// snprintf returns what it would have written, so an unclamped running offset
+// walks past the buffer once the text does not fit.
+static size_t appendf(char* buf, size_t size, size_t at, const char* fmt, ...) {
+  if (at >= size - 1) {
+    return size - 1;
+  }
+  va_list args;
+  va_start(args, fmt);
+  int n = vsnprintf(buf + at, size - at, fmt, args);
+  va_end(args);
+  if (n < 0) {
+    return at;
+  }
+  return (size_t)n >= size - at ? size - 1 : at + (size_t)n;
+}
+
+// The receiver's own readings, recorded as a device so the page renders them
+// with everything it already does for a sensor. rssi is the WiFi link, which is
+// what the card's corner reading means for this one.
+static void recordReceiver() {
+  static int lastRadioC = INT16_MIN;
+  int        radioC = radioTemperature();
+  if (radioC == INT16_MIN) {
+    radioC = lastRadioC; // a skipped read keeps the last one rather than a hole
+  } else {
+    lastRadioC = radioC;
+  }
+
+  char buf[JSON_MSG_BUFFER];
+  size_t n = 0;
+  n = appendf(buf, sizeof(buf), n,
+              "{\"model\":\"Receiver\",\"temperature_C\":%.1f,\"heap_kB\":%lu",
+              temperatureRead(), (unsigned long)(ESP.getFreeHeap() / 1024));
+  if (radioC != INT16_MIN) {
+    n = appendf(buf, sizeof(buf), n, ",\"radio_C\":%d", radioC);
+  }
+  // Zero until the receiver task has averaged its first batch of samples. The
+  // page merges fields across messages, so leaving it out beats reporting 0.
+  if (rtl_433_ESP::averageRssi != 0) {
+    n = appendf(buf, sizeof(buf), n, ",\"noise_dBm\":%d", rtl_433_ESP::averageRssi);
+  }
+  appendf(buf, sizeof(buf), n, "}");
+
+  if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0, false)) {
+    web_ui::broadcast(signal_store::device(0), false);
   }
 }
 
@@ -185,6 +312,7 @@ void setup() {
 #ifdef FAKE_SIGNALS
   signal_store::selfTest();
 #endif
+  recordReceiver();
   Log.notice(F("****** setup complete ******" CR));
   rf.getModuleStatus();
 }
@@ -197,6 +325,12 @@ void loop() {
 #ifdef FAKE_SIGNALS
   fakeSignalTick();
 #endif
+
+  static unsigned long lastTelemetry = 0;
+  if (millis() - lastTelemetry >= RECEIVER_TELEMETRY_MS) {
+    lastTelemetry = millis();
+    recordReceiver();
+  }
 
   static unsigned long lastSweep = 0;
   if (millis() - lastSweep >= 60000) {

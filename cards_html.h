@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 static const char CARDS_HTML[] PROGMEM = R"rawliteral(
-<section id="view-cards" hidden>
+<section id="view-cards">
   <button id="edit-cards" title="Edit layout">&#9998;</button>
   <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
   <span id="grid-size" title="Grid columns and rows">
@@ -16,9 +16,11 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
 <style>
 #cards { display:grid; grid-auto-flow:dense; grid-auto-rows:var(--cell,150px);
          justify-content:start; align-content:start; padding:1.6rem 1rem 1rem; }
+/* Not overflow:hidden: the label straddles the top border like a legend, and
+   clipping the card would cut its text in half. Everything else that could
+   spill clips itself. */
 .card { position:relative; margin:.35rem; border:1px solid var(--line); border-radius:.7rem;
-        padding:.5rem .45rem .6rem; overflow:hidden; }
-.card.flash { animation:flash 1s ease-out; }
+        padding:.5rem .45rem .6rem; }
 .card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
              padding:0 .4rem; background:Canvas; font-size:.75rem;
              display:flex; align-items:baseline; overflow:hidden; }
@@ -28,34 +30,34 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
                  font-variant-numeric:tabular-nums; }
 .card .age { position:absolute; right:.5rem; bottom:.25rem; font-size:.65rem; opacity:.5;
              font-variant-numeric:tabular-nums; }
+.card .btm { position:absolute; left:.5rem; bottom:.25rem; right:3.2rem; font-size:.65rem;
+             opacity:.5; display:flex; gap:.5rem; overflow:hidden; white-space:nowrap; }
+.card .btm .bn { text-transform:uppercase; letter-spacing:.05em; margin-right:.2em; }
+.card .btm .bv { font-variant-numeric:tabular-nums; }
 .card .body { display:grid; align-items:stretch; gap:.2rem .6rem; height:100%; overflow:hidden; }
 .card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
              min-width:0; min-height:0; align-self:stretch; overflow:hidden; }
 .card .fn { font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; opacity:.6;
             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .card .fv { font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
-            text-overflow:ellipsis; display:block; }
+            text-overflow:ellipsis; }
 .card .fv .u { font-size:.5em; opacity:.65; margin-left:.12em; }
-#edit-cards { position:fixed; right:1rem; bottom:1rem; z-index:2; font:inherit;
-              width:2.4rem; height:2.4rem; border-radius:50%; cursor:pointer;
-              border:1px solid var(--line); background:Canvas; color:inherit; }
+#edit-cards, #forget-cards, #grid-size { position:fixed; bottom:1rem; z-index:2;
+                                         cursor:pointer; }
+#edit-cards { right:1rem; width:2.4rem; height:2.4rem; border-radius:50%; }
 #view-cards.editing #edit-cards { background:#8883; }
-#forget-cards { position:fixed; right:4.2rem; bottom:1rem; z-index:2; font:inherit;
-                font-size:.75rem; padding:.4rem .7rem; border-radius:1.2rem; cursor:pointer;
-                border:1px solid var(--line); background:Canvas; color:inherit; display:none; }
+#forget-cards { right:4.2rem; font-size:.75rem; padding:.4rem .7rem;
+                border-radius:1.2rem; display:none; }
 #view-cards.editing #forget-cards { display:block; }
-#grid-size { position:fixed; right:12rem; bottom:1rem; z-index:2; font-size:.75rem;
-             display:none; align-items:center; gap:.25rem; }
+#grid-size { right:12rem; font-size:.75rem; display:none; align-items:center;
+             gap:.25rem; }
 #view-cards.editing #grid-size { display:flex; }
-#grid-size input { font:inherit; font-size:.75rem; width:3.2rem; padding:.3rem .35rem;
-                   border-radius:1.2rem; border:1px solid var(--line); background:Canvas;
-                   color:inherit; text-align:center; }
+#grid-size input { font-size:.75rem; width:3.2rem; padding:.3rem .35rem;
+                   border-radius:1.2rem; text-align:center; }
 #view-cards.editing .card { cursor:grab; touch-action:none; }
-#view-cards.editing .val { cursor:pointer; }
-.card.ghost, .val.ghost { opacity:.35; }
-.card .cx { position:absolute; top:.25rem; left:.3rem; z-index:1; font:inherit; font-size:.7rem;
-            line-height:1; padding:.15rem .3rem; background:Canvas; color:inherit;
-            border:1px solid var(--line); border-radius:.3rem; cursor:pointer;
+.card.ghost, .lifting { opacity:.35; }
+.card .cx { position:absolute; top:.25rem; left:.3rem; z-index:1; font-size:.7rem;
+            line-height:1; padding:.15rem .3rem; border-radius:.3rem; cursor:pointer;
             display:none; }
 #view-cards.editing .card .cx { display:block; }
 .card .rz { position:absolute; right:0; bottom:0; width:1.2rem; height:1.2rem; z-index:1;
@@ -66,12 +68,10 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
                    border-right:2px solid currentColor; border-bottom:2px solid currentColor; }
 #view-cards.editing .card .rz { display:block; }
 #view-cards.editing .card .age { right:1.4rem; }
-.card .lbl input { font:inherit; font-size:.75rem; width:9rem; background:Canvas; color:inherit;
-                   border:1px solid var(--line); }
+.card .lbl input { font-size:.75rem; width:9rem; }
 .ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
              border:1px solid var(--line); border-radius:.7rem; background:Canvas;
              padding:.3rem .6rem; font-size:.8rem; }
-.card.lifting { opacity:.35; }
 </style>
 <script>
 const CARDS_KEY = "rtl433.cards.v1";
@@ -82,6 +82,12 @@ const STATUS_FIELDS = new Set(["battery_ok", "battery", "battery_low", "test", "
 
 let cardState = blankState();
 let storageBroken = false;
+
+// A decode from a protocol nobody owns still makes a device, so a new one gets
+// no card until the device table's checkbox asks for one. The receiver's own
+// telemetry is the one device that cannot be noise, so it starts shown.
+let hideNewCards = true;
+const SELF_KEY = "Receiver";
 
 const GRID_MIN = 1, GRID_MAX = 24;
 
@@ -136,12 +142,26 @@ function loadCardState() {
       w: size.w, h: size.h,
       valueOrder: Array.isArray(c.valueOrder) ? c.valueOrder.filter(f => typeof f === "string") : [],
       hiddenValues: Array.isArray(c.hiddenValues) ? c.hiddenValues.filter(f => typeof f === "string") : [],
+      bottomValues: Array.isArray(c.bottomValues) ? c.bottomValues.filter(f => typeof f === "string") : [],
     };
   }
 }
 
+// Every key ever decoded seeds a card, and a 433 band yields one-off noise for
+// as long as it is listened to, so without this order/hidden/cards grow until
+// localStorage refuses the write. An entry the user acted on is kept whether or
+// not its device is still around; one they never showed goes with the device.
+function pruneCardState() {
+  const keep = new Set(cardState.order.filter(
+    k => devices.has(k) || !cardHidden(k) || (cardState.cards[k] && cardState.cards[k].name)));
+  cardState.order = cardState.order.filter(k => keep.has(k));
+  cardState.hidden = cardState.hidden.filter(k => keep.has(k));
+  for (const k of Object.keys(cardState.cards)) if (!keep.has(k)) delete cardState.cards[k];
+}
+
 function saveCardState() {
   if (storageBroken) return;
+  pruneCardState();
   try { localStorage.setItem(CARDS_KEY, JSON.stringify(cardState)); }
   catch (e) { storageBroken = true; }
 }
@@ -152,14 +172,19 @@ function ensureCard(key, merged) {
   if (!c) {
     c = {
       valueOrder: fields.slice(),
-      hiddenValues: fields.filter(f => STATUS_FIELDS.has(f)),
+      hiddenValues: [],
+      bottomValues: fields.filter(f => STATUS_FIELDS.has(f)),
     };
     cardState.cards[key] = c;
+    if (hideNewCards && key !== SELF_KEY && cardState.hidden.indexOf(key) < 0) {
+      cardState.hidden.push(key);
+    }
   } else {
+    if (!c.bottomValues) c.bottomValues = [];
     for (const f of fields) {
       if (c.valueOrder.indexOf(f) >= 0) continue;
       c.valueOrder.push(f);
-      if (STATUS_FIELDS.has(f)) c.hiddenValues.push(f);
+      if (STATUS_FIELDS.has(f)) c.bottomValues.push(f);
     }
   }
   if (!c.w || !c.h) {
@@ -171,13 +196,42 @@ function ensureCard(key, merged) {
   return c;
 }
 
+// A value is shown in the body, shown small along the bottom edge, or not at
+// all. Anything a card stored before bottom values existed reads as shown.
+function valueMode(c, field) {
+  if (c.hiddenValues.indexOf(field) >= 0) return "hidden";
+  if (c.bottomValues && c.bottomValues.indexOf(field) >= 0) return "bottom";
+  return "shown";
+}
+
 function visibleValues(key, merged) {
   const c = cardState.cards[key];
   if (!c) return [];
-  return c.valueOrder.filter(f => merged[f] !== undefined && c.hiddenValues.indexOf(f) < 0);
+  return c.valueOrder.filter(f => merged[f] !== undefined && valueMode(c, f) === "shown");
+}
+
+function bottomFields(c, merged) {
+  return c.valueOrder.filter(f => merged[f] !== undefined && valueMode(c, f) === "bottom");
 }
 
 function cardHidden(key) { return cardState.hidden.indexOf(key) >= 0; }
+
+cardVisible = key => !cardHidden(key);
+setCardVisible = (key, shown) => setCardHidden(key, !shown);
+cardFields = (key, merged) => {
+  const c = cardState.cards[key];
+  return c ? c.valueOrder.filter(f => merged[f] !== undefined) : Object.keys(merged);
+};
+valueModeOf = (key, field) => {
+  const c = cardState.cards[key];
+  return c ? valueMode(c, field) : "shown";
+};
+setFieldMode = setValueMode;
+cardAlias = key => {
+  const c = cardState.cards[key];
+  return c && c.name ? c.name : "";
+};
+setCardAlias = renameCard;
 
 function orderedKeys() { return cardState.order.filter(k => devices.has(k)); }
 
@@ -187,7 +241,8 @@ loadCardState();
 // here rather than from a table of every sensor.
 const UNITS = [["_mi_h", "mi/h"], ["_km_h", "km/h"], ["_m_s", "m/s"], ["_hPa", "hPa"],
                ["_kPa", "kPa"], ["_in", "in"], ["_mm", "mm"], ["_F", "°F"],
-               ["_C", "°C"], ["_V", "V"], ["_deg", "°"], ["_ppm", "ppm"]];
+               ["_C", "°C"], ["_V", "V"], ["_deg", "°"], ["_ppm", "ppm"],
+               ["_dBm", "dBm"], ["_kB", "kB"]];
 
 function splitUnit(field) {
   for (const [suffix, unit] of UNITS) {
@@ -204,7 +259,7 @@ let cellSide = 150;
 // Square cells sized to fit the whole grid on screen, so the shorter of the two
 // divisions wins and the other axis letterboxes.
 function measureGrid() {
-  const grid = document.getElementById("cards");
+  const grid = $("cards");
   if (!grid || grid.clientWidth <= 0) return;
   const g = cardState.grid;
   const cs = getComputedStyle(grid);
@@ -251,6 +306,7 @@ function fitValues() {
   const boxes = fitting.map(f => f.node.parentNode.clientWidth);
   const caps = new Map();
   fitting.forEach((f, i) => {
+    if (!boxes[i]) return;
     const cap = Math.floor(boxes[i] / f.em);
     if (!caps.has(f.card) || cap < caps.get(f.card)) caps.set(f.card, cap);
   });
@@ -267,13 +323,6 @@ function fitValues() {
 function fmtValue(v) {
   if (typeof v !== "number") return String(v);
   return String(parseFloat(v.toFixed(Math.abs(v) >= 10 ? 1 : 2)));
-}
-
-function el(tag, cls, text) {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text !== undefined) n.textContent = text;
-  return n;
 }
 
 function cardLabel(key) {
@@ -298,14 +347,13 @@ function buildCard(rec, c) {
   lbl.append(el("span", "nm", cardLabel(key)), el("span", "rs", rec.rssi === undefined ? "" : String(rec.rssi)));
 
   const body = el("div", "body");
-  const shown = editing ? c.valueOrder.filter(f => rec.merged[f] !== undefined) : vis;
-  const valueRows = Math.max(h, Math.ceil(shown.length / w));
+  const bottom = bottomFields(c, rec.merged);
+  const valueRows = Math.max(h, Math.ceil(vis.length / w));
   body.style.gridTemplateColumns = "repeat(" + w + ",minmax(0,1fr))";
   body.style.gridTemplateRows = "repeat(" + valueRows + ",minmax(0,1fr))";
   const font = valueFont(h, cellSide, valueRows);
-  for (const f of shown) {
+  for (const f of vis) {
     const v = el("div", "val");
-    if (c.hiddenValues.indexOf(f) >= 0) v.classList.add("ghost");
     v.dataset.f = f;
     const parts = splitUnit(f);
     v.append(el("div", "fn", parts.name));
@@ -315,14 +363,13 @@ function buildCard(rec, c) {
     fitting.push({ node: fv, card: card, em: textWidthEm(num, parts.unit) });
     if (parts.unit) fv.append(el("span", "u", parts.unit));
     v.append(fv);
-    v.onclick = () => { if (editing && !dragMoved) toggleValue(key, f); };
     body.append(v);
   }
 
   if (cardHidden(key)) card.classList.add("ghost");
 
   const cx = el("button", "cx", "✕");
-  cx.onclick = ev => { ev.stopPropagation(); toggleCardHidden(key); };
+  cx.onclick = ev => { ev.stopPropagation(); setCardHidden(key, !cardHidden(key)); };
 
   const rz = el("button", "rz", "");
   // Only a second touch can start one gesture during the other, and a drag
@@ -366,17 +413,32 @@ function buildCard(rec, c) {
     beginDrag(ev, card, ev.target.closest(".val"));
   };
 
-  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, rz);
+  const strip = el("div", "btm");
+  for (const f of bottom) {
+    const parts = splitUnit(f);
+    const item = el("span");
+    item.append(el("span", "bn", parts.name),
+                el("span", "bv", fmtValue(rec.merged[f]) + parts.unit));
+    strip.append(item);
+  }
+
+  card.append(lbl, body, strip, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, rz);
   return card;
 }
 
 renderCards = function () {
-  const grid = document.getElementById("cards");
+  const grid = $("cards");
   if (!grid) return;
-  if (dragging || resizing) return;
-  measureGrid();
+  // A rebuild takes the rename input out from under whoever is typing in it,
+  // and its own blur then commits half a name. A flag rather than a focus test:
+  // the ✕ and resize buttons hold focus after a click and would freeze the grid.
+  if (dragging || resizing || renaming) return;
   const seeded = new Map();
   for (const rec of devices.values()) seeded.set(rec.key, ensureCard(rec.key, rec.merged));
+  // Seeding is what gives the device table its modes, so it runs every tick;
+  // building cards for a section nobody is looking at does not.
+  if ($("view-cards").hidden) return;
+  measureGrid();
   const keys = orderedKeys();
   const shownKeys = keys.filter(k => !cardHidden(k));
   if (editing) shownKeys.push(...keys.filter(cardHidden));
@@ -386,21 +448,31 @@ renderCards = function () {
 };
 
 let editing = false;
+let renaming = false;
 
-function toggleValue(key, field) {
+// Set from the device table, one row per value; the card itself only lays out.
+function setValueMode(key, field, mode) {
   const c = cardState.cards[key];
   if (!c) return;
-  const i = c.hiddenValues.indexOf(field);
-  if (i < 0) c.hiddenValues.push(field); else c.hiddenValues.splice(i, 1);
+  if (!c.bottomValues) c.bottomValues = [];
+  for (const list of [c.hiddenValues, c.bottomValues]) {
+    const i = list.indexOf(field);
+    if (i >= 0) list.splice(i, 1);
+  }
+  if (mode === "hidden") c.hiddenValues.push(field);
+  else if (mode === "bottom") c.bottomValues.push(field);
   saveCardState();
   renderCards();
+  renderDevices();
 }
 
-function toggleCardHidden(key) {
+function setCardHidden(key, hidden) {
   const i = cardState.hidden.indexOf(key);
-  if (i < 0) cardState.hidden.push(key); else cardState.hidden.splice(i, 1);
+  if (hidden === (i >= 0)) return;
+  if (hidden) cardState.hidden.push(key); else cardState.hidden.splice(i, 1);
   saveCardState();
   renderCards();
+  renderDevices();
 }
 
 function renameCard(key, name) {
@@ -410,10 +482,12 @@ function renameCard(key, name) {
   if (trimmed) c.name = trimmed; else delete c.name;
   saveCardState();
   renderCards();
+  renderDevices();
 }
 
 function startRename(key, lbl) {
   lbl.dataset.renaming = "1";
+  renaming = true;
   const input = document.createElement("input");
   input.value = cardState.cards[key] && cardState.cards[key].name ? cardState.cards[key].name : "";
   lbl.replaceChildren(input);
@@ -424,6 +498,7 @@ function startRename(key, lbl) {
     if (done) return;
     done = true;
     delete lbl.dataset.renaming;
+    renaming = false;
     if (commit) renameCard(key, input.value); else renderCards();
   };
   input.onkeydown = ev => {
@@ -437,23 +512,27 @@ function forgetLayouts() {
   try { localStorage.removeItem(CARDS_KEY); } catch (e) { storageBroken = true; }
   cardState = blankState();
   syncGridInputs();
-  measureGrid();
+  // The devices on screen were opted into once already, so re-seed them shown.
+  // Under the hide-new rule this would blank the dashboard rather than reset it.
+  const hideNew = hideNewCards;
+  hideNewCards = false;
   renderCards();
+  hideNewCards = hideNew;
 }
 
-document.getElementById("edit-cards").onclick = () => {
+$("edit-cards").onclick = () => {
   editing = !editing;
-  document.getElementById("view-cards").classList.toggle("editing", editing);
+  $("view-cards").classList.toggle("editing", editing);
   renderCards();
 };
 
-document.getElementById("forget-cards").onclick = () => {
+$("forget-cards").onclick = () => {
   if (confirm("Forget every saved card layout in this browser?")) forgetLayouts();
 };
 
 function syncGridInputs() {
-  document.getElementById("grid-cols").value = String(cardState.grid.cols);
-  document.getElementById("grid-rows").value = String(cardState.grid.rows);
+  $("grid-cols").value = String(cardState.grid.cols);
+  $("grid-rows").value = String(cardState.grid.rows);
 }
 
 function applyGridInput(input, key) {
@@ -463,17 +542,15 @@ function applyGridInput(input, key) {
     saveCardState();
   }
   input.value = String(cardState.grid[key]);
-  measureGrid();
   renderCards();
 }
 
-document.getElementById("grid-cols").onchange = ev => applyGridInput(ev.target, "cols");
-document.getElementById("grid-rows").onchange = ev => applyGridInput(ev.target, "rows");
+$("grid-cols").onchange = ev => applyGridInput(ev.target, "cols");
+$("grid-rows").onchange = ev => applyGridInput(ev.target, "rows");
 syncGridInputs();
 
 const CLICK_SLOP = 6;
 let dragging = null;
-let dragMoved = false;
 
 function moveCard(key, beforeKey) {
   const order = cardState.order;
@@ -511,7 +588,6 @@ function dropSlot(nodes, from, x, y) {
 }
 
 function beginDrag(ev, card, val) {
-  dragMoved = false;
   dragging = {
     key: card.dataset.key, field: val ? val.dataset.f : null,
     x0: ev.clientX, y0: ev.clientY, moved: false, node: val || card,
@@ -573,7 +649,6 @@ function endDrag(ev) {
   if (!d || ev.pointerId !== d.pointerId) return;
   dragging = null;
   d.card.cancelPress();
-  dragMoved = d.moved;
   if (d.ghost) d.ghost.remove();
   d.node.classList.remove("lifting");
   if (!d.moved) return;
@@ -595,10 +670,7 @@ document.addEventListener("pointermove", ev => { dragMove(ev); resizeMove(ev); }
 document.addEventListener("pointerup", ev => { endDrag(ev); endResize(ev); });
 document.addEventListener("pointercancel", ev => { endDrag(ev); endResize(ev); });
 
-// The section is hidden until its tab is shown, so the first real measurement
-// has to wait for that click; the tab's own handler runs first and unhides it.
-document.getElementById("tab-cards").addEventListener("click", () => { measureGrid(); renderCards(); });
-window.addEventListener("resize", () => { measureGrid(); renderCards(); });
+window.addEventListener("resize", renderCards);
 
 renderCards();
 </script>

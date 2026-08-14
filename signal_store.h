@@ -28,7 +28,9 @@ struct SignalEvent {
 
 namespace signal_store {
 void               reset();
-bool               record(const char* payload, int rssi);
+// isDecode false records the receiver's own telemetry: it takes a device slot
+// like any other, but stays out of the raw log and the decode count.
+bool               record(const char* payload, int rssi, bool isDecode = true);
 uint8_t            deviceCount();
 const DeviceSlot&  device(uint8_t i);
 uint8_t            eventCount();

@@ -29,4 +29,9 @@ const FREEZER = {
   battery_ok: 1, temperature_C: -12.345, temperature_F: -4.5678, humidity: 71, mic: "CRC",
 };
 
-module.exports = { ACURITE, OREGON, THERMO, LONGNAME, FREEZER };
+// What the firmware records about itself, keyed on the model alone.
+const RECEIVER = {
+  model: "Receiver", temperature_C: 47.2, radio_C: 31, noise_dBm: -104, heap_kB: 177,
+};
+
+module.exports = { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER };

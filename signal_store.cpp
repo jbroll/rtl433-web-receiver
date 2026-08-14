@@ -86,7 +86,7 @@ static void pushEvent(const char* payload, unsigned long at) {
   }
 }
 
-bool record(const char* payload, int rssi) {
+bool record(const char* payload, int rssi, bool isDecode) {
   JsonDocument doc;
   if (deserializeJson(doc, payload) != DeserializationError::Ok) {
     _dropped++;
@@ -115,8 +115,10 @@ bool record(const char* payload, int rssi) {
   slot.count++;
   _seq[idx] = ++_seqCounter;
 
-  pushEvent(payload, now);
-  _total++;
+  if (isDecode) {
+    pushEvent(payload, now);
+    _total++;
+  }
   return true;
 }
 
@@ -238,6 +240,13 @@ bool selfTest() {
   ok &= check("payload without model is dropped", !record("{\"id\":7}", -70));
   ok &= check("dropped counter advances", droppedCount() == 2);
   ok &= check("dropped payloads leave no device", deviceCount() == 0);
+
+  reset();
+  record("{\"model\":\"Real\",\"id\":1}", -70);
+  record("{\"model\":\"Receiver\",\"temperature_C\":40}", -50, false);
+  ok &= check("telemetry takes a device slot", deviceCount() == 2);
+  ok &= check("telemetry stays out of the event ring", eventCount() == 1);
+  ok &= check("telemetry is not counted as a decode", totalRecorded() == 1);
 
   reset();
   char note[SIGNAL_PAYLOAD_MAX]; // valid JSON, but longer than a slot holds

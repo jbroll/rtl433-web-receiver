@@ -18,24 +18,15 @@ Four projects, in dependency order. The first is done.
 
 ## 1. The HTTP binding for MQTT (spec)
 
-`docs/superpowers/specs/2026-08-14-http-mqtt-binding-design.md`. Three
-operations over stable `<source>/<model>/<id>` topics, the rtl_433 JSON message
-as the payload, and an alias at the source, device, and reading levels carried
-as a `$alias` topic. Everything below is written against it.
-
-It lives in this repo because this is where it was written. It belongs beside
-the bridge once that repo exists, since two other projects depend on it and
-neither is this one.
+`~/src/mqtt-http-bridge/docs/binding.md`. Three operations over stable
+`<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an
+alias at the source, device, and reading levels carried as a `$alias` topic.
+Everything below is written against it. It now lives beside the bridge that
+implements it.
 
 ## 2. `mqtt-http-bridge`
 
-A standalone service implementing the whole binding over a real broker. GET
-returns the broker's retained message, POST publishes, `/events` subscribes with
-MQTT wildcards. Aliases are retained messages like any other, so a rename made
-anywhere reaches every subscriber.
-
-Its own repo. It is the piece that lets the dashboard read sensors this receiver
-never hears, and it is testable against a broker without any hardware.
+Built as a standalone service implementing the whole binding over a real broker.
 
 ## 3. The binding in the receiver
 

@@ -25,10 +25,14 @@ function startServer(opts = {}) {
   const now = () => Date.now() - started;
   const devices = new Map();
   const events = [];
+  let build = opts.build || "test";
   const streams = new Set();
 
   function put(payload, meta = {}) {
-    const key = payload.model + "/" + (payload.id !== undefined ? payload.id : payload.channel);
+    // Same rule as signal_store::buildKey(): id, then channel, then the model
+    // alone, which is how the receiver's own telemetry is keyed.
+    const id = payload.id !== undefined ? payload.id : payload.channel;
+    const key = id !== undefined ? payload.model + "/" + id : payload.model;
     const prev = devices.get(key);
     const rec = {
       key: key,
@@ -39,12 +43,15 @@ function startServer(opts = {}) {
       payload: JSON.stringify(payload),
     };
     devices.set(key, rec);
-    events.unshift({ at: rec.lastSeen, payload: rec.payload });
-    if (events.length > 40) events.length = 40;
+    // The firmware keeps its own telemetry out of the event ring and the total.
+    if (meta.log !== false) {
+      events.unshift({ at: rec.lastSeen, payload: rec.payload });
+      if (events.length > 40) events.length = 40;
+    }
     return rec;
   }
 
-  for (const p of opts.devices || []) put(p);
+  for (const p of opts.devices || []) put(p, p.model === "Receiver" ? { log: false } : {});
 
   const server = http.createServer((req, res) => {
     const url = req.url.split("?")[0];
@@ -56,7 +63,7 @@ function startServer(opts = {}) {
     if (url === "/api/state") {
       res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
       res.end(JSON.stringify({
-        now: now(), total: events.length, dropped: 0,
+        now: now(), build: build, total: events.length, dropped: 0,
         devices: [...devices.values()], events: events,
       }));
       return;
@@ -90,6 +97,7 @@ function startServer(opts = {}) {
           }) + "\n\n";
           for (const s of streams) s.write(frame);
         },
+        setBuild(id) { build = id; },
         close() {
           for (const s of streams) s.end();
           // close() waits out every idle keep-alive socket, and the page's

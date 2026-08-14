@@ -12,6 +12,10 @@
 
 extern bool wifiReady();
 
+#ifndef BUILD_ID
+#  define BUILD_ID "dev"
+#endif
+
 namespace web_ui {
 
 static WebServer _server(80);
@@ -168,9 +172,10 @@ class FrameBuffer : public Print {
   bool        overflowed() const { return _overflow; }
 
  private:
-  // Frame text, two millis() values, rssi, count, and a key and payload that
-  // both double under writeJsonString's escaping, plus a byte of headroom.
-  char _buf[71 + 10 + 10 + (2 * (SIGNAL_KEY_MAX - 1) + 2) + 11 + 10 +
+  // Frame text including the telemetry marker, two millis() values, rssi,
+  // count, and a key and payload that both double under writeJsonString's
+  // escaping, plus a byte of headroom.
+  char _buf[80 + 10 + 10 + (2 * (SIGNAL_KEY_MAX - 1) + 2) + 11 + 10 +
             (2 * SIGNAL_PAYLOAD_MAX + 2) + 1];
   size_t _len      = 0;
   bool   _overflow = false;
@@ -230,8 +235,9 @@ static void handleState() {
 
   ChunkedResponse out(_server, client);
 
-  char head[96];
-  snprintf(head, sizeof(head), "{\"now\":%lu,\"total\":%lu,\"dropped\":%lu,\"devices\":[",
+  char head[112];
+  snprintf(head, sizeof(head),
+           "{\"now\":%lu,\"build\":\"" BUILD_ID "\",\"total\":%lu,\"dropped\":%lu,\"devices\":[",
            millis(), (unsigned long)signal_store::totalRecorded(),
            (unsigned long)signal_store::droppedCount());
   out.print(head);
@@ -275,10 +281,10 @@ static void handleStatus() {
   if (!_server.client().connected()) {
     return;
   }
-  char body[224];
+  char body[192];
   snprintf(body, sizeof(body),
-           "{\"uptime\":%lu,\"heap\":%lu,\"rssi\":%d,\"ip\":\"%s\",\"total\":%lu,"
-           "\"dropped\":%lu}",
+           "{\"uptime\":%lu,\"build\":\"" BUILD_ID "\",\"heap\":%lu,\"rssi\":%d,"
+           "\"ip\":\"%s\",\"total\":%lu,\"dropped\":%lu}",
            millis() / 1000, (unsigned long)ESP.getFreeHeap(),
            wifiReady() ? WiFi.RSSI() : 0,
            wifiReady() ? WiFi.localIP().toString().c_str() : "",
@@ -339,7 +345,13 @@ void begin() {
 }
 
 void loop() {
-  if (!_started || !wifiReady()) {
+  if (!_started) {
+    return;
+  }
+  // Ahead of the WiFi gate: a drop leaves every slot holding a dead client, and
+  // nothing would free them until four more viewers had each evicted one.
+  reapClosedClients();
+  if (!wifiReady()) {
     return;
   }
   _server.handleClient();
@@ -360,7 +372,7 @@ void loop() {
   }
 }
 
-void broadcast(const DeviceSlot& slot) {
+void broadcast(const DeviceSlot& slot, bool isDecode) {
   unsigned long now = millis();
   FrameBuffer   frame;
   frame.print("event: signal\ndata: {\"at\":");
@@ -375,6 +387,9 @@ void broadcast(const DeviceSlot& slot) {
   frame.print(slot.count);
   frame.print(",\"payload\":");
   writeJsonString(frame, slot.payload);
+  if (!isDecode) {
+    frame.print(",\"log\":0");
+  }
   frame.print("}\n\n");
 
   if (frame.overflowed()) {
