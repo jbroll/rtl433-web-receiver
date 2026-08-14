@@ -31,7 +31,17 @@ const FREEZER = {
 
 // What the firmware records about itself, keyed on the model alone.
 const RECEIVER = {
-  model: "Receiver", temperature_C: 47.2, radio_C: 31, noise_dBm: -104, heap_kB: 177,
+  model: "Receiver", build: "test", temperature_C: 47.2, radio_C: 31,
+  noise_dBm: -104, heap_kB: 177,
 };
 
-module.exports = { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER };
+const SOURCE = "rtl433-test";
+
+// The same rule as signal_store::buildKey(): id, then channel, then 0.
+function topicOf(payload, source) {
+  const id = payload.id !== undefined ? payload.id
+           : payload.channel !== undefined ? payload.channel : 0;
+  return (source || SOURCE) + "/" + payload.model + "/" + id;
+}
+
+module.exports = { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, SOURCE, topicOf };

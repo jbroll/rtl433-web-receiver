@@ -20,86 +20,183 @@ function page() {
   return progmem("index_html.h", "INDEX_HTML") + progmem("cards_html.h", "CARDS_HTML");
 }
 
+const SOURCE = "rtl433-test";
+const ALIAS_SUFFIX = "/$alias";
+
+function validTopic(topic) {
+  if (!topic) return false;
+  if (/[+#\s]/.test(topic)) return false;
+  return topic.split("/").every(s => s.length > 0);
+}
+
+function validFilter(filter) {
+  if (!filter || /\s/.test(filter)) return false;
+  const segments = filter.split("/");
+  return segments.every((segment, i) => {
+    if (segment.length === 0) return false;
+    if (segment === "#") return i === segments.length - 1;
+    if (segment === "+") return true;
+    return !segment.includes("#") && !segment.includes("+");
+  });
+}
+
+function matchFilter(filter, topic) {
+  const f = filter.split("/");
+  const t = topic.split("/");
+  for (let i = 0; i < f.length; i++) {
+    if (f[i] === "#") return true;
+    if (i >= t.length) return false;
+    if (f[i] !== "+" && f[i] !== t[i]) return false;
+  }
+  return f.length === t.length;
+}
+
 function startServer(opts = {}) {
-  const started = Date.now();
-  const now = () => Date.now() - started;
-  const devices = new Map();
-  const events = [];
+  const source = opts.source || SOURCE;
   let build = opts.build || "test";
+  // topic -> JSON text, exactly what a GET returns and a frame embeds.
+  const retained = new Map();
+  const counts = new Map();
   const streams = new Set();
 
-  function put(payload, meta = {}) {
-    // Same rule as signal_store::buildKey(): id, then channel, then the model
-    // alone, which is how the receiver's own telemetry is keyed.
-    const id = payload.id !== undefined ? payload.id : payload.channel;
-    const key = id !== undefined ? payload.model + "/" + id : payload.model;
-    const prev = devices.get(key);
-    const rec = {
-      key: key,
-      model: payload.model,
-      rssi: meta.rssi !== undefined ? meta.rssi : -72,
-      lastSeen: now(),
-      count: meta.count !== undefined ? meta.count : (prev ? prev.count + 1 : 1),
-      payload: JSON.stringify(payload),
-    };
-    devices.set(key, rec);
-    // The firmware keeps its own telemetry out of the event ring and the total.
-    if (meta.log !== false) {
-      events.unshift({ at: rec.lastSeen, payload: rec.payload });
-      if (events.length > 40) events.length = 40;
-    }
-    return rec;
+  function topicOf(payload) {
+    const id = payload.id !== undefined ? payload.id
+             : payload.channel !== undefined ? payload.channel : 0;
+    return source + "/" + payload.model + "/" + id;
   }
 
-  for (const p of opts.devices || []) put(p, p.model === "Receiver" ? { log: false } : {});
+  function publish(topic, json) {
+    retained.set(topic, json);
+    const frame = "data: {\"topic\":" + JSON.stringify(topic) + ",\"payload\":" + json + "}\n\n";
+    for (const s of streams) {
+      if (s.filters.some(f => matchFilter(f, topic))) s.res.write(frame);
+    }
+  }
 
-  const server = http.createServer((req, res) => {
-    const url = req.url.split("?")[0];
-    if (url === "/") {
+  function put(payload, meta = {}) {
+    const topic = topicOf(payload);
+    const count = meta.count !== undefined ? meta.count : (counts.get(topic) || 0) + 1;
+    counts.set(topic, count);
+    const stamped = Object.assign({}, payload, {
+      time: meta.time !== undefined ? meta.time : new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+      rssi: meta.rssi !== undefined ? meta.rssi : -72,
+      count: count,
+    });
+    if (stamped.model === "Receiver") stamped.build = meta.build !== undefined ? meta.build : build;
+    publish(topic, JSON.stringify(stamped));
+    return topic;
+  }
+
+  for (const p of opts.devices || []) put(p);
+
+  function readBody(req) {
+    return new Promise(resolve => {
+      let body = "";
+      req.on("data", c => { body += c; });
+      req.on("end", () => resolve(body));
+    });
+  }
+
+  const server = http.createServer(async (req, res) => {
+    const [rawPath, query] = req.url.split("?");
+    const path = decodeURIComponent(rawPath);
+    if (path === "/" && req.method === "GET") {
       res.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-store" });
       res.end(page());
       return;
     }
-    if (url === "/api/state") {
-      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
-      res.end(JSON.stringify({
-        now: now(), build: build, total: events.length, dropped: 0,
-        devices: [...devices.values()], events: events,
-      }));
-      return;
-    }
-    if (url === "/events") {
+    if (path === "/events" && req.method === "GET") {
+      const params = new URLSearchParams(query || "");
+      const filters = params.getAll("f");
+      if (filters.length > 4 || filters.some(f => f.length >= 65 || !validFilter(f))) {
+        res.writeHead(400).end("bad filter");
+        return;
+      }
+      if (filters.length === 0) filters.push("#");
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-store",
         Connection: "keep-alive",
       });
       res.write("retry: 3000\n\n");
-      streams.add(res);
-      req.on("close", () => streams.delete(res));
+      const entry = { res: res, filters: filters };
+      streams.add(entry);
+      req.on("close", () => streams.delete(entry));
+      for (const [topic, json] of retained) {
+        if (filters.some(f => matchFilter(f, topic))) {
+          res.write("data: {\"topic\":" + JSON.stringify(topic) + ",\"payload\":" + json + "}\n\n");
+        }
+      }
       return;
     }
-    res.writeHead(404).end("not found");
+    const topic = path.replace(/^\//, "");
+    if (!validTopic(topic)) {
+      res.writeHead(400).end("malformed topic");
+      return;
+    }
+    if (req.method === "POST") {
+      const isAlias = topic.endsWith(ALIAS_SUFFIX);
+      if (!isAlias || !topic.startsWith(source + "/")) {
+        res.writeHead(405).end("not allowed");
+        return;
+      }
+      const body = await readBody(req);
+      let value;
+      try { value = JSON.parse(body); } catch (e) { value = undefined; }
+      if (typeof value !== "string") {
+        res.writeHead(400).end("body must be a JSON string");
+        return;
+      }
+      publish(topic, JSON.stringify(value));
+      if (value === "") retained.delete(topic);
+      res.writeHead(204).end();
+      return;
+    }
+    if (req.method !== "GET") {
+      res.writeHead(405).end("not allowed");
+      return;
+    }
+    const json = retained.get(topic);
+    if (json === undefined) {
+      res.writeHead(404).end("no message");
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+    res.end(json);
   });
 
   const sockets = new Set();
   server.on("connection", s => { sockets.add(s); s.on("close", () => sockets.delete(s)); });
 
+  function request(method, topic, body) {
+    return new Promise(resolve => {
+      const req = http.request({
+        host: "127.0.0.1", port: server.address().port,
+        path: "/" + topic.split("/").map(encodeURIComponent).join("/"), method: method,
+        headers: body === undefined ? {} : { "Content-Type": "application/json" },
+      }, res => {
+        let out = "";
+        res.setEncoding("utf8");
+        res.on("data", c => { out += c; });
+        res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body: out }));
+      });
+      if (body !== undefined) req.write(body);
+      req.end();
+    });
+  }
+
   return new Promise(resolve => {
     server.listen(0, "127.0.0.1", () => {
       resolve({
         url: "http://127.0.0.1:" + server.address().port + "/",
-        emit(payload, meta) {
-          const rec = put(payload, meta);
-          const frame = "event: signal\ndata: " + JSON.stringify({
-            at: rec.lastSeen, now: now(), key: rec.key,
-            rssi: rec.rssi, count: rec.count, payload: rec.payload,
-          }) + "\n\n";
-          for (const s of streams) s.write(frame);
-        },
+        source: source,
+        emit(payload, meta) { return put(payload, meta); },
+        emitAlias(deviceTopic, name) { publish(deviceTopic + ALIAS_SUFFIX, JSON.stringify(name)); },
+        get(topic) { return request("GET", topic); },
+        post(topic, body) { return request("POST", topic, body === undefined ? "" : body); },
         setBuild(id) { build = id; },
         close() {
-          for (const s of streams) s.end();
+          for (const s of streams) s.res.end();
           // close() waits out every idle keep-alive socket, and the page's
           // EventSource keeps reconnecting into that wait.
           for (const s of sockets) s.destroy();
@@ -110,4 +207,4 @@ function startServer(opts = {}) {
   });
 }
 
-module.exports = { startServer, page };
+module.exports = { startServer, page, matchFilter, validFilter, validTopic };
