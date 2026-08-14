@@ -6,7 +6,7 @@ import mqtt from 'mqtt'
 
 import { createCache } from '../src/cache.js'
 import { createBridge } from '../src/server.js'
-import { startBridge, waitFor } from './helpers/bridge.js'
+import { startBridge, waitFor, withTimeout } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
 test('a topic with no message is 404, and a POST makes it readable byte for byte', async () => {
@@ -168,7 +168,7 @@ test('an unreachable broker at startup serves 503, then serves once it appears',
     assert.equal((await fetch(`${bridge.base}/events`)).status, 503)
 
     mqttBroker = await startBroker(port)
-    await bridge.broker.subscribed
+    await withTimeout(bridge.broker.subscribed, 5000, 'the # subscription')
 
     const posted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
     assert.equal(posted.status, 204)

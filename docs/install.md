@@ -51,12 +51,14 @@ under `/etc/sv`. A minimal one:
 #!/bin/sh
 exec 2>&1
 cd /opt/mqtt-http-bridge
-exec chpst -u mqtt-http-bridge node bin/mqtt-http-bridge.js
+exec chpst -e /etc/sv/mqtt-http-bridge/env -u mqtt-http-bridge \
+  node bin/mqtt-http-bridge.js
 ```
 
-Each file under `env/` holds one variable's value, read by `chpst -e` or by
-runit's own `env/` support depending on how the service is invoked. Enable
-with `ln -s /etc/sv/mqtt-http-bridge /var/service/`.
+Each file under `env/` holds one variable's value. `runsv` does not read the
+directory itself, so `chpst -e` has to name it; without that the service runs
+on the defaults, quietly talking to `mqtt://localhost:1883`. Enable with
+`ln -s /etc/sv/mqtt-http-bridge /var/service/`.
 
 The bridge exits 0 on `SIGTERM`, after closing every open SSE stream, the
 HTTP server, and the broker connection in that order, so a plain `sv down`
