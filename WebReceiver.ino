@@ -14,6 +14,7 @@
 #include <freertos/queue.h>
 #include <rtl_433_ESP.h>
 
+#include "alias_store.h"
 #include "signal_store.h"
 #include "web_ui.h"
 
@@ -304,6 +305,7 @@ void setup() {
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
   connectWiFi();
+  alias_store::begin();
   web_ui::begin();
   rtl433Queue = xQueueCreate(RTL433_QUEUE_LEN, sizeof(SignalQueueItem));
   rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
@@ -311,6 +313,7 @@ void setup() {
   rf.enableReceiver();
 #ifdef FAKE_SIGNALS
   signal_store::selfTest();
+  alias_store::selfTest();
 #endif
   recordReceiver();
   Log.notice(F("****** setup complete ******" CR));
