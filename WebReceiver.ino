@@ -284,7 +284,7 @@ static void recordReceiver() {
   appendf(buf, sizeof(buf), n, "}");
 
   if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0, false)) {
-    web_ui::broadcast(signal_store::device(0), false);
+    web_ui::broadcast(signal_store::device(0));
   }
 }
 

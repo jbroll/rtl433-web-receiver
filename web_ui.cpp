@@ -25,10 +25,18 @@ static WebServer _server(80);
 static bool      _started = false;
 
 #define WEB_UI_SSE_CLIENTS 4
+#define WEB_UI_SSE_FILTERS 4
+#define WEB_UI_FILTER_MAX  65
 #define SSE_KEEPALIVE_MS   15000
+// A browser reading 24 payloads of 600 bytes in one pass overflows the socket's
+// send buffer and is dropped, so the replay is drained a few frames per loop().
+#define REPLAY_PER_LOOP    3
 
 static WiFiClient    _sse[WEB_UI_SSE_CLIENTS];
 static uint32_t      _sseAttachedAt[WEB_UI_SSE_CLIENTS] = {0};
+static char          _filters[WEB_UI_SSE_CLIENTS][WEB_UI_SSE_FILTERS][WEB_UI_FILTER_MAX];
+static uint8_t       _filterCount[WEB_UI_SSE_CLIENTS] = {0};
+static int16_t       _replay[WEB_UI_SSE_CLIENTS] = {-1, -1, -1, -1};
 static uint32_t      _sseAttachCounter = 0;
 static unsigned long _lastKeepalive = 0;
 
@@ -87,6 +95,8 @@ static void reapClosedClients() {
   for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
     if (_sse[i] && peerClosed(_sse[i])) {
       _sse[i].stop();
+      _filterCount[i] = 0;
+      _replay[i] = -1;
     }
   }
 }
@@ -175,13 +185,12 @@ class FrameBuffer : public Print {
   bool        overflowed() const { return _overflow; }
 
  private:
-  // Frame text including the telemetry marker, two millis() values, rssi,
-  // count, and a key and payload that both double under writeJsonString's
-  // escaping, plus a byte of headroom.
+  // "data: {"topic":"","payload":}\n\n" plus a key, plus a payload that is
+  // embedded raw for a device and escaped for an alias, where escaping can
+  // double it.
   // Zero-initialized so the untouched byte past the last write is always the
   // null terminator data() promises.
-  char _buf[80 + 10 + 10 + (2 * (SIGNAL_KEY_MAX - 1) + 2) + 11 + 10 +
-            (2 * SIGNAL_PAYLOAD_MAX + 2) + 1] = {};
+  char _buf[64 + SIGNAL_KEY_MAX + (2 * SIGNAL_PAYLOAD_MAX + 2) + 1] = {};
   size_t _len      = 0;
   bool   _overflow = false;
 };
@@ -209,6 +218,44 @@ void writeJsonString(Print& out, const char* s) {
   }
   out.print('"');
 }
+
+namespace {
+
+static bool slotWants(int i, const char* topic) {
+  for (uint8_t f = 0; f < _filterCount[i]; f++) {
+    if (topic::matchFilter(_filters[i][f], topic)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// payload is JSON text, embedded as it stands: an object for a device, a quoted
+// string for an alias.
+static void buildFrame(FrameBuffer& frame, const char* topic, const char* payload) {
+  frame.print("data: {\"topic\":");
+  writeJsonString(frame, topic);
+  frame.print(",\"payload\":");
+  frame.print(payload);
+  frame.print("}\n\n");
+}
+
+static void sendTo(int i, const FrameBuffer& frame) {
+  WiFiClient& c = _sse[i];
+  if (!c) {
+    return;
+  }
+  if (!socketReadyToWrite(c)) {
+    Log.warning(F("SSE slot %d not ready, dropping" CR), i);
+    c.stop();
+    _filterCount[i] = 0;
+    _replay[i] = -1;
+    return;
+  }
+  sendFrameOrDrop(c, frame.data(), frame.length());
+}
+
+} // namespace
 
 static void streamProgmem(Print& out, const char* text) {
   size_t total = strlen_P(text);
@@ -307,6 +354,24 @@ static void handleTopic() {
 static void handleEvents() {
   WiFiClient client = _server.client();
 
+  char    filters[WEB_UI_SSE_FILTERS][WEB_UI_FILTER_MAX];
+  uint8_t count = 0;
+  for (uint8_t i = 0; i < _server.args(); i++) {
+    if (_server.argName(i) != "f") {
+      continue;
+    }
+    String v = _server.arg(i);
+    if (count >= WEB_UI_SSE_FILTERS || v.length() >= WEB_UI_FILTER_MAX ||
+        !topic::validFilter(v.c_str())) {
+      _server.send(400, "text/plain", "bad filter");
+      return;
+    }
+    strcpy(filters[count++], v.c_str());
+  }
+  if (count == 0) {
+    strcpy(filters[count++], "#");
+  }
+
   reapClosedClients();
 
   int slot = -1;
@@ -340,7 +405,61 @@ static void handleEvents() {
   }
   _sse[slot] = client;
   _sseAttachedAt[slot] = ++_sseAttachCounter;
-  Log.notice(F("SSE client attached to slot %d" CR), slot);
+  _filterCount[slot] = count;
+  for (uint8_t f = 0; f < count; f++) {
+    strcpy(_filters[slot][f], filters[f]);
+  }
+  _replay[slot] = 0;
+  Log.notice(F("SSE client attached to slot %d, %d filters" CR), slot, (int)count);
+}
+
+// The cursor walks raw device slots and then the alias table, so a device heard
+// from mid-replay is delivered with its newer payload when the cursor reaches
+// it, and one evicted mid-replay is simply not delivered.
+static void drainReplay(int i) {
+  for (int sent = 0; sent < REPLAY_PER_LOOP && _replay[i] >= 0; ) {
+    int16_t at = _replay[i]++;
+    const char* topic = NULL;
+    const char* payload = NULL;
+    FrameBuffer frame;
+    if (at < SIGNAL_DEVICE_SLOTS) {
+      const DeviceSlot* slot = signal_store::slotAt((uint8_t)at);
+      if (slot == NULL) {
+        continue;
+      }
+      topic = slot->key;
+      payload = slot->payload;
+      if (!slotWants(i, topic)) {
+        continue;
+      }
+      buildFrame(frame, topic, payload);
+    } else if (at < SIGNAL_DEVICE_SLOTS + ALIAS_SLOTS) {
+      topic = alias_store::topicAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS));
+      if (topic == NULL) {
+        _replay[i] = -1; // the table is compacted, so the first hole is the end
+        return;
+      }
+      if (!slotWants(i, topic)) {
+        continue;
+      }
+      FrameBuffer name;
+      writeJsonString(name, alias_store::nameAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS)));
+      buildFrame(frame, topic, name.data());
+    } else {
+      _replay[i] = -1;
+      return;
+    }
+    if (frame.overflowed()) {
+      Log.warning(F("SSE replay frame overflow, skipping %s" CR), topic);
+      continue;
+    }
+    if (!socketReadyToWrite(_sse[i])) {
+      _replay[i]--; // retry this one next pass rather than losing it
+      return;
+    }
+    sendTo(i, frame);
+    sent++;
+  }
 }
 
 void begin() {
@@ -364,6 +483,11 @@ void loop() {
     return;
   }
   _server.handleClient();
+  for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
+    if (_sse[i] && _replay[i] >= 0) {
+      drainReplay(i);
+    }
+  }
   if (millis() - _lastKeepalive >= SSE_KEEPALIVE_MS) {
     _lastKeepalive = millis();
     reapClosedClients();
@@ -373,6 +497,8 @@ void loop() {
       }
       if (!socketReadyToWrite(_sse[i])) {
         _sse[i].stop();
+        _filterCount[i] = 0;
+        _replay[i] = -1;
         continue;
       }
       static const char keepalive[] = ":keepalive\n\n";
@@ -381,46 +507,40 @@ void loop() {
   }
 }
 
-void broadcast(const DeviceSlot& slot, bool isDecode) {
-  unsigned long now = millis();
-  FrameBuffer   frame;
-  frame.print("event: signal\ndata: {\"at\":");
-  frame.print(slot.lastSeen);
-  frame.print(",\"now\":");
-  frame.print(now);
-  frame.print(",\"key\":");
-  writeJsonString(frame, slot.key);
-  frame.print(",\"count\":");
-  frame.print(slot.count);
-  frame.print(",\"payload\":");
-  writeJsonString(frame, slot.payload);
-  if (!isDecode) {
-    frame.print(",\"log\":0");
+static void broadcastFrame(const char* topic, const FrameBuffer& frame) {
+  for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
+    if (!_sse[i]) {
+      continue;
+    }
+    // A slot still replaying gets this topic from its own cursor, which reads
+    // the live table, so sending it now would duplicate it.
+    if (_replay[i] >= 0 || !slotWants(i, topic)) {
+      continue;
+    }
+    sendTo(i, frame);
   }
-  frame.print("}\n\n");
+}
 
+void broadcast(const DeviceSlot& slot) {
+  FrameBuffer frame;
+  buildFrame(frame, slot.key, slot.payload);
   if (frame.overflowed()) {
     Log.warning(F("SSE frame overflow, dropping frame" CR));
     return;
   }
-
-  for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
-    WiFiClient& c = _sse[i];
-    if (!c) {
-      continue;
-    }
-    if (!socketReadyToWrite(c)) {
-      Log.warning(F("SSE slot %d not ready, dropping" CR), i);
-      c.stop();
-      continue;
-    }
-    sendFrameOrDrop(c, frame.data(), frame.length());
-  }
+  broadcastFrame(slot.key, frame);
 }
 
 void broadcastAlias(const char* topic, const char* name) {
-  (void)topic;
-  (void)name;
+  FrameBuffer quoted;
+  writeJsonString(quoted, name);
+  FrameBuffer frame;
+  buildFrame(frame, topic, quoted.data());
+  if (frame.overflowed()) {
+    Log.warning(F("SSE alias frame overflow, dropping frame" CR));
+    return;
+  }
+  broadcastFrame(topic, frame);
 }
 
 } // namespace web_ui
