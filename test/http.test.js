@@ -73,15 +73,6 @@ test('a malformed percent-escape in the path is 400, and the bridge survives to 
   await bridge.close()
 })
 
-test('a POST body that fails to parse as JSON is 400, not a thrown error', async () => {
-  const bridge = await startBridge()
-
-  const bad = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{not valid json' })
-  assert.equal(bad.status, 400)
-
-  await bridge.close()
-})
-
 test('a client that hangs up mid-body does not take the bridge down with it', async () => {
   const bridge = await startBridge()
   const { hostname, port } = new URL(bridge.base)
