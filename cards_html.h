@@ -9,13 +9,10 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
   <div id="cards"></div>
 </section>
 <style>
-#cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
-         grid-auto-rows:150px; grid-auto-flow:dense; gap:1.4rem 1rem; padding:1.6rem 1rem 1rem; }
-.card { position:relative; border:1px solid var(--line); border-radius:.7rem;
-        padding:.7rem .6rem .9rem; overflow:hidden; }
-.card.h { grid-column:span 2; }
-.card.v { grid-row:span 2; }
-.card.wide { grid-column:span 2; grid-row:span 2; }
+#cards { display:grid; grid-auto-flow:dense; grid-auto-rows:var(--cell,150px);
+         justify-content:start; align-content:start; padding:1.6rem 1rem 1rem; }
+.card { position:relative; margin:.35rem; border:1px solid var(--line); border-radius:.7rem;
+        padding:.5rem .45rem .6rem; overflow:hidden; }
 .card.flash { animation:flash 1s ease-out; }
 .card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
              padding:0 .4rem; background:Canvas; font-size:.75rem;
@@ -26,20 +23,14 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
                  font-variant-numeric:tabular-nums; }
 .card .age { position:absolute; right:.5rem; bottom:.25rem; font-size:.65rem; opacity:.5;
              font-variant-numeric:tabular-nums; }
-.card .body { display:grid; grid-auto-rows:minmax(0,1fr); align-items:stretch; gap:.2rem .9rem;
-              height:100%; overflow:hidden; }
-.card .val { line-height:1.05; min-width:0; align-self:center; }
-.card .fn { font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; opacity:.6; }
+.card .body { display:grid; align-items:stretch; gap:.2rem .6rem; height:100%; overflow:hidden; }
+.card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
+             min-width:0; min-height:0; align-self:stretch; overflow:hidden; }
+.card .fn { font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; opacity:.6;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .card .fv { font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
             text-overflow:ellipsis; display:block; }
 .card .fv .u { font-size:.5em; opacity:.65; margin-left:.12em; }
-@media (max-width:520px) {
-  #cards { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); }
-}
-@media (max-width:400px) {
-  #cards { grid-template-columns:1fr; }
-  .card.h, .card.wide { grid-column:span 1; }
-}
 #edit-cards { position:fixed; right:1rem; bottom:1rem; z-index:2; font:inherit;
               width:2.4rem; height:2.4rem; border-radius:50%; cursor:pointer;
               border:1px solid var(--line); background:Canvas; color:inherit; }
@@ -51,13 +42,11 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
 #view-cards.editing .card { cursor:grab; touch-action:none; }
 #view-cards.editing .val { cursor:pointer; }
 .card.ghost, .val.ghost { opacity:.35; }
-.card .cx, .card .ca { position:absolute; top:.25rem; z-index:1; font:inherit; font-size:.7rem;
-                       line-height:1; padding:.15rem .3rem; background:Canvas; color:inherit;
-                       border:1px solid var(--line); border-radius:.3rem; cursor:pointer;
-                       display:none; }
-.card .cx { left:.3rem; }
-.card .ca { left:2rem; }
-#view-cards.editing .card .cx, #view-cards.editing .card .ca { display:block; }
+.card .cx { position:absolute; top:.25rem; left:.3rem; z-index:1; font:inherit; font-size:.7rem;
+            line-height:1; padding:.15rem .3rem; background:Canvas; color:inherit;
+            border:1px solid var(--line); border-radius:.3rem; cursor:pointer;
+            display:none; }
+#view-cards.editing .card .cx { display:block; }
 .card .lbl input { font:inherit; font-size:.75rem; width:9rem; background:Canvas; color:inherit;
                    border:1px solid var(--line); }
 .ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
@@ -75,8 +64,33 @@ const STATUS_FIELDS = new Set(["battery_ok", "battery", "battery_low", "test", "
 let cardState = blankState();
 let storageBroken = false;
 
+const GRID_MIN = 1, GRID_MAX = 24;
+
 // Null prototype: a stored "__proto__" key must not become a prototype link.
-function blankState() { return { order: [], hidden: [], cards: Object.create(null) }; }
+function blankState() {
+  return { grid: { cols: 6, rows: 4 }, order: [], hidden: [], cards: Object.create(null) };
+}
+
+function gridNum(v, fallback) {
+  return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback;
+}
+
+function defaultSize(count) {
+  const v = Math.max(1, count);
+  const w = Math.ceil(Math.sqrt(v));
+  return { w: w, h: Math.ceil(v / w) };
+}
+
+// Entries written before the grid carry an aspect instead of a size. One with
+// neither returns empty and ensureCard() sizes it from its value count.
+function migrateSize(c) {
+  const w = gridNum(c.w, 0), h = gridNum(c.h, 0);
+  if (w && h) return { w: w, h: h };
+  if (c.aspect === "h") return { w: 2, h: 1 };
+  if (c.aspect === "v") return { w: 1, h: 2 };
+  if (c.aspect === "sq") return { w: 1, h: 1 };
+  return {};
+}
 
 function loadCardState() {
   cardState = blankState();
@@ -86,7 +100,9 @@ function loadCardState() {
   let s;
   try { s = JSON.parse(raw); } catch (e) { return; }
   if (!s || typeof s !== "object") return;
+  const g = s.grid && typeof s.grid === "object" ? s.grid : {};
   cardState = {
+    grid: { cols: gridNum(g.cols, 6), rows: gridNum(g.rows, 4) },
     order: Array.isArray(s.order) ? s.order.filter(k => typeof k === "string") : [],
     hidden: Array.isArray(s.hidden) ? s.hidden.filter(k => typeof k === "string") : [],
     cards: Object.create(null),
@@ -95,9 +111,10 @@ function loadCardState() {
   for (const k of Object.keys(cards)) {
     const c = cards[k];
     if (!c || typeof c !== "object") continue;
+    const size = migrateSize(c);
     cardState.cards[k] = {
       name: typeof c.name === "string" ? c.name : undefined,
-      aspect: c.aspect === "h" || c.aspect === "v" ? c.aspect : "sq",
+      w: size.w, h: size.h,
       valueOrder: Array.isArray(c.valueOrder) ? c.valueOrder.filter(f => typeof f === "string") : [],
       hiddenValues: Array.isArray(c.hiddenValues) ? c.hiddenValues.filter(f => typeof f === "string") : [],
     };
@@ -114,9 +131,7 @@ function ensureCard(key, merged) {
   let c = cardState.cards[key];
   const fields = Object.keys(merged || {});
   if (!c) {
-    const visible = fields.filter(f => !STATUS_FIELDS.has(f));
     c = {
-      aspect: visible.length > 3 ? "h" : "sq",
       valueOrder: fields.slice(),
       hiddenValues: fields.filter(f => STATUS_FIELDS.has(f)),
     };
@@ -127,6 +142,11 @@ function ensureCard(key, merged) {
       c.valueOrder.push(f);
       if (STATUS_FIELDS.has(f)) c.hiddenValues.push(f);
     }
+  }
+  if (!c.w || !c.h) {
+    const size = defaultSize(visibleValues(key, merged).length);
+    c.w = size.w;
+    c.h = size.h;
   }
   if (cardState.order.indexOf(key) < 0) cardState.order.push(key);
   return c;
@@ -160,22 +180,27 @@ function splitUnit(field) {
   return { name: field.replace(/_/g, " "), unit: "" };
 }
 
-function cardCells(key, visibleCount) {
-  const aspect = (cardState.cards[key] || {}).aspect || "sq";
-  if (aspect === "sq") return visibleCount > 6 ? 4 : 1;
-  return 2;
+let cellSide = 150;
+
+// Square cells sized to fit the whole grid on screen, so the shorter of the two
+// divisions wins and the other axis letterboxes.
+function measureGrid() {
+  const grid = document.getElementById("cards");
+  if (!grid || grid.clientWidth <= 0) return;
+  const g = cardState.grid;
+  const cs = getComputedStyle(grid);
+  const width = grid.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const height = window.innerHeight - grid.getBoundingClientRect().top
+                 - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  cellSide = Math.max(20, Math.min(width / g.cols, height / g.rows));
+  grid.style.setProperty("--cell", cellSide + "px");
+  grid.style.gridTemplateColumns = "repeat(" + g.cols + ",var(--cell))";
+  grid.style.gridTemplateRows = "repeat(" + g.rows + ",var(--cell))";
 }
 
-// Column count that best matches the card's own width:height ratio, so the
-// value grid fills the card on both axes instead of just the top-left.
-function bodyCols(aspect, count) {
-  const ratio = aspect === "h" ? 2.2 : aspect === "v" ? 0.5 : aspect === "wide" ? 1.1 : 1;
-  return Math.max(1, Math.min(count, Math.round(Math.sqrt(count * ratio))));
-}
-
-function valueFont(cells, visibleCount) {
-  const raw = 1.9 * Math.sqrt(cells / Math.max(1, visibleCount));
-  return Math.min(2.6, Math.max(0.7, Math.round(raw * 1000) / 1000)) + "rem";
+function valueFont(h, cell, rows) {
+  const px = Math.round(0.42 * h * cell / Math.max(1, rows));
+  return Math.min(64, Math.max(11, px)) + "px";
 }
 
 // rtl_433 sends full float precision; the card only needs enough to read at a glance.
@@ -199,10 +224,13 @@ function cardLabel(key) {
 function buildCard(rec, c) {
   const key = rec.key;
   const vis = visibleValues(key, rec.merged);
-  const cells = cardCells(key, vis.length);
+  const g = cardState.grid;
+  const w = Math.max(1, Math.min(c.w, g.cols));
+  const h = Math.max(1, Math.min(c.h, g.rows));
 
-  const card = el("div", "card " + c.aspect);
-  if (c.aspect === "sq" && cells === 4) card.className = "card sq wide";
+  const card = el("div", "card");
+  card.style.gridColumn = "span " + w;
+  card.style.gridRow = "span " + h;
   card.dataset.key = key;
   if (rec.flashUntil > Date.now()) card.classList.add("flash");
 
@@ -211,9 +239,10 @@ function buildCard(rec, c) {
 
   const body = el("div", "body");
   const shown = editing ? c.valueOrder.filter(f => rec.merged[f] !== undefined) : vis;
-  const gridAspect = c.aspect === "sq" && cells === 4 ? "wide" : c.aspect;
-  body.style.gridTemplateColumns = "repeat(" + bodyCols(gridAspect, shown.length) + ",minmax(0,1fr))";
-  const font = valueFont(cells, vis.length);
+  const valueRows = Math.max(h, Math.ceil(shown.length / w));
+  body.style.gridTemplateColumns = "repeat(" + w + ",minmax(0,1fr))";
+  body.style.gridTemplateRows = "repeat(" + valueRows + ",minmax(0,1fr))";
+  const font = valueFont(h, cellSide, valueRows);
   for (const f of shown) {
     const v = el("div", "val");
     if (c.hiddenValues.indexOf(f) >= 0) v.classList.add("ghost");
@@ -232,8 +261,6 @@ function buildCard(rec, c) {
 
   const cx = el("button", "cx", "✕");
   cx.onclick = ev => { ev.stopPropagation(); toggleCardHidden(key); };
-  const ca = el("button", "ca", "▭");
-  ca.onclick = ev => { ev.stopPropagation(); cycleAspect(key); };
 
   // dblclick/pointerdown stay wired to lbl for its whole lifetime, and both
   // bubble up from the rename <input> startRename() puts inside it. Without
@@ -266,7 +293,7 @@ function buildCard(rec, c) {
     beginDrag(ev, card, ev.target.closest(".val"));
   };
 
-  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, ca);
+  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx);
   return card;
 }
 
@@ -274,6 +301,7 @@ renderCards = function () {
   const grid = document.getElementById("cards");
   if (!grid) return;
   if (dragging) return;
+  measureGrid();
   const seeded = new Map();
   for (const rec of devices.values()) seeded.set(rec.key, ensureCard(rec.key, rec.merged));
   const keys = orderedKeys();
@@ -283,8 +311,6 @@ renderCards = function () {
 };
 
 let editing = false;
-
-const ASPECTS = ["sq", "h", "v"];
 
 function toggleValue(key, field) {
   const c = cardState.cards[key];
@@ -298,14 +324,6 @@ function toggleValue(key, field) {
 function toggleCardHidden(key) {
   const i = cardState.hidden.indexOf(key);
   if (i < 0) cardState.hidden.push(key); else cardState.hidden.splice(i, 1);
-  saveCardState();
-  renderCards();
-}
-
-function cycleAspect(key) {
-  const c = cardState.cards[key];
-  if (!c) return;
-  c.aspect = ASPECTS[(ASPECTS.indexOf(c.aspect) + 1) % ASPECTS.length];
   saveCardState();
   renderCards();
 }
@@ -448,6 +466,11 @@ function endDrag(ev) {
 document.addEventListener("pointermove", dragMove);
 document.addEventListener("pointerup", endDrag);
 document.addEventListener("pointercancel", endDrag);
+
+// The section is hidden until its tab is shown, so the first real measurement
+// has to wait for that click; the tab's own handler runs first and unhides it.
+document.getElementById("tab-cards").addEventListener("click", () => { measureGrid(); renderCards(); });
+window.addEventListener("resize", () => { measureGrid(); renderCards(); });
 
 renderCards();
 </script>

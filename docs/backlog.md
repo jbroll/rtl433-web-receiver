@@ -107,9 +107,9 @@ compilation and by reasoning, not by execution.
 - No test covers a negative reading, though rtl_433 temperatures go below zero
   and `fmtValue` branches on `Math.abs`. The rounding is correct by inspection;
   it is simply unexercised.
-- The card overflow test runs one device at its default aspect, so the
-  `wide` (2×2) and `v` branches of `bodyCols()` are never exercised by
-  `npx playwright test`. Both were checked by hand and passed.
+- The card overflow test runs one device at its default size, so a card packed
+  with more values than its cells hold is never exercised by
+  `npx playwright test`. It was checked by hand and passed.
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the
   Escape path out of a rename.
 
@@ -126,9 +126,7 @@ compilation and by reasoning, not by execution.
   The page has Playwright tests under `test/`. The firmware itself is still
   compile plus hardware; a PlatformIO `native` environment would make the
   store's tests a normal `pio test`.
-- The card view's font-size base of 1.9rem and its 0.7–2.6rem clamp were tuned
-  against a handful of synthetic devices, and `bodyCols()` picks a column count
-  from per-aspect ratio constants (2.2, 0.5, 1.1) that were estimated rather
-  than measured against the live grid. A wrong ratio leaves a card sparse or
+- The card view's font-size factor of 0.42 and its 11–64px clamp were tuned
+  against a handful of synthetic devices. A wrong factor leaves a card sparse or
   crowded; it cannot overflow, because both axes use `minmax(0,1fr)` and `.fv`
   ellipsizes.

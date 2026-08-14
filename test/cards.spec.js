@@ -2,6 +2,10 @@ const { test, expect } = require("@playwright/test");
 const { startServer } = require("./harness");
 const { ACURITE, OREGON, THERMO, LONGNAME } = require("./fixtures");
 
+const CARD = '.card[data-key="Acurite-5n1/396"]';
+const LONG_KEY = LONGNAME.model + "/" + LONGNAME.id;
+const LONG_CARD = `.card[data-key="${LONG_KEY}"]`;
+
 let server;
 
 test.afterEach(async () => { if (server) await server.close(); server = null; });
@@ -39,6 +43,29 @@ async function cardState(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem("rtl433.cards.v1") || "null"));
 }
 
+async function setSize(page, key, w, h) {
+  await page.evaluate(([k, w, h]) => {
+    cardState.cards[k].w = w;
+    cardState.cards[k].h = h;
+    renderCards();
+  }, [key, w, h]);
+}
+
+async function setGrid(page, cols, rows) {
+  await page.evaluate(([c, r]) => {
+    cardState.grid = { cols: c, rows: r };
+    measureGrid();
+    renderCards();
+  }, [cols, rows]);
+}
+
+function spans(page, sel) {
+  return page.locator(sel).evaluate(n => {
+    const s = getComputedStyle(n);
+    return { col: s.gridColumnStart + " " + s.gridColumnEnd, row: s.gridRowStart + " " + s.gridRowEnd };
+  });
+}
+
 test("a new device gets defaults: appended, visible, status fields hidden", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.click("#tab-cards");
@@ -63,8 +90,8 @@ test("a field added later appends without disturbing stored order", async ({ pag
   await open(page, [ACURITE]);
   await page.click("#tab-cards");
   const order = await page.evaluate(() => {
-    cardState = { order: ["k"], hidden: [],
-      cards: { k: { aspect: "sq", valueOrder: ["humidity", "temperature_F"], hiddenValues: [] } } };
+    cardState = { grid: { cols: 6, rows: 4 }, order: ["k"], hidden: [],
+      cards: { k: { w: 1, h: 1, valueOrder: ["humidity", "temperature_F"], hiddenValues: [] } } };
     ensureCard("k", { temperature_F: 1, humidity: 2, rain_in: 3 });
     return cardState.cards.k.valueOrder;
   });
@@ -79,11 +106,12 @@ test("corrupt storage is discarded and defaults rebuild", async ({ page }) => {
 
   const s = await page.evaluate(() => cardState);
   expect(s).toEqual({
+    grid: { cols: 6, rows: 4 },
     order: ["Acurite-5n1/396"],
     hidden: [],
     cards: {
       "Acurite-5n1/396": {
-        aspect: "sq",
+        w: 2, h: 2,
         valueOrder: ["battery_ok", "wind_avg_mi_h", "temperature_F", "humidity"],
         hiddenValues: ["battery_ok"],
       },
@@ -96,7 +124,7 @@ test("a __proto__ key in stored cards can't taint an untouched device's defaults
   // Written as raw JSON text: an object literal's __proto__ key sets a
   // prototype rather than an own property, which would defeat the test.
   const payload = '{"order":[],"hidden":[],"cards":{"__proto__":' +
-    '{"aspect":"v","valueOrder":["bogus"],"hiddenValues":["bogus"]}}}';
+    '{"w":4,"h":4,"valueOrder":["bogus"],"hiddenValues":["bogus"]}}}';
   await page.evaluate((p) => localStorage.setItem("rtl433.cards.v1", p), payload);
   await page.reload();
   await expect(page.locator("#status")).toHaveText("live");
@@ -111,9 +139,86 @@ test("a __proto__ key in stored cards can't taint an untouched device's defaults
     }
   });
   expect(result.ok).toBe(true);
-  expect(result.card.aspect).toBe("sq");
+  expect(result.card.w).toBe(2);
+  expect(result.card.h).toBe(1);
   expect(result.card.valueOrder).toEqual(["temperature_F", "humidity", "battery_ok"]);
   expect(result.card.hiddenValues).toEqual(["battery_ok"]);
+});
+
+test("default card size packs values into the most compact rectangle", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  const sizes = await page.evaluate(() =>
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => { const s = defaultSize(n); return [s.w, s.h]; }));
+  expect(sizes).toEqual([[1, 1], [2, 1], [2, 2], [2, 2], [3, 2], [3, 2], [3, 3], [3, 3], [3, 3]]);
+});
+
+test("an Acurite 5n1 with three readings defaults to 2x2", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  const c = (await page.evaluate(() => cardState)).cards["Acurite-5n1/396"];
+  expect([c.w, c.h]).toEqual([2, 2]);
+  expect(await spans(page, CARD)).toEqual({ col: "span 2 auto", row: "span 2 auto" });
+});
+
+test("the cell side is the smaller of the two divisions and re-measures on resize", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  await setGrid(page, 6, 4);
+
+  const read = () => page.evaluate(() => {
+    const g = document.getElementById("cards");
+    const cs = getComputedStyle(g);
+    return {
+      cell: cellSide,
+      width: g.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+      height: window.innerHeight - g.getBoundingClientRect().top
+              - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
+      prop: parseFloat(cs.getPropertyValue("--cell")),
+    };
+  });
+
+  for (const [w, h] of [[1200, 800], [640, 900], [1400, 500]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(120);
+    const m = await read();
+    expect(m.cell).toBeCloseTo(Math.min(m.width / 6, m.height / 4), 1);
+    expect(m.prop).toBeCloseTo(m.cell, 1);
+  }
+});
+
+test("an old aspect entry migrates to a width and height", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await page.evaluate(() => localStorage.setItem("rtl433.cards.v1", JSON.stringify({
+    order: ["Acurite-5n1/396", "Oregon-THN132N/23", "Fineoffset-WH2/174"],
+    hidden: [],
+    cards: {
+      "Acurite-5n1/396": { aspect: "h", valueOrder: [], hiddenValues: [] },
+      "Oregon-THN132N/23": { aspect: "v", valueOrder: [], hiddenValues: [] },
+      "Fineoffset-WH2/174": { aspect: "sq", valueOrder: [], hiddenValues: [] },
+    },
+  })));
+  await page.reload();
+  await page.click("#tab-cards");
+
+  const cards = (await page.evaluate(() => cardState)).cards;
+  expect([cards["Acurite-5n1/396"].w, cards["Acurite-5n1/396"].h]).toEqual([2, 1]);
+  expect([cards["Oregon-THN132N/23"].w, cards["Oregon-THN132N/23"].h]).toEqual([1, 2]);
+  expect([cards["Fineoffset-WH2/174"].w, cards["Fineoffset-WH2/174"].h]).toEqual([1, 1]);
+  expect(cards["Acurite-5n1/396"].aspect).toBeUndefined();
+});
+
+test("an entry with neither a size nor an aspect is sized from its value count", async ({ page }) => {
+  await open(page, [LONGNAME]);
+  await page.evaluate(k => localStorage.setItem("rtl433.cards.v1", JSON.stringify({
+    order: [k], hidden: [], cards: { [k]: { valueOrder: [], hiddenValues: [] } },
+  })), LONG_KEY);
+  await page.reload();
+  await page.click("#tab-cards");
+
+  // Eight readings, battery_ok hidden as a status field, leaves seven visible.
+  const c = (await page.evaluate(() => cardState)).cards[LONG_KEY];
+  expect([c.w, c.h]).toEqual([3, 3]);
 });
 
 test("a card renders label, visible values, rssi and age", async ({ page }) => {
@@ -130,26 +235,14 @@ test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await expect(card.locator(".age")).not.toBeEmpty();
 });
 
-test("value font follows cells over visible count", async ({ page }) => {
+test("value font follows the measured box", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.click("#tab-cards");
   const sizes = await page.evaluate(() => ({
-    one: valueFont(1, 1), three: valueFont(1, 3), big: valueFont(4, 8), floor: valueFont(1, 40),
+    one: valueFont(1, 150, 1), two: valueFont(2, 150, 2),
+    packed: valueFont(1, 150, 4), floor: valueFont(1, 20, 1), ceil: valueFont(3, 200, 1),
   }));
-  expect(sizes.one).toBe("1.9rem");
-  expect(sizes.three).toBe("1.097rem");
-  expect(sizes.big).toBe("1.344rem");
-  expect(sizes.floor).toBe("0.7rem");
-});
-
-test("a card with more than six visible values spans 2x2", async ({ page }) => {
-  await open(page, [ACURITE]);
-  await page.click("#tab-cards");
-  const cells = await page.evaluate(() => {
-    cardState.cards["k"] = { aspect: "sq", valueOrder: [], hiddenValues: [] };
-    return [cardCells("k", 3), cardCells("k", 7)];
-  });
-  expect(cells).toEqual([1, 4]);
+  expect(sizes).toEqual({ one: "63px", two: "63px", packed: "16px", floor: "11px", ceil: "64px" });
 });
 
 test("a live update flashes the card", async ({ page }) => {
@@ -158,8 +251,6 @@ test("a live update flashes the card", async ({ page }) => {
   server.emit(ACURITE);
   await expect(page.locator('.card[data-key="Acurite-5n1/396"]')).toHaveClass(/flash/);
 });
-
-const CARD = '.card[data-key="Acurite-5n1/396"]';
 
 async function edit(page) {
   await page.click("#tab-cards");
@@ -183,29 +274,19 @@ test("edit mode toggles a value's visibility and persists it", async ({ page }) 
   await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveCount(0);
 });
 
-test("hiding a value grows the rest", async ({ page }) => {
-  await open(page, [ACURITE]);
+test("hiding a value in a card smaller than its value count grows the rest", async ({ page }) => {
+  await open(page, [LONGNAME]);
   await page.click("#tab-cards");
-  const before = await page.locator(CARD + ' .val[data-f="temperature_F"] .fv').evaluate(n => n.style.fontSize);
-  await page.click("#edit-cards");
-  await page.click(CARD + ' .val[data-f="humidity"]');
-  await page.click("#edit-cards");
-  const after = await page.locator(CARD + ' .val[data-f="temperature_F"] .fv').evaluate(n => n.style.fontSize);
-  expect(parseFloat(after)).toBeGreaterThan(parseFloat(before));
-});
+  await setSize(page, LONG_KEY, 2, 1);
+  const font = () => page.locator(LONG_CARD + ' .val[data-f="temperature_F"] .fv')
+    .evaluate(n => parseFloat(n.style.fontSize));
 
-test("the aspect button cycles square, horizontal, vertical", async ({ page }) => {
-  await open(page, [ACURITE]);
-  await edit(page);
-  await page.evaluate(() => { cardState.cards["Acurite-5n1/396"].aspect = "sq"; renderCards(); });
-
-  await page.click(CARD + " .ca");
-  await expect(page.locator(CARD)).toHaveClass(/\bh\b/);
-  await page.click(CARD + " .ca");
-  await expect(page.locator(CARD)).toHaveClass(/\bv\b/);
-  await page.click(CARD + " .ca");
-  await expect(page.locator(CARD)).toHaveClass(/\bsq\b/);
-  expect((await cardState(page)).cards["Acurite-5n1/396"].aspect).toBe("sq");
+  // Seven values in two columns need four rows; hiding one drops it to three.
+  const before = await font();
+  await page.click("#edit-cards");
+  await page.click(LONG_CARD + ' .val[data-f="rain_mm"]');
+  await page.click("#edit-cards");
+  expect(await font()).toBeGreaterThan(before);
 });
 
 test("hiding a card ghosts it in edit mode and drops it in normal mode", async ({ page }) => {
@@ -281,7 +362,6 @@ test("Forget layouts clears stored state and rebuilds defaults", async ({ page }
   await open(page, [ACURITE, OREGON]);
   await edit(page);
   await page.click(CARD + " .cx");
-  await page.click(CARD + " .ca");
   expect((await cardState(page)).hidden).toEqual(["Acurite-5n1/396"]);
 
   page.once("dialog", d => d.accept());
@@ -289,7 +369,7 @@ test("Forget layouts clears stored state and rebuilds defaults", async ({ page }
 
   expect(await cardState(page)).toBeNull();
   await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
-  await expect(page.locator(CARD)).toHaveClass(/\bsq\b/);
+  expect(await spans(page, CARD)).toEqual({ col: "span 2 auto", row: "span 2 auto" });
   await expect(page.locator("#cards .card")).toHaveCount(2);
 });
 
@@ -408,12 +488,10 @@ test("a live signal does not re-render mid-drag", async ({ page }) => {
   await expect(page.locator(CARD)).not.toHaveClass(/lifting/);
 });
 
-const LONG_KEY = LONGNAME.model + "/" + LONGNAME.id;
-const LONG_CARD = `.card[data-key="${LONG_KEY}"]`;
-
 test("a long device name ellipsizes instead of clipping, and rssi stays whole", async ({ page }) => {
   await open(page, [LONGNAME]);
   await page.click("#tab-cards");
+  await setSize(page, LONG_KEY, 1, 1);
 
   const card = page.locator(LONG_CARD);
   const cardBox = await card.boundingBox();
