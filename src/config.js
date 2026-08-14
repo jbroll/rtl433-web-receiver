@@ -3,9 +3,13 @@
 export function brokerLabel(url) {
   try {
     const { protocol, host } = new URL(url)
-    return `${protocol}//${host}`
+    // A URL that parses but has no host, e.g. "mqtt://alice:s3cr3t@", falls
+    // through to the same fallback as one that doesn't parse at all: every
+    // caller embeds this in "broker <label>", where the old fallback,
+    // "the broker", read as "broker the broker".
+    return host ? `${protocol}//${host}` : 'unknown'
   } catch {
-    return 'the broker'
+    return 'unknown'
   }
 }
 

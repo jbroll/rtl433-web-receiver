@@ -45,5 +45,9 @@ test('the printable broker address keeps the host and port and drops the credent
   assert.equal(brokerLabel('mqtt://alice:s3cr3t@host.local:1883'), 'mqtt://host.local:1883')
   assert.equal(brokerLabel('mqtt://host.local:1883'), 'mqtt://host.local:1883')
   assert.equal(brokerLabel('mqtts://alice@host.local'), 'mqtts://host.local')
-  assert.equal(brokerLabel('not a url'), 'the broker')
+  assert.equal(brokerLabel('not a url'), 'unknown')
+})
+
+test('a URL with no host falls back the same way one that fails to parse does', () => {
+  assert.equal(brokerLabel('mqtt://alice:s3cr3t@'), 'unknown')
 })
