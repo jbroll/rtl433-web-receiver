@@ -84,10 +84,9 @@ update ages in place rather than rebuild.
 
 ## The card page costs more flash than budgeted
 
-The Cards tab added 16,432 bytes against a design expectation of under 15 KB,
-and the label and decimal work added a further 1,124, for about 17.5 KB.
-Measured by building this branch against its merge-base with `main`. The build
-sits at 86% of flash, so nothing is at risk today, but the figure was never
+The Cards tab now costs 21,876 bytes against a design expectation of under
+15 KB. The grid redesign moved it by 4,192 bytes. The build sits at 86% of
+flash, so nothing is at risk today, but the figure was never
 brought back under the number it was written against. Either the budget was
 wrong or the page needs trimming; `CARDS_HTML` is the obvious target, being
 mostly CSS and hand-rolled pointer handling.
@@ -104,12 +103,6 @@ compilation and by reasoning, not by execution.
 
 ## Gaps in the page tests
 
-- No test covers a negative reading, though rtl_433 temperatures go below zero
-  and `fmtValue` branches on `Math.abs`. The rounding is correct by inspection;
-  it is simply unexercised.
-- The card overflow test runs one device at its default size, so a card packed
-  with more values than its cells hold is never exercised by
-  `npx playwright test`. It was checked by hand and passed.
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the
   Escape path out of a rename.
 

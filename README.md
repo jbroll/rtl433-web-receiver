@@ -83,14 +83,24 @@ therefore be older than the age column, which tracks the newest message.
 
 ## Cards
 
-The Cards tab shows each tracked device as a card. The pencil button opens edit
-mode, where cards drag to reorder, values drag to reorder within their card,
-clicking a value hides it, ✕ hides the card, and double-clicking the label
-renames it. Cards sit on a grid of square cells sized to fit the window, each
-card spanning whole cells. Values lay out in a grid that fills the card and grow
-as fewer of them share a card and as the card grows. A long device name in the label ellipsizes rather than
-overflowing the card; readings round to one or two decimal places for display,
-without changing the stored values.
+The Cards tab lays each tracked device on a grid of square cells. Two
+number inputs in edit mode set the columns and rows, 6 × 4 by default and
+1–24 each; the cell side is whichever of width ÷ columns and height ÷ rows
+is smaller, so the grid fits on screen with margin on the other axis.
+
+A card spans whole cells. On first detection it is sized to hold its
+visible readings one per cell, in the most compact rectangle: one reading
+gives 1×1, three or four give 2×2, seven through nine give 3×3. Dragging
+the corner handle in edit mode resizes it, snapped to whole cells, from
+1×1 up to the grid's own dimensions. Type size follows the measured cell,
+so a bigger card reads bigger. Cards that do not fit in the set number of
+rows render below the fold.
+
+The pencil button opens edit mode, where cards drag to reorder, values
+drag to reorder within their card, clicking a value hides it, ✕ hides the
+card, and double-clicking the label renames it. A long device name in the
+label ellipsizes rather than overflowing the card; readings round to one
+or two decimal places for display, without changing the stored values.
 
 Layout is per browser, in localStorage under `rtl433.cards.v1`. It is never
 sent to the device, so two browsers can arrange the same receiver differently.
