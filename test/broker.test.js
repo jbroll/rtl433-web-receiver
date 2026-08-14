@@ -193,3 +193,83 @@ test('a publish that times out leaves nothing waiting behind it', async () => {
     await broker.close()
   }
 })
+
+test('a connection and the loss of it are each reported once, however many retries follow', async () => {
+  const broker = await startBroker()
+  const connects = []
+  const disconnects = []
+  const errors = []
+  const client = connectBroker({
+    url: broker.url,
+    cache: createCache(),
+    onMessage: () => {},
+    onConnect: () => connects.push(Date.now()),
+    onDisconnect: () => disconnects.push(Date.now()),
+    onError: (err) => errors.push(err),
+    reconnectMs: 50,
+  })
+  try {
+    await client.subscribed
+    assert.equal(connects.length, 1)
+    assert.deepEqual(disconnects, [])
+
+    await broker.close()
+    await waitFor(() => disconnects.length > 0)
+    await new Promise((resolve) => setTimeout(resolve, 400))
+
+    assert.equal(disconnects.length, 1, 'every failed retry reported the disconnect again')
+    const refused = errors.filter((err) => /ECONNREFUSED/.test(err.message))
+    assert.equal(refused.length, 1, 'the same error was reported on every retry')
+  } finally {
+    await client.end()
+  }
+})
+
+test('an error is reported again once something has changed', async () => {
+  const broker = await startBroker()
+  const port = broker.port
+  await broker.close()
+
+  const errors = []
+  const client = connectBroker({
+    url: `mqtt://127.0.0.1:${port}`,
+    cache: createCache(),
+    onMessage: () => {},
+    onError: (err) => errors.push(err),
+    reconnectMs: 50,
+  })
+  let again
+  try {
+    await waitFor(() => errors.length > 0)
+    assert.equal(errors.length, 1)
+
+    again = await startBroker(port)
+    await client.subscribed
+    await again.close()
+
+    await waitFor(() => errors.filter((err) => /ECONNREFUSED/.test(err.message)).length === 2)
+  } finally {
+    await client.end()
+    if (again) await again.close()
+  }
+})
+
+test('a shutdown does not report the disconnect it causes', async () => {
+  const broker = await startBroker()
+  try {
+    const disconnects = []
+    const client = connectBroker({
+      url: broker.url,
+      cache: createCache(),
+      onMessage: () => {},
+      onDisconnect: () => disconnects.push(Date.now()),
+    })
+    await client.subscribed
+    await client.end()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    assert.deepEqual(disconnects, [])
+  } finally {
+    await broker.close()
+  }
+})

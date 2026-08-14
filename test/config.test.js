@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { readConfig } from '../src/config.js'
+import { brokerLabel, readConfig } from '../src/config.js'
 
 test('an empty environment gives the local defaults', () => {
   assert.deepEqual(readConfig({}), {
@@ -39,4 +39,11 @@ test('a PORT that is not a number is rejected rather than defaulted', () => {
   assert.throws(() => readConfig({ PORT: '-1' }), /PORT/)
   assert.equal(readConfig({ PORT: '0' }).port, 0)
   assert.equal(readConfig({ PORT: '65535' }).port, 65535)
+})
+
+test('the printable broker address keeps the host and port and drops the credentials', () => {
+  assert.equal(brokerLabel('mqtt://alice:s3cr3t@host.local:1883'), 'mqtt://host.local:1883')
+  assert.equal(brokerLabel('mqtt://host.local:1883'), 'mqtt://host.local:1883')
+  assert.equal(brokerLabel('mqtts://alice@host.local'), 'mqtts://host.local')
+  assert.equal(brokerLabel('not a url'), 'the broker')
 })

@@ -18,18 +18,27 @@ export function connectBroker({
   onDisconnect,
   onError,
   echoTimeoutMs = ECHO_TIMEOUT_MS,
+  reconnectMs = RECONNECT_MS,
 }) {
   const client = mqtt.connect(url, {
     username,
     password,
-    reconnectPeriod: RECONNECT_MS,
+    reconnectPeriod: reconnectMs,
     resubscribe: true,
   })
 
   // Swallowing these left a bridge that answered 503 to everything and said
   // nothing about why, for a wrong password as much as a missing broker. The
   // listener also has to exist: an 'error' event with none is thrown.
-  client.on('error', (err) => onError?.(err))
+  // Reporting each retry instead filled a log with the same line every two
+  // seconds, so an error is reported only when it is not the one already
+  // reported, and a connection clears what was.
+  let reported = null
+  client.on('error', (err) => {
+    if (err.message === reported) return
+    reported = err.message
+    onError?.(err)
+  })
 
   let subscribed
   const ready = new Promise((resolve) => {
@@ -38,9 +47,11 @@ export function connectBroker({
 
   const waiting = new Map()
   let up = false
+  let ending = false
 
   client.on('connect', () => {
     up = true
+    reported = null
     // What the cache holds came from the last connection. This one has its own
     // retained set, and anything missing from it no longer exists.
     cache.clear()
@@ -51,8 +62,10 @@ export function connectBroker({
     })
   })
 
+  // 'close' fires on every failed retry as well as on the loss itself, and
+  // once more for the shutdown that asked for it.
   client.on('close', () => {
-    if (!up) return
+    if (!up || ending) return
     up = false
     onDisconnect?.()
   })
@@ -111,7 +124,10 @@ export function connectBroker({
     },
     waiting: () => waiting.size,
     connected: () => client.connected,
-    end: () => client.endAsync(),
+    end: () => {
+      ending = true
+      return client.endAsync()
+    },
   }
 }
 

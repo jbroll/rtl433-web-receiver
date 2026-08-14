@@ -1,3 +1,14 @@
+// mqtt.connect takes credentials in the URL, so printing MQTT_URL verbatim
+// puts a password in the log of every service that runs the bridge.
+export function brokerLabel(url) {
+  try {
+    const { protocol, host } = new URL(url)
+    return `${protocol}//${host}`
+  } catch {
+    return 'the broker'
+  }
+}
+
 export function readConfig(env) {
   // Number('') and Number('  ') are both 0, which would otherwise pass
   // validation and silently bind an ephemeral port.

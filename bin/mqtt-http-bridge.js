@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
-import { readConfig } from '../src/config.js'
+import { brokerLabel, readConfig } from '../src/config.js'
 import { createBridge } from '../src/server.js'
 
 const config = readConfig(process.env)
+const brokerName = brokerLabel(config.mqttUrl)
 const cache = createCache()
 
 let bridge
@@ -17,14 +18,14 @@ const broker = connectBroker({
   onMessage: (topic, payload) => bridge?.broadcast(topic, payload),
   username: config.username,
   password: config.password,
-  onConnect: () => console.log(`broker ${config.mqttUrl} connected`),
-  onDisconnect: () => console.error(`broker ${config.mqttUrl} disconnected, retrying`),
-  onError: (err) => console.error(`broker ${config.mqttUrl}: ${err.message}`),
+  onConnect: () => console.log(`broker ${brokerName} connected`),
+  onDisconnect: () => console.error(`broker ${brokerName} disconnected, retrying`),
+  onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
 })
 bridge = createBridge({ broker, cache })
 
 bridge.httpServer.listen(config.port, config.host, () => {
-  console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${config.mqttUrl}`)
+  console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${brokerName}`)
 })
 
 for (const signal of ['SIGINT', 'SIGTERM']) {

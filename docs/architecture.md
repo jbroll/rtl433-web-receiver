@@ -107,6 +107,18 @@ one file that writes to the console. Without them a bridge whose password is
 wrong answers `503` to every request and prints nothing after its startup
 line.
 
+Each is reported once per change: an error is reported only when it is not
+the one already reported and a connection clears what was, the disconnect is
+reported once rather than on every failed retry, and the disconnect a
+shutdown causes is not reported at all. A broker that is simply not there is
+retried every two seconds, and printing each failure was 43,000 lines a day
+saying the same thing.
+
+The broker is named in those lines by protocol, host, and port only.
+`mqtt.connect` accepts credentials in the URL, so printing `MQTT_URL`
+verbatim put a password in the log of every service that ran the bridge;
+`brokerLabel` in `src/config.js` is what every line uses instead.
+
 ## Filters are fixed per connection
 
 An SSE client's filters are set once, from the `f` query parameters at
