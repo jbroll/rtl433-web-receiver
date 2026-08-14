@@ -62,8 +62,11 @@ other choice.
 An incoming message with a zero-length payload deletes the cache entry only
 when its packet carries the retain flag, which is how MQTT removes a
 retained message. Without the flag it is an ordinary message with an empty
-body and is cached like any other, because a foreign publisher sending one
-must not make the bridge answer `404` for a topic the broker still holds.
+body and is cached like any other: an empty body is never a valid message,
+and `binding.md` defines `404` for a topic with no message, so a `GET` of
+either answers the same way. A foreign publisher's non-retained empty
+message therefore reads as `404` even while the broker still holds that
+topic's own retained message; see [`docs/backlog.md`](backlog.md).
 
 A broker clears the retain flag on messages it forwards to an established
 subscription, so the bridge does not see a retained delete as a delete: it

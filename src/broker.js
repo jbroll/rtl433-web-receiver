@@ -134,8 +134,9 @@ export function connectBroker({
 
 // Only a zero-length publish carrying the retain flag deletes a retained
 // message. A zero-length publish without it is an ordinary message with an
-// empty body, and dropping the topic for one would answer 404 for a topic the
-// broker still holds.
+// empty body, and is cached like any other: an empty body is never a valid
+// message, and binding.md defines 404 for a topic with no message, so a GET
+// of either answers the same way.
 export function cacheMessage(cache, topic, payload, packet) {
   if (payload.length === 0 && packet?.retain) cache.delete(topic)
   else cache.set(topic, payload)
