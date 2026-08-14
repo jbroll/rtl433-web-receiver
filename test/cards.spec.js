@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const { startServer } = require("./harness");
-const { ACURITE, OREGON, THERMO, LONGNAME } = require("./fixtures");
+const { ACURITE, OREGON, THERMO, LONGNAME, FREEZER } = require("./fixtures");
 
 const CARD = '.card[data-key="Acurite-5n1/396"]';
 const LONG_KEY = LONGNAME.model + "/" + LONGNAME.id;
@@ -527,12 +527,29 @@ test("values spread across the card without overflowing it", async ({ page }) =>
   const spanY = Math.max(...boxes.map(b => b.bottom)) - Math.min(...boxes.map(b => b.top));
   expect(spanX).toBeGreaterThan(bodyBox.width * 0.8);
   expect(spanY).toBeGreaterThan(bodyBox.height * 0.7);
+});
 
-  const overflow = await card.evaluate(n => ({
+test("no card overflows its box at any size or value count", async ({ page }) => {
+  await open(page, [LONGNAME, ACURITE, OREGON]);
+  await page.click("#tab-cards");
+  await setGrid(page, 6, 4);
+
+  const overflow = sel => page.locator(sel).evaluate(n => ({
     w: n.scrollWidth - n.clientWidth, h: n.scrollHeight - n.clientHeight,
   }));
-  expect(overflow.w).toBeLessThanOrEqual(0);
-  expect(overflow.h).toBeLessThanOrEqual(0);
+
+  for (const [key, sel] of [[LONG_KEY, LONG_CARD], ["Acurite-5n1/396", CARD],
+                            ["Oregon-THN132N/23", '.card[data-key="Oregon-THN132N/23"]']]) {
+    for (const [w, h] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 2], [3, 3], [6, 4]]) {
+      await setSize(page, key, w, h);
+      const card = await overflow(sel);
+      expect(card.w, `${key} ${w}x${h} card width`).toBeLessThanOrEqual(0);
+      expect(card.h, `${key} ${w}x${h} card height`).toBeLessThanOrEqual(0);
+      const body = await overflow(sel + " .body");
+      expect(body.w, `${key} ${w}x${h} body width`).toBeLessThanOrEqual(0);
+      expect(body.h, `${key} ${w}x${h} body height`).toBeLessThanOrEqual(0);
+    }
+  }
 });
 
 test("displayed values are rounded and trimmed, without touching stored data", async ({ page }) => {
@@ -556,8 +573,18 @@ test("fmtValue rounds by magnitude and leaves non-numbers untouched", async ({ p
   const out = await page.evaluate(() => [
     fmtValue(71.234), fmtValue(4.6), fmtValue(0.0300), fmtValue(1013.25),
     fmtValue(38), fmtValue("CHECKSUM"), fmtValue(true),
+    fmtValue(-12.345), fmtValue(-4.5678), fmtValue(-0.004), fmtValue(-1013.25),
   ]);
-  expect(out).toEqual(["71.2", "4.6", "0.03", "1013.3", "38", "CHECKSUM", "true"]);
+  expect(out).toEqual(["71.2", "4.6", "0.03", "1013.3", "38", "CHECKSUM", "true",
+                      "-12.3", "-4.57", "0", "-1013.3"]);
+});
+
+test("a below-zero reading renders with its sign and unit", async ({ page }) => {
+  await open(page, [FREEZER]);
+  await page.click("#tab-cards");
+  const card = page.locator('.card[data-key="Fineoffset-WH51/88"]');
+  await expect(card.locator('.val[data-f="temperature_C"] .fv')).toHaveText("-12.3°C");
+  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("-4.57°F");
 });
 
 test("the grid inputs are hidden until edit mode and set the tracks", async ({ page }) => {

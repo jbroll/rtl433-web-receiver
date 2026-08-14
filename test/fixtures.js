@@ -23,4 +23,10 @@ const LONGNAME = {
   pressure_hPa: 1013.25, mic: "CHECKSUM",
 };
 
-module.exports = { ACURITE, OREGON, THERMO, LONGNAME };
+// rtl_433 reports temperatures below zero; fmtValue branches on Math.abs.
+const FREEZER = {
+  model: "Fineoffset-WH51", id: 88, channel: 2, protocol: 55,
+  battery_ok: 1, temperature_C: -12.345, temperature_F: -4.5678, humidity: 71, mic: "CRC",
+};
+
+module.exports = { ACURITE, OREGON, THERMO, LONGNAME, FREEZER };
