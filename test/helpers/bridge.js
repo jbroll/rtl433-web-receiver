@@ -3,23 +3,26 @@ import { createCache } from '../../src/cache.js'
 import { createBridge } from '../../src/server.js'
 import { startBroker } from './broker.js'
 
-export async function startBridge() {
-  const mqttBroker = await startBroker()
+// Given a url, the bridge is pointed at that address and started without
+// waiting for anything there: that is the unreachable-broker case.
+export async function startBridge({ url } = {}) {
+  const mqttBroker = url ? null : await startBroker()
   const cache = createCache()
   let bridge
-  const broker = await connectBroker({
-    url: mqttBroker.url,
+  const broker = connectBroker({
+    url: url ?? mqttBroker.url,
     cache,
     onMessage: (topic, payload) => bridge.broadcast(topic, payload),
   })
   bridge = createBridge({ broker, cache })
+  if (mqttBroker) await broker.subscribed
 
   await new Promise((resolve) => bridge.httpServer.listen(0, '127.0.0.1', resolve))
   const { port } = bridge.httpServer.address()
 
   let brokerStopped = false
   const stopBroker = async () => {
-    if (brokerStopped) return
+    if (brokerStopped || !mqttBroker) return
     brokerStopped = true
     await mqttBroker.close()
   }

@@ -5,6 +5,7 @@ import net from 'node:net'
 import { createCache } from '../src/cache.js'
 import { createBridge } from '../src/server.js'
 import { startBridge, waitFor } from './helpers/bridge.js'
+import { startBroker } from './helpers/broker.js'
 
 test('a topic with no message is 404, and a POST makes it readable byte for byte', async () => {
   const bridge = await startBridge()
@@ -155,3 +156,33 @@ test('a publish the broker rejects is 503, and caches nothing', async () => {
     await new Promise((resolve) => bridge.httpServer.close(resolve))
   }
 })
+
+test('an unreachable broker at startup serves 503, then serves once it appears', async () => {
+  const port = await freePort()
+  const bridge = await startBridge({ url: `mqtt://127.0.0.1:${port}` })
+  let mqttBroker
+  try {
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 503)
+    assert.equal((await fetch(`${bridge.base}/events`)).status, 503)
+
+    mqttBroker = await startBroker(port)
+    await bridge.broker.subscribed
+
+    const posted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+    assert.equal(posted.status, 204)
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 200)
+  } finally {
+    await bridge.close()
+    if (mqttBroker) await mqttBroker.close()
+  }
+})
+
+function freePort() {
+  return new Promise((resolve) => {
+    const probe = net.createServer()
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address()
+      probe.close(() => resolve(port))
+    })
+  })
+}

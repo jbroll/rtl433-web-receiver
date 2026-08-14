@@ -8,7 +8,7 @@ const config = readConfig(process.env)
 const cache = createCache()
 
 let bridge
-const broker = await connectBroker({
+const broker = connectBroker({
   url: config.mqttUrl,
   cache,
   // A broker with retained messages can deliver a publish while the

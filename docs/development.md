@@ -36,4 +36,5 @@ Match the existing file per module: `test/topic.test.js` for
 `startBroker()` from `test/helpers/broker.js` to get a live one, or
 `startBridge()` from `test/helpers/bridge.js` to get a broker and a bridge
 already wired together; both return a `close()` to call at the end of the
-test.
+test. `startBridge({ url })` skips starting a broker and points the bridge at
+the given address, which is how the unreachable-broker case is tested.

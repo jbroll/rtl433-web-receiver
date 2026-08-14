@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
+import { waitFor } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
 test('a published message reaches the cache and the callback', async () => {
@@ -10,12 +11,13 @@ test('a published message reaches the cache and the callback', async () => {
   try {
     const cache = createCache()
     const seen = []
-    const client = await connectBroker({
+    const client = connectBroker({
       url: broker.url,
       cache,
       onMessage: (topic, payload) => seen.push([topic, payload]),
     })
     try {
+      await client.subscribed
       await client.publish('src/Acurite/1', '{"temperature_C":21.4}')
       await waitFor(() => cache.get('src/Acurite/1') !== undefined)
 
@@ -33,16 +35,18 @@ test('a published message reaches the cache and the callback', async () => {
 test('a publish is retained, so a later connection is replayed it', async () => {
   const broker = await startBroker()
   try {
-    const first = await connectBroker({ url: broker.url, cache: createCache(), onMessage: () => {} })
+    const first = connectBroker({ url: broker.url, cache: createCache(), onMessage: () => {} })
     try {
+      await first.subscribed
       await first.publish('src/Acurite/1', '{"temperature_C":21.4}')
     } finally {
       await first.end()
     }
 
     const cache = createCache()
-    const second = await connectBroker({ url: broker.url, cache, onMessage: () => {} })
+    const second = connectBroker({ url: broker.url, cache, onMessage: () => {} })
     try {
+      await second.subscribed
       await waitFor(() => cache.get('src/Acurite/1') !== undefined)
       assert.equal(cache.get('src/Acurite/1'), '{"temperature_C":21.4}')
     } finally {
@@ -52,12 +56,3 @@ test('a publish is retained, so a later connection is replayed it', async () => 
     await broker.close()
   }
 })
-
-async function waitFor(predicate, timeoutMs = 2000) {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (predicate()) return
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  }
-  throw new Error('timed out waiting for condition')
-}

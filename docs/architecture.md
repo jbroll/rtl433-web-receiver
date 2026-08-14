@@ -32,6 +32,19 @@ holds one entry per topic ever seen, for the life of the process, whether or
 not anyone is watching it. It is the first thing to revisit if the bridge
 needs to run against a busy broker.
 
+## Starting without a broker
+
+`connectBroker` returns as soon as the client object exists, without waiting
+for a connection, and the `mqtt` client retries every two seconds until the
+broker answers. So the bridge listens and answers `503` from the moment it
+starts, whether or not the broker is up yet, and starts serving once it is.
+Waiting for the first connection instead would leave a bridge supervised by
+runit crash-looping until its broker came up.
+
+The `#` subscription is made on every `connect` event. `broker.subscribed`
+resolves the first time it succeeds; tests await it before publishing so the
+echo they are waiting for cannot be missed.
+
 ## Filters are fixed per connection
 
 An SSE client's filters are set once, from the `f` query parameters at

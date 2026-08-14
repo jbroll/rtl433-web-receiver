@@ -4,7 +4,9 @@
 
 - Node 22 or later.
 - One runtime dependency, `mqtt`, installed via `npm install`.
-- An MQTT broker reachable from wherever the bridge runs.
+- An MQTT broker reachable from wherever the bridge runs. It does not have
+  to be up when the bridge starts: the bridge listens immediately, answers
+  `503` until the broker answers, and starts serving once it does.
 
 ## From a clone
 
