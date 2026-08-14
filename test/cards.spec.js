@@ -613,3 +613,75 @@ test("the grid size survives a reload and Forget layouts resets it", async ({ pa
   await expect(page.locator("#grid-rows")).toHaveValue("4");
   expect(await cardState(page)).toBeNull();
 });
+
+async function dragHandle(page, sel, dx, dy) {
+  const box = await page.locator(sel + " .rz").boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y + dy, { steps: 10 });
+  await page.mouse.up();
+}
+
+test("the resize handle only appears in edit mode", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  await expect(page.locator(CARD + " .rz")).toBeHidden();
+  await page.click("#edit-cards");
+  await expect(page.locator(CARD + " .rz")).toBeVisible();
+});
+
+test("dragging the corner snaps to whole cells and persists", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  const cell = await page.evaluate(() => cellSide);
+
+  await dragHandle(page, CARD, cell, cell);
+  expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span 3 auto" });
+  const c = (await cardState(page)).cards["Acurite-5n1/396"];
+  expect([c.w, c.h]).toEqual([3, 3]);
+
+  await page.reload();
+  await page.click("#tab-cards");
+  expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span 3 auto" });
+});
+
+test("a resize clamps at one cell and at the grid's own dimensions", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await setGrid(page, 6, 4);
+
+  await dragHandle(page, CARD, -4000, -4000);
+  let c = (await cardState(page)).cards["Acurite-5n1/396"];
+  expect([c.w, c.h]).toEqual([1, 1]);
+
+  await dragHandle(page, CARD, 4000, 4000);
+  c = (await cardState(page)).cards["Acurite-5n1/396"];
+  expect([c.w, c.h]).toEqual([6, 4]);
+});
+
+test("a drag on the handle moves neither the card nor a value", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  const cell = await page.evaluate(() => cellSide);
+  const fieldsBefore = await page.locator(CARD + " .val").evaluateAll(n => n.map(v => v.dataset.f));
+
+  await dragHandle(page, CARD, cell, 0);
+
+  const keys = await page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+  expect(keys).toEqual(["Acurite-5n1/396", "Oregon-THN132N/23"]);
+  expect(await page.locator(CARD + " .val").evaluateAll(n => n.map(v => v.dataset.f))).toEqual(fieldsBefore);
+  await expect(page.locator(".ghostcard")).toHaveCount(0);
+});
+
+test("a card resized larger renders larger type", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-cards");
+  const font = () => page.locator(CARD + ' .val[data-f="temperature_F"] .fv')
+    .evaluate(n => parseFloat(n.style.fontSize));
+
+  await setSize(page, "Acurite-5n1/396", 1, 1);
+  const small = await font();
+  await setSize(page, "Acurite-5n1/396", 4, 4);
+  expect(await font()).toBeGreaterThan(small);
+});

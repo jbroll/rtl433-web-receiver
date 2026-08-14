@@ -58,6 +58,14 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
             border:1px solid var(--line); border-radius:.3rem; cursor:pointer;
             display:none; }
 #view-cards.editing .card .cx { display:block; }
+.card .rz { position:absolute; right:0; bottom:0; width:1.2rem; height:1.2rem; z-index:1;
+            padding:0; border:none; background:none; color:inherit; cursor:nwse-resize;
+            touch-action:none; display:none; }
+.card .rz::after { content:""; position:absolute; right:.25rem; bottom:.25rem;
+                   width:.5rem; height:.5rem; opacity:.55;
+                   border-right:2px solid currentColor; border-bottom:2px solid currentColor; }
+#view-cards.editing .card .rz { display:block; }
+#view-cards.editing .card .age { right:1.4rem; }
 .card .lbl input { font:inherit; font-size:.75rem; width:9rem; background:Canvas; color:inherit;
                    border:1px solid var(--line); }
 .ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
@@ -273,6 +281,13 @@ function buildCard(rec, c) {
   const cx = el("button", "cx", "✕");
   cx.onclick = ev => { ev.stopPropagation(); toggleCardHidden(key); };
 
+  const rz = el("button", "rz", "");
+  rz.onpointerdown = ev => {
+    if (!editing || ev.button !== 0) return;
+    ev.stopPropagation();
+    beginResize(ev, card, w, h);
+  };
+
   // dblclick/pointerdown stay wired to lbl for its whole lifetime, and both
   // bubble up from the rename <input> startRename() puts inside it. Without
   // the renaming guard, interacting with the open input (double-clicking a
@@ -304,14 +319,14 @@ function buildCard(rec, c) {
     beginDrag(ev, card, ev.target.closest(".val"));
   };
 
-  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx);
+  card.append(lbl, body, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, rz);
   return card;
 }
 
 renderCards = function () {
   const grid = document.getElementById("cards");
   if (!grid) return;
-  if (dragging) return;
+  if (dragging || resizing) return;
   measureGrid();
   const seeded = new Map();
   for (const rec of devices.values()) seeded.set(rec.key, ensureCard(rec.key, rec.merged));
@@ -455,6 +470,33 @@ function beginDrag(ev, card, val) {
   };
 }
 
+let resizing = null;
+
+function beginResize(ev, card, w, h) {
+  resizing = { key: card.dataset.key, card: card, x0: ev.clientX, y0: ev.clientY,
+               w0: w, h0: h, w: w, h: h, pointerId: ev.pointerId };
+  card.setPointerCapture(ev.pointerId);
+}
+
+function resizeMove(ev) {
+  const r = resizing;
+  if (!r || ev.pointerId !== r.pointerId) return;
+  const g = cardState.grid;
+  r.w = Math.max(1, Math.min(g.cols, r.w0 + Math.round((ev.clientX - r.x0) / cellSide)));
+  r.h = Math.max(1, Math.min(g.rows, r.h0 + Math.round((ev.clientY - r.y0) / cellSide)));
+  r.card.style.gridColumn = "span " + r.w;
+  r.card.style.gridRow = "span " + r.h;
+}
+
+function endResize(ev) {
+  const r = resizing;
+  if (!r || ev.pointerId !== r.pointerId) return;
+  resizing = null;
+  const c = cardState.cards[r.key];
+  if (c) { c.w = r.w; c.h = r.h; saveCardState(); }
+  renderCards();
+}
+
 function dragMove(ev) {
   const d = dragging;
   if (!d || ev.pointerId !== d.pointerId) return;
@@ -496,9 +538,9 @@ function endDrag(ev) {
 // the slop, so before that a pointer leaving the card would strand the drag and
 // renderCards() would stay suppressed forever. Registered once, since
 // renderCards() replaces every card element on every tick.
-document.addEventListener("pointermove", dragMove);
-document.addEventListener("pointerup", endDrag);
-document.addEventListener("pointercancel", endDrag);
+document.addEventListener("pointermove", ev => { dragMove(ev); resizeMove(ev); });
+document.addEventListener("pointerup", ev => { endDrag(ev); endResize(ev); });
+document.addEventListener("pointercancel", ev => { endDrag(ev); endResize(ev); });
 
 // The section is hidden until its tab is shown, so the first real measurement
 // has to wait for that click; the tab's own handler runs first and unhides it.
