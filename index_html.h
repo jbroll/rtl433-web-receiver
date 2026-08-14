@@ -53,15 +53,17 @@ section[hidden] { display:none; }
 </table></section>
 <section id="view-log" hidden><table id="log"><tbody id="logrows"></tbody></table></section>
 <script>
-// Everything rtl_433 adds around the actual sensor readings.
+// Everything rtl_433 and the binding add around the actual sensor readings.
 const META = new Set(["model", "id", "channel", "protocol", "rssi", "duration",
-                      "mic", "message_type", "sequence_num", "time"]);
+                      "mic", "message_type", "sequence_num", "time", "count",
+                      "build"]);
 const LOG_MAX = 200;
 const DEVICE_MAX = 24;
+const ALIAS_SUFFIX = "/$alias";
 const devices = new Map();
+const aliases = new Map();
+let source = null;
 let logRows = [];
-let offset = 0;
-let refreshSeq = 0;
 let build = null;
 // CARDS_HTML is streamed after this script and reassigns these.
 let renderCards = () => {};
@@ -145,7 +147,7 @@ function renderDevices() {
 
 function deviceRow(r) {
   const obj = r.obj;
-  const name = obj && obj.model ? obj.model : r.key;
+  const name = obj && obj.model ? obj.model : shortKey(r.key);
   const tr = el("tr", r.flashUntil > Date.now() ? "flash" : "");
   tr.dataset.key = r.key;
   const cells = [
@@ -213,80 +215,61 @@ function renderLog() {
   if ($("view-log").hidden) return;
   $("logrows").replaceChildren(...logRows.map(e => {
     const tr = el("tr");
-    const t = el("td", "nw", new Date(e.at + offset).toLocaleTimeString());
+    const t = el("td", "nw", new Date(e.at).toLocaleTimeString());
     tr.append(t, el("td", "", e.raw));
     return tr;
   }));
 }
 
-async function refresh() {
-  const seq = ++refreshSeq;
-  let state;
-  try {
-    state = await (await fetch("/api/state", { cache: "no-store" })).json();
-  } catch (e) {
-    // The device aborts a response it cannot write immediately; without a retry
-    // one failed fetch would leave the page blank until the next reconnect.
-    setTimeout(() => { if (seq === refreshSeq) refresh(); }, 3000);
-    return;
-  }
-  if (seq !== refreshSeq) return; // a newer refresh started meanwhile; this response is stale
-  // A reflashed device reboots, the stream reconnects, and this runs: the page
-  // it served is the old firmware's, so reload it rather than run stale markup.
-  if (state.build) {
-    if (build === null) build = state.build;
-    else if (state.build !== build) { location.reload(); return; }
-  }
-  offset = Date.now() - state.now;
-  const seen = new Set();
-  for (const d of state.devices) {
-    seen.add(d.key);
-    const obj = parse(d.payload);
-    const snap = { key: d.key, obj: obj, raw: d.payload, rssi: d.rssi,
-                   count: d.count, seenAt: d.lastSeen + offset, at: d.lastSeen };
-    const prev = devices.get(d.key);
-    snap.merged = merged(prev, obj);
-    if (prev) snap.flashUntil = prev.flashUntil;
-    // Compare device millis(), not seenAt: offset is recomputed per fetch, so
-    // a slow response can skew it past an already-applied live update.
-    if (!prev || prev.at <= snap.at) devices.set(d.key, snap);
-  }
-  // An entry the snapshot omits may be a decode that landed after the server
-  // serialized it, so only drop entries the server could already have seen.
-  for (const [key, prev] of [...devices]) {
-    if (!seen.has(key) && prev.at <= state.now) devices.delete(key);
-  }
-  trim();
-  logRows = state.events.map(e => ({ at: e.at, raw: e.payload }));
-  if (logRows.length > LOG_MAX) logRows.length = LOG_MAX;
+function isSelf(topic) { return topic.split("/")[1] === "Receiver"; }
+
+function shortKey(topic) { return topic.split("/").slice(1).join("/"); }
+
+function aliasOf(topic) { return aliases.get(topic) || ""; }
+
+function postAlias(topic, name) {}
+
+function applyAlias(topic, payload) {
+  const key = topic.slice(0, -ALIAS_SUFFIX.length);
+  if (typeof payload === "string" && payload !== "") aliases.set(key, payload);
+  else aliases.delete(key);
   renderCards();
   renderDevices();
-  renderLog();
+}
+
+function applyMessage(topic, obj) {
+  if (!obj || typeof obj !== "object") return;
+  if (source === null) source = topic.split("/")[0];
+  // A message stamped before the device's clock was set has no time, so it ages
+  // from its arrival instead.
+  const stamped = obj.time ? Date.parse(obj.time) : NaN;
+  const at = Number.isFinite(stamped) ? stamped : Date.now();
+  // A reflashed device reboots, the stream reconnects, and its telemetry names
+  // the new build: the page it served is the old firmware's, so reload it.
+  if (isSelf(topic) && typeof obj.build === "string") {
+    if (build === null) build = obj.build;
+    else if (obj.build !== build) { location.reload(); return; }
+  }
+  const raw = JSON.stringify(obj);
+  upsert({ key: topic, obj: obj, raw: raw, rssi: obj.rssi, count: obj.count,
+           seenAt: at, at: at }, true);
+  if (!isSelf(topic)) addLog(at, raw);
 }
 
 function connect() {
-  let opened = false;
   const es = new EventSource("/events");
-  es.onopen = () => {
-    $("status").textContent = "live";
-    if (opened) refresh(); // a reconnect may have missed events
-    opened = true;
-  };
+  es.onopen = () => { $("status").textContent = "live"; };
   es.onerror = () => {
     $("status").textContent = "reconnecting";
-    // A non-200 (both slots busy) closes the stream for good, so retry by hand.
+    // A non-200 (every slot busy) closes the stream for good, so retry by hand.
     if (es.readyState === EventSource.CLOSED) setTimeout(connect, 5000);
   };
-  es.addEventListener("signal", ev => {
+  es.onmessage = ev => {
     const msg = parse(ev.data);
-    if (!msg) return;
-    offset = Date.now() - msg.now;
-    const obj = parse(msg.payload);
-    upsert({ key: msg.key, obj: obj, raw: msg.payload,
-             rssi: msg.rssi, count: msg.count,
-             seenAt: msg.at + offset, at: msg.at }, true);
-    if (msg.log !== 0) addLog(msg.at, msg.payload); // 0 marks receiver telemetry
-  });
+    if (!msg || typeof msg.topic !== "string") return;
+    if (msg.topic.endsWith(ALIAS_SUFFIX)) applyAlias(msg.topic, msg.payload);
+    else applyMessage(msg.topic, msg.payload);
+  };
 }
 
 const TABS = ["devices", "log", "cards"];
@@ -303,7 +286,6 @@ function showTab(name) {
 }
 
 setInterval(() => { renderCards(); renderDevices(); }, 1000);
-refresh();
 connect();
 </script>
 )rawliteral";

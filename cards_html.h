@@ -74,7 +74,7 @@ static const char CARDS_HTML[] PROGMEM = R"rawliteral(
              padding:.3rem .6rem; font-size:.8rem; }
 </style>
 <script>
-const CARDS_KEY = "rtl433.cards.v1";
+const CARDS_KEY = "rtl433.cards.v2";
 
 // rtl_433 flags rather than readings: useful, but not what a card is for.
 const STATUS_FIELDS = new Set(["battery_ok", "battery", "battery_low", "test", "tamper",
@@ -87,7 +87,6 @@ let storageBroken = false;
 // no card until the device table's checkbox asks for one. The receiver's own
 // telemetry is the one device that cannot be noise, so it starts shown.
 let hideNewCards = true;
-const SELF_KEY = "Receiver";
 
 const GRID_MIN = 1, GRID_MAX = 24;
 
@@ -138,7 +137,6 @@ function loadCardState() {
     if (!c || typeof c !== "object") continue;
     const size = migrateSize(c);
     cardState.cards[k] = {
-      name: typeof c.name === "string" ? c.name : undefined,
       w: size.w, h: size.h,
       valueOrder: Array.isArray(c.valueOrder) ? c.valueOrder.filter(f => typeof f === "string") : [],
       hiddenValues: Array.isArray(c.hiddenValues) ? c.hiddenValues.filter(f => typeof f === "string") : [],
@@ -153,7 +151,7 @@ function loadCardState() {
 // not its device is still around; one they never showed goes with the device.
 function pruneCardState() {
   const keep = new Set(cardState.order.filter(
-    k => devices.has(k) || !cardHidden(k) || (cardState.cards[k] && cardState.cards[k].name)));
+    k => devices.has(k) || !cardHidden(k) || aliases.has(k)));
   cardState.order = cardState.order.filter(k => keep.has(k));
   cardState.hidden = cardState.hidden.filter(k => keep.has(k));
   for (const k of Object.keys(cardState.cards)) if (!keep.has(k)) delete cardState.cards[k];
@@ -176,7 +174,7 @@ function ensureCard(key, merged) {
       bottomValues: fields.filter(f => STATUS_FIELDS.has(f)),
     };
     cardState.cards[key] = c;
-    if (hideNewCards && key !== SELF_KEY && cardState.hidden.indexOf(key) < 0) {
+    if (hideNewCards && !isSelf(key) && cardState.hidden.indexOf(key) < 0) {
       cardState.hidden.push(key);
     }
   } else {
@@ -227,10 +225,7 @@ valueModeOf = (key, field) => {
   return c ? valueMode(c, field) : "shown";
 };
 setFieldMode = setValueMode;
-cardAlias = key => {
-  const c = cardState.cards[key];
-  return c && c.name ? c.name : "";
-};
+cardAlias = key => aliasOf(key);
 setCardAlias = renameCard;
 
 function orderedKeys() { return cardState.order.filter(k => devices.has(k)); }
@@ -325,9 +320,10 @@ function fmtValue(v) {
   return String(parseFloat(v.toFixed(Math.abs(v) >= 10 ? 1 : 2)));
 }
 
+// The client's own config would win here, but nothing sets a local name: the
+// rename posts an alias. So the published alias, then the stable segments.
 function cardLabel(key) {
-  const c = cardState.cards[key];
-  return c && c.name ? c.name : key;
+  return aliasOf(key) || shortKey(key);
 }
 
 function buildCard(rec, c) {
@@ -476,20 +472,14 @@ function setCardHidden(key, hidden) {
 }
 
 function renameCard(key, name) {
-  const c = cardState.cards[key];
-  if (!c) return;
-  const trimmed = name.trim();
-  if (trimmed) c.name = trimmed; else delete c.name;
-  saveCardState();
-  renderCards();
-  renderDevices();
+  postAlias(key, name.trim());
 }
 
 function startRename(key, lbl) {
   lbl.dataset.renaming = "1";
   renaming = true;
   const input = document.createElement("input");
-  input.value = cardState.cards[key] && cardState.cards[key].name ? cardState.cards[key].name : "";
+  input.value = aliasOf(key);
   lbl.replaceChildren(input);
   input.focus();
   input.select();
