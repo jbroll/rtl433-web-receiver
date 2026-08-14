@@ -11,16 +11,24 @@ test('retained messages arrive on connect, live ones after', async () => {
     await waitFor(() => bridge.cache.get('src/Acurite/1') !== undefined)
 
     const stream = await fetch(`${bridge.base}/events?f=src/%23`)
-    assert.equal(stream.headers.get('content-type'), 'text/event-stream')
-    const reading = readEvents(stream, 2)
+    try {
+      assert.equal(stream.headers.get('content-type'), 'text/event-stream')
+      const reading = readEvents(stream, 2)
 
-    await fetch(`${bridge.base}/src/Acurite/2`, { method: 'POST', body: '{"t":2}' })
-    const events = await reading
+      await fetch(`${bridge.base}/src/Acurite/2`, { method: 'POST', body: '{"t":2}' })
+      const events = await reading
 
-    assert.deepEqual(events, [
-      { topic: 'src/Acurite/1', payload: { t: 1 } },
-      { topic: 'src/Acurite/2', payload: { t: 2 } },
-    ])
+      assert.deepEqual(events, [
+        { topic: 'src/Acurite/1', payload: { t: 1 } },
+        { topic: 'src/Acurite/2', payload: { t: 2 } },
+      ])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
   } finally {
     await bridge.close()
   }
@@ -30,16 +38,24 @@ test('repeated f delivers from every filter, and a topic matching two arrives on
   const bridge = await startBridge()
   try {
     const stream = await fetch(`${bridge.base}/events?f=src/Acurite/%2B&f=src/%23`)
-    const reading = readEvents(stream, 2)
+    try {
+      const reading = readEvents(stream, 2)
 
-    await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
-    await fetch(`${bridge.base}/src/Other/1`, { method: 'POST', body: '{"t":2}' })
-    const events = await reading
+      await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
+      await fetch(`${bridge.base}/src/Other/1`, { method: 'POST', body: '{"t":2}' })
+      const events = await reading
 
-    assert.deepEqual(events, [
-      { topic: 'src/Acurite/1', payload: { t: 1 } },
-      { topic: 'src/Other/1', payload: { t: 2 } },
-    ])
+      assert.deepEqual(events, [
+        { topic: 'src/Acurite/1', payload: { t: 1 } },
+        { topic: 'src/Other/1', payload: { t: 2 } },
+      ])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
   } finally {
     await bridge.close()
   }
@@ -82,11 +98,19 @@ test('an alias reaches a subscriber like any other topic', async () => {
   const bridge = await startBridge()
   try {
     const stream = await fetch(`${bridge.base}/events?f=src/%23`)
-    const reading = readEvents(stream, 1)
+    try {
+      const reading = readEvents(stream, 1)
 
-    await fetch(`${bridge.base}/src/Acurite/1/$alias`, { method: 'POST', body: '"Back fence"' })
+      await fetch(`${bridge.base}/src/Acurite/1/$alias`, { method: 'POST', body: '"Back fence"' })
 
-    assert.deepEqual(await reading, [{ topic: 'src/Acurite/1/$alias', payload: 'Back fence' }])
+      assert.deepEqual(await reading, [{ topic: 'src/Acurite/1/$alias', payload: 'Back fence' }])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
   } finally {
     await bridge.close()
   }
