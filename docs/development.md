@@ -29,6 +29,18 @@ an OS-assigned port. Tests that need a broker start one of these instead of
 depending on anything external, so the suite needs nothing installed and no
 broker running to pass.
 
+Every broker is reached through a TCP proxy the helper puts in front of it,
+which can delay traffic or swallow it while leaving the connection open. A
+test asks for delay with `startBridge({ delayMs })`, and
+
+```
+MQTT_TEST_LATENCY_MS=25 npm test
+```
+
+runs the whole suite over a slow link. That is the check that a test passes
+by construction rather than because loopback is faster than an HTTP connect;
+two SSE tests used to depend on the difference.
+
 ## Adding a test
 
 Match the existing file per module: `test/topic.test.js` for

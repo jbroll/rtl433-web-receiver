@@ -19,7 +19,8 @@
 - `503` is decided from `broker.connected()` at request time, so a request
   in flight when the broker drops can still get a `404` or a stale `200`.
 - A `POST` is held for the broker's round trip, so a publisher's throughput
-  is bounded by the link's latency rather than by the bridge.
+  is bounded by the link's latency rather than by the bridge. A publish the
+  broker never echoes holds it for the full 5 seconds before the `503`.
 - Echoes are matched by topic only, so two `POST`s to one topic in flight at
   once can each be answered by the other's echo.
 - A `500` is still possible for an error the bridge does not foresee. The
