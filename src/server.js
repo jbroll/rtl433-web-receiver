@@ -66,6 +66,9 @@ async function handle(req, res, { broker, cache, clients }) {
       return send(res, 400, 'body is not JSON')
     }
     await broker.publish(topic, body)
+    // The broker echoes the publish back over the '#' subscription a round
+    // trip later; caching it here is what makes a GET right after a 204 hit.
+    cache.set(topic, body)
     res.writeHead(204)
     return res.end()
   }

@@ -21,6 +21,12 @@ without a round trip to the broker, and what lets a new SSE subscriber be
 replayed with the current state of every topic it's watching on connect,
 rather than waiting for the next publish.
 
+A `POST` writes the published payload into the cache itself, before it
+answers `204`. The broker echoes the same message back over the `#`
+subscription, but that takes a round trip, and until it lands a `GET` of the
+topic just written would answer `404`. The binding's first test case is that
+it does not.
+
 On a broker with a large topic space this is a real memory cost: the cache
 holds one entry per topic ever seen, for the life of the process, whether or
 not anyone is watching it. It is the first thing to revisit if the bridge

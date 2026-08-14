@@ -2,13 +2,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 
-import { readEvents, startBridge, waitFor } from './helpers/bridge.js'
+import { readEvents, startBridge } from './helpers/bridge.js'
 
 test('retained messages arrive on connect, live ones after', async () => {
   const bridge = await startBridge()
   try {
     await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
-    await waitFor(() => bridge.cache.get('src/Acurite/1') !== undefined)
 
     const stream = await fetch(`${bridge.base}/events?f=src/%23`)
     try {
