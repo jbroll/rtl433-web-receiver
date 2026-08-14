@@ -67,8 +67,14 @@ must not make the bridge answer `404` for a topic the broker still holds.
 
 A broker clears the retain flag on messages it forwards to an established
 subscription, so the bridge does not see a retained delete as a delete: it
-keeps serving the payload that was there until the connection is remade and
-the cache is rebuilt.
+caches the empty payload in place of the message, and the cache entry only
+goes away when the connection is remade and the cache is rebuilt.
+
+A `GET` of a topic whose cached payload is empty is `404`, not a `200` with an
+empty body, because an empty body is not the JSON a `200` promises and a
+client parsing it gets a syntax error instead of a missing message. That makes
+the two ways a retained delete can be seen — live, and at reconnect — answer
+the same.
 
 The cache is emptied on every `connect`, before the `#` subscription is
 made. What it holds came from the last connection, and a broker that has

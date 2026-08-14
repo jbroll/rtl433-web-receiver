@@ -48,7 +48,9 @@ async function handle(req, res, { broker, cache, clients }) {
 
   if (req.method === 'GET') {
     const payload = cache.get(topic)
-    if (payload === undefined) return send(res, 404, 'no message')
+    // An empty body is not the JSON the binding says a 200 carries, and a
+    // retained delete the broker forwarded live is cached as exactly that.
+    if (payload === undefined || payload.length === 0) return send(res, 404, 'no message')
     res.writeHead(200, { 'content-type': 'application/json' })
     return res.end(payload)
   }
