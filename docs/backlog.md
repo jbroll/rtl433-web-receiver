@@ -3,9 +3,133 @@
 Known gaps, in rough priority order. None of these break the receiver as it
 stands; each was found during review or hardware testing and deliberately left.
 
+The roadmap comes first: it is a program of four projects, of which this
+receiver is one. The gaps below are about the receiver as it exists today.
+
+# Roadmap: splitting the receiver into a source, a bridge, and a dashboard
+
+Today the firmware is all three at once. It decodes, it holds the state, and it
+serves a page shaped around its own device table. Nothing else can feed that
+page and the page cannot read anything else, so a second receiver, a wired
+sensor, or a real broker has no way in. Aliases live in one browser's
+localStorage, so a name assigned in one place is invisible everywhere else.
+
+Four projects, in dependency order. The first is done.
+
+## 1. The HTTP binding for MQTT (spec)
+
+`docs/superpowers/specs/2026-08-14-http-mqtt-binding-design.md`. Three
+operations over stable `<source>/<model>/<id>` topics, the rtl_433 JSON message
+as the payload, and an alias at the source, device, and reading levels carried
+as a `$alias` topic. Everything below is written against it.
+
+It lives in this repo because this is where it was written. It belongs beside
+the bridge once that repo exists, since two other projects depend on it and
+neither is this one.
+
+## 2. `mqtt-http-bridge`
+
+A standalone service implementing the whole binding over a real broker. GET
+returns the broker's retained message, POST publishes, `/events` subscribes with
+MQTT wildcards. Aliases are retained messages like any other, so a rename made
+anywhere reaches every subscriber.
+
+Its own repo. It is the piece that lets the dashboard read sensors this receiver
+never hears, and it is testable against a broker without any hardware.
+
+## 3. The binding in the receiver
+
+Replaces `/api/state`, `/events`, and `/api/status` with the source-only subset:
+serves GET and `/events` for its own topics, accepts POST only to its own
+`$alias` topics, persists those to NVS, and answers 405 to everything else.
+
+This is where stable naming lands. Device keys become `<source>/<model>/<id>`
+with `source` the existing mDNS name, which also retires the 48-byte key
+collision noted below. Aliases move out of the browser and onto the device, so
+a sensor named once is named for every viewer.
+
+Doing the naming and the NVS aliases as a separate step ahead of this would
+build the alias path twice, now that the spec exists. They are one project.
+
+## 4. The dashboard as its own project
+
+The page lifted out of `cards_html.h` and `index_html.h` into a project with a
+build step, reading a configurable list of bridges rather than the host it was
+served from. The receiver serves a build of it, so the single-device case still
+works with no extra parts.
+
+Layering stays as it is: the browser's own config wins, the bridge's `$alias`
+next, the stable segment last. A build step also settles the flash cost, the
+duplicated constants, and the minification questions the current PROGMEM page
+cannot answer.
+
+## Nothing filters false decodes
+
+All 214 decoders in `rtl_433_devices.h` are compiled in, and the weak ones
+claim noise: a device shows up once, never repeats, and reads humidity 154,
+wind direction 458°, or 5768 hPa. New devices now start with no card, which
+keeps them off the dashboard but still lists them. Real filters, cheapest
+first: define `MY_DEVICES` and list only the protocols in use, which also
+frees flash; hold a new key until it is heard twice; or range-check the common
+fields (`humidity` 0–100, `wind_dir_deg` 0–360, `pressure_hPa` 800–1100). The
+first is a build flag and the others need firmware.
+
+A `mic` filter would not help. Cotech-36-7959, Telldus-FT0385R, and
+Watts-WFHTRF all declare `"mic":"CRC"` or `"CHECKSUM"`, so these payloads
+passed the decoder's own integrity check. A checksum that short passes on
+noise often enough to produce what the table shows.
+
+## No path in or out for sensors that are not 433 MHz decodes
+
+The receiver's own card proved the shape: anything recorded through
+`signal_store::record()` becomes a device the page already knows how to draw,
+alias, and lay out. Nothing else uses it. Three directions, none started:
+
+- A wired sensor on a spare GPIO (a DS18B20 on 1-Wire) recorded the same way.
+  Bit-banged 1-Wire masks interrupts for tens of microseconds per bit, and the
+  decoder timestamps every DIO2 edge in an ISR, so a read can cost a decode.
+  The RMT-based 1-Wire driver avoids that and is the way in if this happens.
+- Ingest from elsewhere: an authenticated `POST /api/signal` taking the same
+  rtl_433 JSON is about twenty lines and no new dependency. An MQTT
+  subscription needs a broker and roughly 10 KB of flash, against 144 KB free.
+  ESP-NOW suits battery nodes but pins them to the station's WiFi channel.
+- Egress to home automation: publishing each decode to
+  `rtl_433/<host>/devices/<model>/<id>/<field>` matches what rtl_433's own
+  `-F mqtt` emits, so existing Home Assistant setups would take it unchanged.
+  Polling `/api/state` from an HA REST sensor works today with no firmware
+  change at all, and is the cheapest first step.
+
+## Radio SPI is shared between two tasks with no lock
+
+`rtl_433_ReceiverTask` runs on core 0 and reads RSSI over SPI continuously
+(`rtl_433_ESP.cpp:934`); `radioTemperature()` in `WebReceiver.ino` reads the
+temperature registers from the loop task on core 1. RadioLib's `Module` has no
+mutex. `disableReceiver()` only clears a flag and detaches the interrupt, with
+no acknowledgement that the task has left its body, so the `delay(5)` that
+follows is a heuristic, not a barrier. The measurement is bounded and
+`receiveDirect()`'s return is checked, so a lost transaction costs one sample
+rather than a hung loop, but the race is still there. The fix is to keep all
+radio SPI on one task: a request flag the receiver task picks up at the top of
+its own iteration, publishing the reading back.
+
+## The library dependency is pinned to a branch, not a commit
+
+`platformio.ini:13` points at `jbroll/rtl_433_ESP#sx1231-support`. PlatformIO
+resolves that once and caches it, so a build here and a build on another
+machine can silently differ, and a new fork commit changes the firmware without
+anything in this repo changing. Pinning the commit sha fixes it at the cost of
+an edit per library update.
+
+## The decode path still allocates
+
+Beyond the `JsonDocument` and `String` noted below: ArduinoJson 7.4.3's default
+allocator is `malloc`/`realloc`, and it reallocs several times per parse. A
+static pool (an `ArduinoJson::Allocator` subclass over a fixed buffer, passed to
+the `JsonDocument` constructor) removes it without touching the parse.
+
 ## Constants duplicated between the firmware and the page
 
-`index_html.h:50` caps the browser's device table at `DEVICE_MAX = 24` to match
+`index_html.h:58` caps the browser's device table at `DEVICE_MAX = 24` to match
 `SIGNAL_DEVICE_SLOTS` in `signal_store.h:9`, and `LOG_MAX = 200` mirrors the
 truncation the device already applies. Change one and nothing catches the
 divergence — the page would silently keep a different number of rows than the
@@ -46,7 +170,7 @@ this is reachable, not theoretical. Either widen the key or hash the tail.
 ## A slow HTTP client can still stall the receive path
 
 `ChunkedResponse::flush()` waits up to `CHUNK_WAIT_US` 150 ms per chunk with a
-`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:89-90`) before dropping the
+`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:94-95`) before dropping the
 client. That bound exists because aborting on the first not-ready probe
 truncated the page and left the browser running no script at all. The cost is
 that a genuinely slow reader can hold `loop()` for up to 1.5 s, and the
@@ -73,28 +197,20 @@ window is tens of milliseconds because the ESP32 web server handles one request
 at a time. This is the accepted cost of dropping the previous behaviour, which
 fetched the snapshot twice on every load.
 
-## The one second render tick wipes an open card rename
-
-`index_html.h:218` re-renders the cards every second to age the timestamps, and
-`renderCards()` rebuilds every card from scratch. A rename input open longer
-than that is removed mid-typing and the typed text is lost. Card dragging
-already suppresses the tick while a drag is in progress (`cards_html.h`,
-`if (dragging) return;`); a rename needs the same, or the renderer needs to
-update ages in place rather than rebuild.
-
 ## The card page costs more flash than budgeted
 
-The Cards tab now costs 21,876 bytes against a design expectation of under
-15 KB. The grid redesign moved it by 4,192 bytes. Both figures are linked
-firmware sizes from `pio run -e esp32s3-generic`, differenced across three
-commits, not the size of the literal; rerunning that diff reproduces them.
-For reference, the `CARDS_HTML` literal itself is about 21.5 KB now, against
-about 17.3 KB before this work. The build sits at 86% of flash, so nothing
-is at risk today, but the figure was never brought back under the number it
-was written against. `CARDS_HTML` is no longer the obvious target: of its
-bytes roughly 4 KB is CSS and roughly 2 KB is the explanatory comments the
-project's own rules require, so the only real lever left is gzip-encoding
-the page, which needs the build step the design deliberately avoids.
+The Cards tab cost 21,876 bytes against a design expectation of under 15 KB
+when that was last measured as a linked-size difference across three commits
+with `pio run -e esp32s3-generic`. The `CARDS_HTML` literal is 26,162 bytes
+today and `INDEX_HTML` 11,190, so the page is 37 KB of the image. The build
+sits at 88.8% of flash, so nothing is at risk today, but the figure was never
+brought back under the number it was written against. `CARDS_HTML` is not the
+obvious target: comments are 5 KB of the 37 and leading indentation another 2,
+both of which the project's own rules require, so the levers left are
+gzip-encoding the page or minifying it, and each needs the build step the
+design deliberately avoids. The bigger lever is elsewhere: the 319 compiled
+decoders are 172,009 bytes of `.flash.text`, 15% of the image, and `MY_DEVICES`
+in the fork's `rtl_433_devices.h` is what narrows them.
 
 ## The grid floors cells at 20px and can overflow the viewport
 
@@ -112,13 +228,14 @@ between two sizes as it does. Fixing it means measuring against
 
 ## A second pointer can still write layout mid-gesture
 
-`toggleValue`, `toggleCardHidden`, `applyGridInput`, and a rename committed
+`setValueMode`, `setCardHidden`, `applyGridInput`, and a rename committed
 with Enter all call `saveCardState()`, and all are reachable with a second
 finger while a resize is in flight, which the project's rules say must not
 write. No corruption results today: the in-flight resize has written nothing
 yet, and `endResize` re-renders over whatever the second finger did. The
 drag and resize entry points already guard against each other; these four
-do not guard against either.
+do not guard against either. `setValueMode` and `setCardHidden` are now
+reachable from the device table as well as from a card.
 
 ## The firmware self-test has never been read on a device
 
@@ -151,7 +268,7 @@ compilation and by reasoning, not by execution.
 
 ## Smaller items
 
-- `WebReceiver.ino:169-171` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
+- `WebReceiver.ino:244-246` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
   a bare expression statement rather than a `#define`, so it does nothing if
   `LOG_LEVEL` is ever undefined. Inherited from the upstream example; the build
   always defines `LOG_LEVEL`, so it is inert.
@@ -177,10 +294,6 @@ compilation and by reasoning, not by execution.
   has no `gap`; the spacing moved to `.card { margin:.35rem }`. Re-adding a
   `gap` would overflow the grid by `(cols-1) × gap`. Nothing in the file says
   so, and no test guards it.
-- `valueRows` is computed from the values currently shown, and edit mode
-  shows hidden values too, so opening edit mode shrinks the type and closing
-  it grows it back. One test works around this by toggling edit off before
-  measuring.
 - A stored `w` or `h` outside 1–24 is discarded rather than clamped, so the
   card is re-sized from its value count instead of pinned to 24.
 - `#grid-size` is fixed at `right:12rem` and is about 7rem wide, so below
