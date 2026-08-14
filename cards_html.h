@@ -282,6 +282,8 @@ function buildCard(rec, c) {
   cx.onclick = ev => { ev.stopPropagation(); toggleCardHidden(key); };
 
   const rz = el("button", "rz", "");
+  // Only a second touch can start one gesture during the other, and a drag
+  // ending mid-resize would save layout the suppressed renderer has not drawn.
   rz.onpointerdown = ev => {
     if (!editing || ev.button !== 0 || dragging) return;
     ev.stopPropagation();
