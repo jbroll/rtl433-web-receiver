@@ -204,6 +204,23 @@ serialised blob, but not `Preferences::putString()` actually landing in NVS
 and surviving a power cycle — that needs hardware, like the self-test gap
 above.
 
+## The SSE paths carry a frame-sized buffer for a 32-byte name
+
+`FrameBuffer` is 1363 bytes, sized for a device frame: a 96-byte topic and a
+600-byte payload that doubles under escaping. Two are live at once on the paths
+that publish an alias. `drainReplay()` takes the hoisted `replayFrame` and
+builds a second one per alias entry to hold the quoted name (`web_ui.cpp:454`),
+and `broadcastAlias()` holds `quoted` and `frame` together
+(`web_ui.cpp:555-561`), inside `_server.handleClient()` and alongside the
+`JsonDocument` that parsed the POST body. An alias name is capped at
+`ALIAS_NAME_MAX` 32, so 64 bytes would hold it escaped.
+
+That is about 2.7 KB of the Arduino loop task's default 8 KB stack, which
+`platformio.ini` does not override. Nothing has crashed, but the figure comes
+from reading the code rather than from a measurement: no high-water mark has
+been read off a device. A small local buffer for the name removes the question
+without needing one.
+
 ## Gaps in the page tests
 
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the
@@ -255,3 +272,21 @@ above.
 - `#grid-size` is fixed at `right:12rem` and is about 7rem wide, so below
   roughly 320px of viewport width it reaches the left edge and overlaps the
   grid in edit mode.
+- `alias_store::remove()` calls `persist()` and ignores its result, so an NVS
+  write that fails after a removal is silent and the alias returns on the next
+  boot. `set()` reports the same failure to its caller, which answers `503`.
+- `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test
+  check. The alias self-test casts `indexOf()`'s result to `uint8_t`, so a `-1`
+  would read as 255 and `topicAt()` would return NULL, passing the check for
+  the wrong reason.
+- `REPLAY_PER_LOOP` bounds the frames a replay sends per `web_ui::loop()`, not
+  the cursor steps it takes: a subscriber whose filters match nothing walks all
+  56 indices in one pass. Bounded and cheap, but it is the loop's worst case
+  and nothing states it.
+- The keepalive's write-failure path (`web_ui.cpp:519`) is the one place a
+  stopped client is not routed through `releaseSlot()`, so its filters and
+  replay cursor stay set. Inert, because every reader gates on `_sse[i]` first
+  and `handleEvents()` overwrites both when the slot is reused.
+- `test/harness.js`'s `request()` has no `error` handler on `http.request`, so
+  a client-side socket error surfaces as an uncaught exception rather than a
+  rejected promise. Test-only, and it shows up as a timeout.
