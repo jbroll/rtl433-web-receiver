@@ -91,12 +91,16 @@ static bool peerClosed(WiFiClient& client) {
   return false;
 }
 
+static void releaseSlot(int i) {
+  _sse[i].stop();
+  _filterCount[i] = 0;
+  _replay[i] = -1;
+}
+
 static void reapClosedClients() {
   for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
     if (_sse[i] && peerClosed(_sse[i])) {
-      _sse[i].stop();
-      _filterCount[i] = 0;
-      _replay[i] = -1;
+      releaseSlot(i);
     }
   }
 }
@@ -184,6 +188,12 @@ class FrameBuffer : public Print {
   size_t      length() const { return _len; }
   bool        overflowed() const { return _overflow; }
 
+  void reset() {
+    _len = 0;
+    _overflow = false;
+    _buf[0] = '\0';
+  }
+
  private:
   // "data: {"topic":"","payload":}\n\n" plus a key, plus a payload that is
   // embedded raw for a device and escaped for an alias, where escaping can
@@ -247,12 +257,13 @@ static void sendTo(int i, const FrameBuffer& frame) {
   }
   if (!socketReadyToWrite(c)) {
     Log.warning(F("SSE slot %d not ready, dropping" CR), i);
-    c.stop();
-    _filterCount[i] = 0;
-    _replay[i] = -1;
+    releaseSlot(i);
     return;
   }
   sendFrameOrDrop(c, frame.data(), frame.length());
+  if (!c) {
+    releaseSlot(i);
+  }
 }
 
 } // namespace
@@ -356,7 +367,7 @@ static void handleEvents() {
 
   char    filters[WEB_UI_SSE_FILTERS][WEB_UI_FILTER_MAX];
   uint8_t count = 0;
-  for (uint8_t i = 0; i < _server.args(); i++) {
+  for (int i = 0; i < _server.args(); i++) {
     if (_server.argName(i) != "f") {
       continue;
     }
@@ -390,7 +401,7 @@ static void handleEvents() {
         slot = i;
       }
     }
-    _sse[slot].stop();
+    releaseSlot(slot);
     Log.notice(F("SSE slots full, evicted slot %d" CR), slot);
   }
   static const char header[] = "HTTP/1.1 200 OK\r\n"
@@ -415,35 +426,37 @@ static void handleEvents() {
 
 // The cursor walks raw device slots and then the alias table, so a device heard
 // from mid-replay is delivered with its newer payload when the cursor reaches
-// it, and one evicted mid-replay is simply not delivered.
-static void drainReplay(int i) {
+// it, and one evicted mid-replay is simply not delivered. The alias table now
+// has holes like the device table, so every index is visited and NULLs skip.
+static void drainReplay(int i, FrameBuffer& frame) {
   for (int sent = 0; sent < REPLAY_PER_LOOP && _replay[i] >= 0; ) {
     int16_t at = _replay[i]++;
     const char* topic = NULL;
-    const char* payload = NULL;
-    FrameBuffer frame;
+    frame.reset();
     if (at < SIGNAL_DEVICE_SLOTS) {
       const DeviceSlot* slot = signal_store::slotAt((uint8_t)at);
       if (slot == NULL) {
         continue;
       }
       topic = slot->key;
-      payload = slot->payload;
       if (!slotWants(i, topic)) {
         continue;
       }
-      buildFrame(frame, topic, payload);
+      buildFrame(frame, topic, slot->payload);
     } else if (at < SIGNAL_DEVICE_SLOTS + ALIAS_SLOTS) {
       topic = alias_store::topicAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS));
       if (topic == NULL) {
-        _replay[i] = -1; // the table is compacted, so the first hole is the end
-        return;
+        continue;
       }
       if (!slotWants(i, topic)) {
         continue;
       }
       FrameBuffer name;
       writeJsonString(name, alias_store::nameAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS)));
+      if (name.overflowed()) {
+        Log.warning(F("SSE replay alias name overflow, skipping %s" CR), topic);
+        continue;
+      }
       buildFrame(frame, topic, name.data());
     } else {
       _replay[i] = -1;
@@ -483,9 +496,12 @@ void loop() {
     return;
   }
   _server.handleClient();
-  for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
-    if (_sse[i] && _replay[i] >= 0) {
-      drainReplay(i);
+  {
+    FrameBuffer replayFrame;
+    for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
+      if (_sse[i] && _replay[i] >= 0) {
+        drainReplay(i, replayFrame);
+      }
     }
   }
   if (millis() - _lastKeepalive >= SSE_KEEPALIVE_MS) {
@@ -496,9 +512,7 @@ void loop() {
         continue;
       }
       if (!socketReadyToWrite(_sse[i])) {
-        _sse[i].stop();
-        _filterCount[i] = 0;
-        _replay[i] = -1;
+        releaseSlot(i);
         continue;
       }
       static const char keepalive[] = ":keepalive\n\n";
@@ -507,14 +521,20 @@ void loop() {
   }
 }
 
-static void broadcastFrame(const char* topic, const FrameBuffer& frame) {
+// index is the topic's raw table index (device slot, or SIGNAL_DEVICE_SLOTS +
+// alias slot), or -1 when it has none (an alias that was just removed).
+static void broadcastFrame(const char* topic, int index, const FrameBuffer& frame) {
   for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
     if (!_sse[i]) {
       continue;
     }
-    // A slot still replaying gets this topic from its own cursor, which reads
-    // the live table, so sending it now would duplicate it.
-    if (_replay[i] >= 0 || !slotWants(i, topic)) {
+    // A slot still replaying gets an index its cursor hasn't reached yet from
+    // the cursor itself, which reads the live table; one the cursor has
+    // already passed is never revisited, so deliver it live instead.
+    if (_replay[i] >= 0 && index >= 0 && index >= _replay[i]) {
+      continue;
+    }
+    if (!slotWants(i, topic)) {
       continue;
     }
     sendTo(i, frame);
@@ -528,19 +548,24 @@ void broadcast(const DeviceSlot& slot) {
     Log.warning(F("SSE frame overflow, dropping frame" CR));
     return;
   }
-  broadcastFrame(slot.key, frame);
+  broadcastFrame(slot.key, signal_store::indexOf(slot), frame);
 }
 
 void broadcastAlias(const char* topic, const char* name) {
   FrameBuffer quoted;
   writeJsonString(quoted, name);
+  if (quoted.overflowed()) {
+    Log.warning(F("SSE alias name overflow, dropping frame" CR));
+    return;
+  }
   FrameBuffer frame;
   buildFrame(frame, topic, quoted.data());
   if (frame.overflowed()) {
     Log.warning(F("SSE alias frame overflow, dropping frame" CR));
     return;
   }
-  broadcastFrame(topic, frame);
+  int aliasIndex = alias_store::indexOf(topic);
+  broadcastFrame(topic, aliasIndex < 0 ? -1 : SIGNAL_DEVICE_SLOTS + aliasIndex, frame);
 }
 
 } // namespace web_ui

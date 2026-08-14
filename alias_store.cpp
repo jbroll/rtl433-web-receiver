@@ -8,7 +8,7 @@ namespace alias_store {
 
 static char        _topics[ALIAS_SLOTS][ALIAS_TOPIC_MAX];
 static char        _names[ALIAS_SLOTS][ALIAS_NAME_MAX];
-static uint8_t     _count = 0;
+static bool        _used[ALIAS_SLOTS] = {false};
 static Preferences _prefs;
 static bool        _open = false;
 
@@ -18,8 +18,17 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
 }
 
 static int find(const char* topic) {
-  for (uint8_t i = 0; i < _count; i++) {
-    if (strcmp(_topics[i], topic) == 0) {
+  for (uint8_t i = 0; i < ALIAS_SLOTS; i++) {
+    if (_used[i] && strcmp(_topics[i], topic) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int findFree() {
+  for (uint8_t i = 0; i < ALIAS_SLOTS; i++) {
+    if (!_used[i]) {
       return i;
     }
   }
@@ -28,8 +37,10 @@ static int find(const char* topic) {
 
 static size_t serializeTable(char* out, size_t size) {
   JsonDocument doc;
-  for (uint8_t i = 0; i < _count; i++) {
-    doc[(const char*)_topics[i]] = (const char*)_names[i];
+  for (uint8_t i = 0; i < ALIAS_SLOTS; i++) {
+    if (_used[i]) {
+      doc[(const char*)_topics[i]] = (const char*)_names[i];
+    }
   }
   if (measureJson(doc) >= size) {
     return 0;
@@ -38,7 +49,7 @@ static size_t serializeTable(char* out, size_t size) {
 }
 
 static void loadTable(const char* json) {
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   JsonDocument doc;
   if (json == NULL || *json == '\0') {
     return;
@@ -50,13 +61,15 @@ static void loadTable(const char* json) {
   if (obj.isNull()) {
     return;
   }
+  uint8_t i = 0;
   for (JsonPair kv : obj) {
-    if (_count >= ALIAS_SLOTS || !kv.value().is<const char*>()) {
+    if (i >= ALIAS_SLOTS || !kv.value().is<const char*>()) {
       continue;
     }
-    copyTruncated(_topics[_count], ALIAS_TOPIC_MAX, kv.key().c_str());
-    copyTruncated(_names[_count], ALIAS_NAME_MAX, kv.value().as<const char*>());
-    _count++;
+    copyTruncated(_topics[i], ALIAS_TOPIC_MAX, kv.key().c_str());
+    copyTruncated(_names[i], ALIAS_NAME_MAX, kv.value().as<const char*>());
+    _used[i] = true;
+    i++;
   }
 }
 
@@ -75,7 +88,7 @@ static bool persist() {
 }
 
 bool begin() {
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   _open = _prefs.begin("alias", false);
   if (!_open) {
     Log.warning(F("alias store: NVS unavailable, aliases will not persist" CR));
@@ -83,7 +96,7 @@ bool begin() {
   }
   String stored = _prefs.getString("map", "");
   loadTable(stored.c_str());
-  Log.notice(F("alias store: %d aliases loaded" CR), (int)_count);
+  Log.notice(F("alias store: %d aliases loaded" CR), (int)count());
   return true;
 }
 
@@ -103,21 +116,22 @@ bool set(const char* topic, const char* name) {
   char previous[ALIAS_NAME_MAX];
   bool added = (i < 0);
   if (added) {
-    if (_count >= ALIAS_SLOTS) {
+    i = findFree();
+    if (i < 0) {
       return false;
     }
-    i = _count++;
     copyTruncated(_topics[i], ALIAS_TOPIC_MAX, topic);
     previous[0] = '\0';
   } else {
     copyTruncated(previous, sizeof(previous), _names[i]);
   }
   copyTruncated(_names[i], ALIAS_NAME_MAX, name);
+  _used[i] = true;
   if (persist()) {
     return true;
   }
   if (added) {
-    _count--;
+    _used[i] = false;
   } else {
     copyTruncated(_names[i], ALIAS_NAME_MAX, previous);
   }
@@ -129,25 +143,31 @@ bool remove(const char* topic) {
   if (i < 0) {
     return false;
   }
-  for (uint8_t j = (uint8_t)i; j + 1 < _count; j++) {
-    memcpy(_topics[j], _topics[j + 1], ALIAS_TOPIC_MAX);
-    memcpy(_names[j], _names[j + 1], ALIAS_NAME_MAX);
-  }
-  _count--;
+  _used[i] = false;
   persist();
   return true;
 }
 
 uint8_t count() {
-  return _count;
+  uint8_t n = 0;
+  for (uint8_t i = 0; i < ALIAS_SLOTS; i++) {
+    if (_used[i]) {
+      n++;
+    }
+  }
+  return n;
 }
 
 const char* topicAt(uint8_t i) {
-  return i < _count ? _topics[i] : NULL;
+  return i < ALIAS_SLOTS && _used[i] ? _topics[i] : NULL;
 }
 
 const char* nameAt(uint8_t i) {
-  return i < _count ? _names[i] : NULL;
+  return i < ALIAS_SLOTS && _used[i] ? _names[i] : NULL;
+}
+
+int indexOf(const char* topic) {
+  return find(topic);
 }
 
 #ifdef FAKE_SIGNALS
@@ -166,7 +186,7 @@ bool selfTest() {
   bool saved_open = _open;
   _open           = false;
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   ok &= check("an unset topic has no alias", get("s/M/1/$alias") == NULL);
   ok &= check("set stores a name", set("s/M/1/$alias", "Back fence"));
   ok &= check("get returns the name",
@@ -177,17 +197,23 @@ bool selfTest() {
   ok &= check("an empty name removes", set("s/M/1/$alias", "") && get("s/M/1/$alias") == NULL);
   ok &= check("removing an unset topic reports false", !remove("s/M/1/$alias"));
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   set("s/M/1/$alias", "one");
   set("s/M/2/$alias", "two");
   set("s/M/3/$alias", "three");
+  int idx1 = indexOf("s/M/1/$alias");
+  int idx2 = indexOf("s/M/2/$alias");
+  int idx3 = indexOf("s/M/3/$alias");
   remove("s/M/2/$alias");
-  ok &= check("removal compacts the table", count() == 2);
-  ok &= check("the tail shifts down", strcmp(topicAt(1), "s/M/3/$alias") == 0);
-  ok &= check("names follow their topics", strcmp(nameAt(1), "three") == 0);
-  ok &= check("an index past the end is NULL", topicAt(2) == NULL && nameAt(2) == NULL);
+  ok &= check("removing an entry drops the count", count() == 2);
+  ok &= check("a removed entry's neighbours keep their indices",
+              indexOf("s/M/1/$alias") == idx1 && indexOf("s/M/3/$alias") == idx3);
+  ok &= check("a removed entry reads as NULL", topicAt((uint8_t)idx2) == NULL &&
+                                                    nameAt((uint8_t)idx2) == NULL);
+  set("s/M/4/$alias", "four");
+  ok &= check("a later set reuses the freed entry", indexOf("s/M/4/$alias") == idx2);
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   bool capped = true;
   for (int i = 0; i < ALIAS_SLOTS; i++) {
     snprintf(topic, sizeof(topic), "s/M/%d/$alias", i);
@@ -197,12 +223,12 @@ bool selfTest() {
   ok &= check("a set past the cap fails", !set("s/M/99/$alias", "n"));
   ok &= check("a failed set leaves the table alone", count() == ALIAS_SLOTS);
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   set("s/M/1/$alias", "Back \"fence\"");
   set("s/$alias", "Garage");
   size_t n = serializeTable(blob, sizeof(blob));
   ok &= check("the table serialises", n > 0);
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   loadTable(blob);
   ok &= check("a serialised blob reloads", count() == 2);
   ok &= check("a quoted name survives the round trip",
@@ -210,11 +236,11 @@ bool selfTest() {
   ok &= check("a source level alias survives the round trip",
               get("s/$alias") != NULL && strcmp(get("s/$alias"), "Garage") == 0);
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   loadTable("not json at all");
   ok &= check("an unparseable blob loads as empty", count() == 0);
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   char name[ALIAS_NAME_MAX];
   memset(name, 'n', sizeof(name) - 1);
   name[sizeof(name) - 1] = '\0';
@@ -242,7 +268,7 @@ bool selfTest() {
   ok &= check("the last name stored before the blob overflow is still readable",
               get(lastTopic) != NULL && strcmp(get(lastTopic), name) == 0);
 
-  _count = 0;
+  memset(_used, 0, sizeof(_used));
   _open  = saved_open;
   Log.notice(F("alias selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

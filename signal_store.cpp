@@ -192,6 +192,13 @@ const DeviceSlot* slotAt(uint8_t i) {
   return &_devices[i];
 }
 
+int indexOf(const DeviceSlot& slot) {
+  if (&slot < &_devices[0] || &slot > &_devices[SIGNAL_DEVICE_SLOTS - 1]) {
+    return -1;
+  }
+  return (int)(&slot - &_devices[0]);
+}
+
 uint32_t totalRecorded() {
   return _total;
 }

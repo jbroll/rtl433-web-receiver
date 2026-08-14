@@ -32,6 +32,8 @@ const DeviceSlot& device(uint8_t i);
 // Raw table index rather than recency order, so a cursor over it does not skip
 // or repeat a slot when a device is heard from mid-walk.
 const DeviceSlot* slotAt(uint8_t i);
+// The slot's raw table index, or -1 if it is not one of this store's slots.
+int               indexOf(const DeviceSlot& slot);
 void              sweepStale(unsigned long now, unsigned long staleMs);
 uint32_t          totalRecorded();
 uint32_t          droppedCount();
