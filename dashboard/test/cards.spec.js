@@ -696,6 +696,20 @@ test("dragging a card reorders the grid and persists", async ({ page }) => {
   expect(await keys()).toEqual(fullKeys(OREGON_KEY, THERMO_KEY, ACURITE_KEY));
 });
 
+test("a card dropped before the first card lands at the start", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await edit(page);
+  const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+
+  const a = await page.locator(`.card[data-key$="${THERMO_KEY}"] .lbl`).boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(0, a.y + a.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  expect(await keys()).toEqual(fullKeys(THERMO_KEY, ACURITE_KEY, OREGON_KEY));
+});
+
 test("card drag shows only card-level drop zones", async ({ page }) => {
   await open(page, [ACURITE, OREGON, THERMO]);
   await edit(page);
@@ -708,6 +722,8 @@ test("card drag shows only card-level drop zones", async ({ page }) => {
   const zones = await activeZones(page);
   expect(zones.card).toBe(1);
   expect(zones.value).toBe(0);
+  await expect(page.locator(".ghostcard.card-ghost")).toHaveCount(1);
+  await expect(page.locator(".ghostcard.value-ghost")).toHaveCount(0);
 
   await page.mouse.up();
   await expect(page.locator(".drop-layer")).toHaveCount(0);
@@ -725,6 +741,8 @@ test("value drag shows only value-level drop zones in the source card", async ({
   const zones = await activeZones(page);
   expect(zones.card).toBe(0);
   expect(zones.value).toBe(1);
+  await expect(page.locator(".ghostcard.value-ghost")).toHaveCount(1);
+  await expect(page.locator(".ghostcard.card-ghost")).toHaveCount(0);
 
   await page.mouse.up();
   await expect(page.locator(".drop-layer")).toHaveCount(0);

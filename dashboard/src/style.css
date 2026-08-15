@@ -83,9 +83,6 @@ section[hidden] { display:none; }
 #view-cards.editing .card .rz { display:block; }
 #view-cards.editing .card .age { right:1.4rem; }
 .card .lbl input { font-size:.75rem; width:9rem; }
-.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
-             border:1px solid var(--line); border-radius:.7rem; background:Canvas;
-             padding:.3rem .6rem; font-size:.8rem; }
 #view-sources { padding:.7rem; border:1px solid var(--line); border-radius:.7rem;
                 min-width:18rem; }
 #source-list { list-style:none; margin:0 0 .5rem; padding:0; }
