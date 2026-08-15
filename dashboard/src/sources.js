@@ -4,9 +4,14 @@ export const SOURCES_KEY = 'rtl433.sources.v1'
 
 let list = []
 let storageBroken = false
+let stored = 'absent' // 'absent' | 'empty' | 'populated'
 let onChange = () => {}
 
 export function setSourcesChanged(fn) { onChange = fn }
+
+// What loadSources() found in storage. Startup uses it to decide between
+// probing the serving origin (absent) and landing on Sources (empty).
+export function storageState() { return stored }
 
 export function normalizeBase(raw) {
   let url
@@ -22,16 +27,20 @@ export function normalizeBase(raw) {
 
 export function loadSources() {
   list = []
-  let stored
-  try { stored = localStorage.getItem(SOURCES_KEY) } catch (e) { storageBroken = true; return }
-  if (!stored) return
+  storageBroken = false
+  stored = 'absent'
+  let raw
+  try { raw = localStorage.getItem(SOURCES_KEY) } catch (e) { storageBroken = true; return }
+  if (raw === null) return
+  stored = 'empty'
   let parsed
-  try { parsed = JSON.parse(stored) } catch (e) { return }
+  try { parsed = JSON.parse(raw) } catch (e) { return }
   if (!Array.isArray(parsed)) return
   for (const entry of parsed) {
     const base = normalizeBase(entry)
     if (base && list.indexOf(base) < 0) list.push(base)
   }
+  if (list.length) stored = 'populated'
 }
 
 function save() {
@@ -42,9 +51,9 @@ function save() {
 
 export function configured() { return list.slice() }
 
-// Never empty: with nothing configured the page reads the origin it was served
-// from, which is what makes the firmware-served build work with no setup.
-export function sources() { return list.length ? list.slice() : [location.origin] }
+// May be empty: the stored list is the only source of truth. A serving origin
+// joins it only through the startup probe's explicit adoption.
+export function sources() { return list.slice() }
 
 export function addSource(raw) {
   const base = normalizeBase(raw)
@@ -83,14 +92,8 @@ export function renderSourcePanel(next) {
 }
 
 export function installSourcePanel() {
-  const toggle = document.getElementById('sources-toggle')
-  const panel = document.getElementById('view-sources')
   const form = document.getElementById('source-form')
   const input = document.getElementById('source-url')
-  toggle.onclick = () => {
-    panel.hidden = !panel.hidden
-    if (!panel.hidden) renderSourcePanel()
-  }
   input.oninput = () => input.removeAttribute('aria-invalid')
   form.onsubmit = (ev) => {
     ev.preventDefault()

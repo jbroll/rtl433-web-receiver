@@ -56,7 +56,7 @@ test("one source down does not stop another", async ({ page }) => {
   await withSources(page, host, [base(a), dead]);
   await page.click("#tab-devices");
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(1);
-  await page.click("#sources-toggle");
+  await page.click("#tab-sources");
   await expect(page.locator(`#source-list li .dot[data-state="live"]`)).toHaveCount(1);
   await expect(page.locator(`#source-list li .dot:not([data-state="live"])`)).toHaveCount(1);
 });
@@ -69,8 +69,9 @@ test("removing a source drops its devices and its cards", async ({ page }) => {
   await withSources(page, host, [base(a), base(b)]);
   await page.click("#tab-devices");
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(2);
-  await page.click("#sources-toggle");
+  await page.click("#tab-sources");
   await page.locator(`#source-list li:has-text("${base(b)}") button.rm`).click();
+  await page.click("#tab-devices");
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(1);
   await expect(page.locator(`#devices tr[data-key="${base(a)} ${topicOf(ACURITE, "srcA")}"]:not(.vrow)`))
     .toHaveCount(1);
@@ -83,7 +84,7 @@ test("removing a source updates the status line to match what remains", async ({
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
   await expect(page.locator("#status")).toHaveText("live");
-  await page.click("#sources-toggle");
+  await page.click("#tab-sources");
   await page.locator(`#source-list li:has-text("${base(b)}") button.rm`).click();
   await expect(page.locator("#status")).toHaveText("live");
 });

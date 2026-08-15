@@ -10,6 +10,7 @@ function fakeStorage() {
     setItem: (k, v) => map.set(k, String(v)),
     removeItem: (k) => map.delete(k),
   }
+  return map
 }
 
 beforeEach(() => {
@@ -18,9 +19,24 @@ beforeEach(() => {
   src.loadSources()
 })
 
-test('with nothing configured the origin is the one source', () => {
+test('with nothing configured there are no sources and the key is absent', () => {
   assert.deepEqual(src.configured(), [])
-  assert.deepEqual(src.sources(), ['http://origin.test'])
+  assert.deepEqual(src.sources(), [])
+  assert.equal(src.storageState(), 'absent')
+})
+
+test('a stored empty list is empty, not absent', () => {
+  localStorage.setItem(src.SOURCES_KEY, '[]')
+  src.loadSources()
+  assert.deepEqual(src.sources(), [])
+  assert.equal(src.storageState(), 'empty')
+})
+
+test('a stored populated list is populated', () => {
+  src.addSource('http://a.b')
+  src.loadSources()
+  assert.deepEqual(src.sources(), ['http://a.b'])
+  assert.equal(src.storageState(), 'populated')
 })
 
 test('a base URL loses its trailing slash and keeps its port and path', () => {
@@ -36,7 +52,7 @@ test('a URL that is not http is refused', () => {
   assert.equal(src.addSource('nope'), false)
 })
 
-test('added sources replace the origin default and persist', () => {
+test('added sources persist and reload', () => {
   assert.equal(src.addSource('http://a.b/'), true)
   assert.equal(src.addSource('http://a.b'), false)
   assert.equal(src.addSource('http://c.d:80'), true)
@@ -53,9 +69,35 @@ test('a URL with a query, fragment, or credentials is refused', () => {
   assert.equal(src.normalizeBase('http://a.b/mqtt'), 'http://a.b/mqtt')
 })
 
-test('removing the last source falls back to the origin', () => {
+test('removing the last source leaves an empty list', () => {
   src.addSource('http://a.b')
   assert.equal(src.removeSource('http://a.b'), true)
   assert.equal(src.removeSource('http://a.b'), false)
-  assert.deepEqual(src.sources(), ['http://origin.test'])
+  assert.deepEqual(src.sources(), [])
+  src.loadSources()
+  assert.equal(src.storageState(), 'empty')
+})
+
+test('malformed storage yields no sources and no origin source', () => {
+  localStorage.setItem(src.SOURCES_KEY, 'not json')
+  src.loadSources()
+  assert.deepEqual(src.sources(), [])
+  localStorage.setItem(src.SOURCES_KEY, '{"a":1}')
+  src.loadSources()
+  assert.deepEqual(src.sources(), [])
+})
+
+test('a storage exception keeps adoption in memory and turns saves into no-ops', () => {
+  const writes = []
+  globalThis.localStorage = {
+    getItem: () => { throw new Error('denied') },
+    setItem: (k, v) => writes.push([k, String(v)]),
+    removeItem: () => {},
+  }
+  src.loadSources()
+  assert.equal(src.storageState(), 'absent')
+  assert.equal(src.addSource('http://a.b'), true)
+  assert.equal(src.addSource('http://c.d'), true)
+  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d'])
+  assert.deepEqual(writes, [])
 })

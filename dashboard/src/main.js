@@ -3,7 +3,8 @@ import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases } from './alias.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
-import { loadSources, installSourcePanel, renderSourcePanel, sources, setSourcesChanged } from './sources.js'
+import { loadSources, installSourcePanel, renderSourcePanel, sources, setSourcesChanged,
+         storageState, addSource } from './sources.js'
 import { measureGrid, installGestures, setEditing, editing, gestureInFlight, fitValues,
          cellSide, fontPx, currentDrag, resetFit } from './grid.js'
 import { buildCard } from './card.js'
@@ -86,6 +87,54 @@ function onState(base, state) {
 
 const open = new Map() // base -> stream
 
+// The removal cleanup path: probe abort uses it too, so a half-adopted origin
+// leaves nothing behind.
+function dropSource(base, stream) {
+  stream.close()
+  open.delete(base)
+  sourceState.delete(base)
+  clearSource(base)
+  for (const key of [...aliases.keys()]) if (key.startsWith(`${base} `)) aliases.delete(key)
+}
+
+// While the origin probe is undecided its base is not in sources(), so the
+// prune loop must leave it alone or startup would close it before it reports.
+let probe = null // { base, stream, timer }
+
+function probeOrigin() {
+  const base = location.origin
+  const stream = openSource(base, { onMessage, onAlias, onState: onProbeState })
+  open.set(base, stream)
+  probe = { base, stream, timer: setTimeout(abortProbe, 1500) }
+}
+
+function onProbeState(base, state) {
+  onState(base, state)
+  if (!probe || base !== probe.base) return
+  if (state === 'live') adoptProbe()
+  else if (state === 'reconnecting') abortProbe()
+}
+
+// Adoption keeps the already-open stream: addSource fires syncSources, which
+// finds the base in `open` and opens nothing new.
+function adoptProbe() {
+  const base = probe.base
+  clearTimeout(probe.timer)
+  probe = null
+  addSource(base)
+  showTab('cards')
+}
+
+function abortProbe() {
+  const { base, stream } = probe
+  clearTimeout(probe.timer)
+  probe = null
+  dropSource(base, stream)
+  renderStatus()
+  render()
+  showTab('sources')
+}
+
 function syncSources() {
   const want = sources()
   for (const base of want) {
@@ -94,11 +143,8 @@ function syncSources() {
   }
   for (const [base, stream] of open) {
     if (want.indexOf(base) >= 0) continue
-    stream.close()
-    open.delete(base)
-    sourceState.delete(base)
-    clearSource(base)
-    for (const key of [...aliases.keys()]) if (key.startsWith(`${base} `)) aliases.delete(key)
+    if (probe && base === probe.base) continue
+    dropSource(base, stream)
   }
   // stream.close() fires onState synchronously while the base is still in
   // sourceState, so the summary it computes counts a source that is about to
@@ -107,7 +153,7 @@ function syncSources() {
   render()
 }
 
-const TABS = ['devices', 'log', 'cards']
+const TABS = ['devices', 'log', 'cards', 'sources']
 for (const n of TABS) $('tab-' + n).onclick = () => showTab(n)
 
 function showTab(name) {
@@ -115,6 +161,7 @@ function showTab(name) {
     $('tab-' + n).setAttribute('aria-selected', String(n === name))
     $('view-' + n).hidden = n !== name
   }
+  if (name === 'sources') renderSourcePanel()
   // The section it reveals has not been drawn since it was last hidden.
   render()
   renderLog()
@@ -174,5 +221,10 @@ installGestures()
 installSort()
 window.addEventListener('resize', render)
 setInterval(render, 1000)
+// Only a never-written key probes the serving origin; a stored empty list is
+// a deliberate choice and lands on Sources instead.
+const stored = storageState()
+if (stored === 'absent') probeOrigin()
+else showTab(stored === 'empty' ? 'sources' : 'cards')
 syncSources()
 render()
