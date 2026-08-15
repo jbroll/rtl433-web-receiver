@@ -86,12 +86,10 @@ module boundaries and the replay design.
 
 ## The page
 
-The page opens on Cards, a grid of one card per device, and also has a
-Devices table and a raw Log, behind tabs. See
-[docs/user-manual.md](docs/user-manual.md) for the tabs, the card grid and
-its persistence, and edit mode, and
-[docs/architecture.md](docs/architecture.md) for the receiver's own card and
-its telemetry fields.
+The receiver serves a build of the [dashboard](../dashboard/README.md). See
+[its user manual](../dashboard/docs/user-manual.md) for the tabs, the card
+grid, and edit mode, and [docs/architecture.md](docs/architecture.md) for the
+receiver's own card and its telemetry fields.
 
 ## Limits
 
@@ -115,7 +113,6 @@ printing a PASS/FAIL line per check over serial.
 `topic.cpp` has no Arduino dependency and is host-tested: `bash test/host/run.sh`
 compiles and runs it on the host.
 
-The browser page has its own tests. `npm install` once, then `npx playwright
-test`. `test/harness.js` extracts the same PROGMEM literals the firmware serves
-and implements the HTTP binding — `GET` and `POST` of a topic, `/events` with
-filters and a retained replay — so the tests run without a board.
+`test/binding.spec.js` covers the HTTP binding against `test/binding-server.js`, a JS
+model of the same surface, so it runs without a board: `npm install` once, then `npx
+playwright test`. The dashboard has [its own suite](../dashboard/README.md).
