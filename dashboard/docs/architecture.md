@@ -12,7 +12,7 @@ Plain ES modules, no framework, bundled by `esbuild` into one `<script>`.
 | `devices.js` | the live device map and its `DEVICE_MAX` cap |
 | `store.js` | layout and settings in `localStorage`, and `forgetLayouts()` |
 | `sources.js` | the source list, its storage, and the settings panel |
-| `stream.js` | one source's SSE connection, its filters, and its reconnect |
+| `stream.js` | one source's SSE connection and its reconnect |
 | `grid.js` | cell arithmetic, the resize and drag gestures, and value fitting |
 | `card.js` | one card's DOM, its value modes, and rename |
 | `table.js` | the device table and the log |

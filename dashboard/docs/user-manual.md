@@ -65,7 +65,7 @@ reads bigger, and shrinks further where a reading is too wide to fit at that
 size. Every reading on a card takes the same size, the one its widest needs.
 Cards that do not fit in the set number of rows render below the fold.
 
-Layout is per browser, in localStorage under `rtl433.cards.v2`: the grid size,
+Layout is per browser, in localStorage under `rtl433.dashboard.v1`: the grid size,
 the card order, which cards are hidden, and per card a size in cells, the
 value order, and which values are hidden or at the bottom. No name is stored
 there; a card's name is the published alias, or the device's key if none is
