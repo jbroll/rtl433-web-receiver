@@ -23,6 +23,8 @@ esbuild, Playwright, `node --test`.
   `rtl433.cards.v1`/`v2` keys and `migrateSize()` are deleted, not carried.
 - Node >= 22, ESM (`"type": "module"`) for `bridge/` and `dashboard/`. `receiver/`'s test
   package stays CommonJS, as it is today.
+- Every file under `dashboard/test/` is ESM, `dashboard/package.json` being `"type":
+  "module"`; `receiver/test/` stays CommonJS.
 - `esbuild` is the dashboard's only runtime dependency. Playwright is a devDependency.
 - Never open a pull request, never push to any remote, never push to `mqtt-http-bridge`.
   All work stays on the local `dashboard` branch of `rtl433-web-receiver`.
@@ -2000,9 +2002,9 @@ export function installSourcePanel()      // wires #sources-toggle, #source-add,
 Write `dashboard/test/sources.spec.js`:
 
 ```js
-const { test, expect } = require("@playwright/test");
-const { startServer, startPage } = require("./harness");
-const { ACURITE } = require("./fixtures");
+import { test, expect } from "@playwright/test";
+import { startServer, startPage } from "./harness.js";
+import { ACURITE } from "./fixtures.js";
 
 let servers = [];
 
@@ -2237,9 +2239,9 @@ Claude-Session: https://claude.ai/code/session_01CGhKgNdjFzFJkNv8BBTvWw"
 Write `dashboard/test/multi.spec.js`:
 
 ```js
-const { test, expect } = require("@playwright/test");
-const { startServer, startPage } = require("./harness");
-const { ACURITE, OREGON, topicOf } = require("./fixtures");
+import { test, expect } from "@playwright/test";
+import { startServer, startPage } from "./harness.js";
+import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 let servers = [];
 

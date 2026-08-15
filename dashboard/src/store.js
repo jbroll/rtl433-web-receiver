@@ -24,6 +24,7 @@ function gridNum(v, fallback) {
   return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback
 }
 
+// Exported only for the browser suite; no module here calls it externally.
 export function defaultSize(count) {
   const v = Math.max(1, count)
   const w = Math.ceil(Math.sqrt(v))
@@ -111,6 +112,9 @@ export function ensureCard(key, merged) {
 
 export function cardEntry(key) { return cardState.cards[key] }
 
+// Only the browser suite calls these two: setCardState() replaces cardState
+// wholesale, bypassing blankState()'s null-prototype guard and every filter in
+// loadCardState() on whatever the caller hands it.
 export function getCardState() { return cardState }
 
 export function setCardState(s) { cardState = s }

@@ -4,7 +4,7 @@ import { makeKey, applyAliasFrame, isSelf } from './alias.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { measureGrid, installGestures, setEditing, editing, gestureInFlight, fitValues,
-         cellSide, fontPx, currentDrag } from './grid.js'
+         cellSide, fontPx, currentDrag, resetFit } from './grid.js'
 import { buildCard } from './card.js'
 import { renderDevices, addLog, renderLog } from './table.js'
 import { openSource } from './stream.js'
@@ -28,6 +28,7 @@ function renderCards() {
   const keys = store.orderedKeys()
   const shown = keys.filter((k) => !store.cardHidden(k))
   if (editing()) shown.push(...keys.filter(store.cardHidden))
+  resetFit()
   grid.replaceChildren(...shown.map((k) => buildCard(devices.get(k))))
   fitValues()
 }
@@ -113,18 +114,21 @@ $('forget-cards').onclick = () => {
 
 // The browser suite drives the page through the names it had before the bundle
 // closed over them.
-Object.assign(window, {
-  devices, render, renderCards, measureGrid, fmtValue, valueFont: fontPx,
-  ensureCard: store.ensureCard, visibleValues: store.visibleValues,
-  saveCardState: store.saveCardState, defaultSize: store.defaultSize,
-})
-Object.defineProperties(window, {
-  cardState: { get: store.getCardState, set: store.setCardState },
-  cellSide: { get: cellSide },
-  dragging: { get: currentDrag },
-  hideNewCards: { set: store.setHideNewCards },
-})
+function exposeForTests() {
+  Object.assign(window, {
+    devices, renderCards, measureGrid, fmtValue, valueFont: fontPx,
+    ensureCard: store.ensureCard, visibleValues: store.visibleValues,
+    saveCardState: store.saveCardState, defaultSize: store.defaultSize,
+  })
+  Object.defineProperties(window, {
+    cardState: { get: store.getCardState, set: store.setCardState },
+    cellSide: { get: cellSide },
+    dragging: { get: currentDrag },
+    hideNewCards: { set: store.setHideNewCards },
+  })
+}
 
+exposeForTests()
 store.loadCardState()
 syncGridInputs()
 installGestures()

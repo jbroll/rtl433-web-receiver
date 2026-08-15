@@ -7,6 +7,8 @@ const OREGON_KEY = topicOf(OREGON);
 const THERMO_KEY = topicOf(THERMO);
 const FREEZER_KEY = topicOf(FREEZER);
 const RECEIVER_KEY = topicOf(RECEIVER);
+// $= matches an unanchored tail, so this only picks one card as long as a
+// spec runs a single source; a two-source test would need the full key.
 const CARD = `.card[data-key$="${ACURITE_KEY}"]`;
 const LONG_KEY = topicOf(LONGNAME);
 const LONG_CARD = `.card[data-key$="${LONG_KEY}"]`;

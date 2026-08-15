@@ -62,6 +62,13 @@ export function trackFit(node, card, em) {
   fitting.push({ node: node, card: card, em: em });
 }
 
+// Cleared before the rebuild too, not just at fitValues()'s tail: if buildCard
+// throws mid-render, entries from the aborted pass would carry over with nodes
+// no longer in the document, poisoning the next fit's per-card cap.
+export function resetFit() {
+  fitting = [];
+}
+
 export function fitValues() {
   const boxes = fitting.map(f => f.node.parentNode.clientWidth);
   const caps = new Map();
