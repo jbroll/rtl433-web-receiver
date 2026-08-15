@@ -441,6 +441,13 @@ async function edit(page) {
   await expect(page.locator("#view-cards")).toHaveClass(/editing/);
 }
 
+async function activeZones(page) {
+  return page.evaluate(() => ({
+    card: document.querySelectorAll('.drop-layer.card-layer .drop-zone.active').length,
+    value: document.querySelectorAll('.drop-layer.value-layer .drop-zone.active').length,
+  }));
+}
+
 test("the devices tab sets a value's display mode", async ({ page }) => {
   await open(page, [ACURITE]);
   const stored = async () => (await cardState(page)).cards[storeKey(server, ACURITE_KEY)];
@@ -687,6 +694,40 @@ test("dragging a card reorders the grid and persists", async ({ page }) => {
   await page.reload();
   await page.click("#tab-cards");
   expect(await keys()).toEqual(fullKeys(OREGON_KEY, THERMO_KEY, ACURITE_KEY));
+});
+
+test("card drag shows only card-level drop zones", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await edit(page);
+  const box = await page.locator(CARD + " .lbl").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 40, { steps: 5 });
+
+  await expect(page.locator(".drop-layer")).toHaveCount(1);
+  const zones = await activeZones(page);
+  expect(zones.card).toBe(1);
+  expect(zones.value).toBe(0);
+
+  await page.mouse.up();
+  await expect(page.locator(".drop-layer")).toHaveCount(0);
+});
+
+test("value drag shows only value-level drop zones in the source card", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  const from = await page.locator(CARD + ' .val[data-f="temperature_F"]').boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 20, from.y + 20, { steps: 5 });
+
+  await expect(page.locator(".drop-layer")).toHaveCount(1);
+  const zones = await activeZones(page);
+  expect(zones.card).toBe(0);
+  expect(zones.value).toBe(1);
+
+  await page.mouse.up();
+  await expect(page.locator(".drop-layer")).toHaveCount(0);
 });
 
 test("dragging a value reorders within its card only", async ({ page }) => {
