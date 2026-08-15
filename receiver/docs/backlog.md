@@ -158,13 +158,6 @@ sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
 `signal_store`'s 31 checks and `alias_store`'s 21 are verified by compilation
 and by reasoning, not by execution.
 
-## An alias surviving a reboot is unverified
-
-`alias_store::selfTest()` covers the in-RAM table and the round trip through a
-serialised blob, but not `Preferences::putString()` actually landing in NVS
-and surviving a power cycle — that needs hardware, like the self-test gap
-above.
-
 ## The SSE paths carry a frame-sized buffer for a 32-byte name
 
 `FrameBuffer` is 1363 bytes, sized for a device frame: a 96-byte topic and a
