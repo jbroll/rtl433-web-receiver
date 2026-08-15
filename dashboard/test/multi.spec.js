@@ -153,23 +153,28 @@ test("same-origin alias written in one browser replays in a fresh browser", asyn
 
   const contextA = await browser.newContext();
   const pageA = await contextA.newPage();
-  await pageA.goto(server.url);
-  await pageA.click("#tab-devices");
-  await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).fill("Back fence");
-  await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).press("Enter");
+  try {
+    await pageA.goto(server.url);
+    await pageA.click("#tab-devices");
+    await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).fill("Back fence");
+    await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).press("Enter");
 
-  // The POST landed and was retained.
-  const posted = await server.get(topic + "/$alias");
-  expect(posted.status).toBe(200);
-  expect(JSON.parse(posted.body)).toBe("Back fence");
+    // The POST landed and was retained.
+    const posted = await server.get(topic + "/$alias");
+    expect(posted.status).toBe(200);
+    expect(JSON.parse(posted.body)).toBe("Back fence");
 
-  // A fresh browser with no localStorage sees the alias replayed from the server.
-  const contextB = await browser.newContext();
-  const pageB = await contextB.newPage();
-  await pageB.goto(server.url);
-  await pageB.click("#tab-devices");
-  await expect(pageB.locator(`#devices tr[data-key="${key}"] input[type=text]`)).toHaveValue("Back fence");
-
-  await contextA.close();
-  await contextB.close();
+    // A fresh browser with no localStorage sees the alias replayed from the server.
+    const contextB = await browser.newContext();
+    const pageB = await contextB.newPage();
+    try {
+      await pageB.goto(server.url);
+      await pageB.click("#tab-devices");
+      await expect(pageB.locator(`#devices tr[data-key="${key}"] input[type=text]`)).toHaveValue("Back fence");
+    } finally {
+      await contextB.close();
+    }
+  } finally {
+    await contextA.close();
+  }
 });

@@ -158,6 +158,13 @@ sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
 `signal_store`'s 31 checks and `alias_store`'s 21 are verified by compilation
 and by reasoning, not by execution.
 
+## An alias surviving a reboot is unverified
+
+`alias_store::selfTest()` covers the in-RAM table and the round trip through a
+serialised blob, but not `Preferences::putString()` actually landing in NVS
+and surviving a power cycle — that needs hardware, like the self-test gap
+above.
+
 ## Smaller items
 
 - `WebReceiver.ino:244-246` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,

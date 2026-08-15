@@ -133,6 +133,7 @@ test('the alias key is scoped to the full device key including source base', () 
 test('postAlias logs a failed POST without throwing', async () => {
   const errors = []
   const origError = console.error
+  const origFetch = globalThis.fetch
   console.error = (...args) => errors.push(args)
   try {
     globalThis.fetch = () => Promise.resolve({ ok: false, status: 503 })
@@ -149,5 +150,6 @@ test('postAlias logs a failed POST without throwing', async () => {
     assert.match(errors[0].join(' '), /POST .*\$alias.* network down/)
   } finally {
     console.error = origError
+    globalThis.fetch = origFetch
   }
 })
