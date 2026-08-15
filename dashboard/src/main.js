@@ -1,9 +1,9 @@
 import { setRender } from './render.js'
-import { devices, upsert } from './devices.js'
-import { makeKey, applyAliasFrame, isSelf } from './alias.js'
+import { devices, upsert, clearSource } from './devices.js'
+import { makeKey, applyAliasFrame, isSelf, aliases } from './alias.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
-import { loadSources, installSourcePanel, renderSourcePanel } from './sources.js'
+import { loadSources, installSourcePanel, renderSourcePanel, sources, setSourcesChanged } from './sources.js'
 import { measureGrid, installGestures, setEditing, editing, gestureInFlight, fitValues,
          cellSide, fontPx, currentDrag, resetFit } from './grid.js'
 import { buildCard } from './card.js'
@@ -80,6 +80,26 @@ function onState(base, state) {
   renderSourcePanel(sourceState)
 }
 
+const open = new Map() // base -> stream
+
+function syncSources() {
+  const want = sources()
+  for (const base of want) {
+    if (open.has(base)) continue
+    open.set(base, openSource(base, { onMessage, onAlias, onState }))
+  }
+  for (const [base, stream] of open) {
+    if (want.indexOf(base) >= 0) continue
+    stream.close()
+    open.delete(base)
+    sourceState.delete(base)
+    clearSource(base)
+    for (const key of [...aliases.keys()]) if (key.startsWith(`${base} `)) aliases.delete(key)
+  }
+  render()
+  renderSourcePanel(sourceState)
+}
+
 const TABS = ['devices', 'log', 'cards']
 for (const n of TABS) $('tab-' + n).onclick = () => showTab(n)
 
@@ -139,10 +159,11 @@ function exposeForTests() {
 exposeForTests()
 store.loadCardState()
 loadSources()
+setSourcesChanged(syncSources)
 installSourcePanel()
 syncGridInputs()
 installGestures()
 window.addEventListener('resize', render)
 setInterval(render, 1000)
-openSource(location.origin, { onMessage, onAlias, onState })
+syncSources()
 render()

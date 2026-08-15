@@ -1,10 +1,12 @@
-import { requestRender } from './render.js'
 import { el } from './units.js'
 
 export const SOURCES_KEY = 'rtl433.sources.v1'
 
 let list = []
 let storageBroken = false
+let onChange = () => {}
+
+export function setSourcesChanged(fn) { onChange = fn }
 
 export function normalizeBase(raw) {
   let url
@@ -49,7 +51,7 @@ export function addSource(raw) {
   if (!base || list.indexOf(base) >= 0) return false
   list.push(base)
   save()
-  requestRender()
+  onChange()
   return true
 }
 
@@ -58,7 +60,7 @@ export function removeSource(base) {
   if (at < 0) return false
   list.splice(at, 1)
   save()
-  requestRender()
+  onChange()
   return true
 }
 
