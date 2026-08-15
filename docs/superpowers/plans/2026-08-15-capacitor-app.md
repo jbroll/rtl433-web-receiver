@@ -50,7 +50,7 @@
 
 - [ ] **Step 3: Run the focused tests and verify they fail for the current implementation.**
 
-  Run `npm test -- --grep "origin|Sources|source"` from `dashboard/`. Expected: the new tests fail because the gear control, origin fallback, and startup behavior still exist.
+  Run `node --test test/sources.test.js` and `npx playwright test test/sources.spec.js` from `dashboard/`. Expected: the new tests fail because the gear control, origin fallback, and startup behavior still exist.
 
 - [ ] **Step 4: Replace the gear control with a fourth Sources tab.**
 
@@ -58,7 +58,7 @@
 
 - [ ] **Step 5: Implement stored-list-only loading and the bounded origin probe.**
 
-  In `sources.js`, preserve the distinction between `localStorage.getItem(...) === null` and a parsed empty array, remove the `[location.origin]` fallback, and add the smallest startup-state accessors needed by `main.js`. In `main.js`, open `location.origin` only for an absent key, register it in `open` before synchronization, adopt it on `live`, and select Cards. On `reconnecting` or a 1500 ms timeout, call the same stream close and source cleanup path used by removal, clear source devices and aliases, and select Sources. The probe stream's `onMessage` and `onAlias` handlers remain the normal handlers, so messages received before adoption render normally. A successful adoption must save the origin and reuse the already-open stream rather than opening a second stream. `installSourcePanel()` remains installed at startup and retains the form and source-list wiring.
+  In `sources.js`, preserve the distinction between `localStorage.getItem(...) === null` and a parsed empty array, remove the `[location.origin]` fallback, and add the smallest startup-state accessors needed by `main.js`. In `main.js`, open `location.origin` only for an absent key, register it in `open` before synchronization, adopt it on `live`, and select Cards. `syncSources()` closes any open stream not in `sources()`, so while the probe is undecided the probe base must be treated as wanted — track the pending probe and exempt it from the prune loop until the probe resolves, or the startup `syncSources()` call will close the probe before it can report. On `reconnecting` or a 1500 ms timeout, call the same stream close and source cleanup path used by removal, clear source devices and aliases, and select Sources. The probe stream's `onMessage` and `onAlias` handlers remain the normal handlers, so messages received before adoption render normally. A successful adoption must save the origin and reuse the already-open stream rather than opening a second stream. `installSourcePanel()` remains installed at startup and retains the form and source-list wiring.
 
 - [ ] **Step 6: Run the focused and complete dashboard tests.**
 
@@ -98,7 +98,7 @@
 
 - [ ] **Step 2: Generate the platform trees from the dashboard artifact.**
 
-  Run `cd dashboard && npm run build`, then `cd ../app && npx cap add android && npx cap add ios && npx cap sync android && npx cap sync ios`. Keep the generated source trees in git, and add these exact generated-only paths to `app/.gitignore`: `android/app/build/`, `android/build/`, `android/.gradle/`, `android/local.properties`, `android/app/src/main/assets/public/`, `android/app/src/main/assets/capacitor.config.json`, `android/app/src/main/assets/capacitor.plugins.json`, `ios/build/`, `ios/DerivedData/`, and `ios/App/Pods/`.
+  Run `cd dashboard && npm run build`, then `cd ../app && npx cap add android && npx cap add ios && npx cap sync android && npx cap copy ios`. `cap sync ios` runs `pod install`, which exists only on macOS, so the local run uses `cap copy ios` for the web-asset half; the macOS runner in Task 4 runs the full sync. Keep the generated source trees in git, and add these exact generated-only paths to `app/.gitignore`: `android/app/build/`, `android/build/`, `android/.gradle/`, `android/local.properties`, `android/app/src/main/assets/public/`, `android/app/src/main/assets/capacitor.config.json`, `android/app/src/main/assets/capacitor.plugins.json`, `ios/build/`, `ios/DerivedData/`, and `ios/App/Pods/`.
 
 - [ ] **Step 3: Configure Android cleartext LAN access.**
 
@@ -116,9 +116,9 @@
   </dict>
   ```
 
-- [ ] **Step 5: Compile both platforms independently.**
+- [ ] **Step 5: Verify locally what this host can verify.**
 
-  Run `cd dashboard && npm run build`, `cd ../app && npx cap sync android`, `cd android && ./gradlew assembleDebug`; then run `cd ../../app && npx cap sync ios && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug CODE_SIGNING_ALLOWED=NO`. Expected: both compilation commands succeed without a connected device or signing credentials.
+  Run `cd dashboard && npm run build`, `cd ../app && npx cap sync android`, and `npx cap copy ios`. Expected: all three succeed. This host has no Android SDK, no JDK 21, and no Xcode, so compilation is deliberately not local: Android compilation is Task 3's `ci/android` job on `gpu`, and iOS compilation is Task 4's workflow on `macos-latest`. Do not run `./gradlew assembleDebug` or `xcodebuild` here.
 
 - [ ] **Step 6: Commit the shell.**
 
@@ -140,19 +140,23 @@
 
   Verify the script is executable, contains the exact environment exports, runs dashboard build before `npx cap sync android`, and runs `./gradlew assembleDebug` from `app/android`. Verify the optional device path uses `if adb devices | grep -q '[[:space:]]device$'; then ... else echo 'device smoke skipped: no adb device'; fi` and reports skipped when no tablet is connected.
 
-- [ ] **Step 2: Implement the simple-ci configuration and job.**
+- [ ] **Step 2: Create the missing host workspace clone.**
+
+  The simple-ci quickstart requires a clone at `gpu:~/ci-workspace/rtl433-web-receiver`, which the backlog records as not existing yet. Run `ssh gpu 'test -d ~/ci-workspace/rtl433-web-receiver || git clone <this-repo-url> ~/ci-workspace/rtl433-web-receiver'`, using the repository's own remote URL, and confirm the clone can fetch this branch.
+
+- [ ] **Step 3: Implement the simple-ci configuration and job.**
 
   Follow the repository's existing simple-ci shape in `/home/john/src/KinoQ/ci/simple-ci.conf`: source `~/.config/simple-ci.conf` from `ci/simple-ci.conf`, set the job host to `gpu` in that config, and do not store host details in the repository. The executable job must run `npm ci` in `dashboard` and `app` as needed, build the dashboard, sync Android, assemble the debug APK, and then run the device check only when an adb device is present.
 
-- [ ] **Step 3: Implement the CDP smoke path.**
+- [ ] **Step 4: Implement the CDP smoke path.**
 
   When a tablet is connected, install the debug APK with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, forward the WebView DevTools socket with `adb forward tcp:9222 localabstract:webview_devtools_remote`, and use a Node Playwright smoke script with `chromium.connectOverCDP('http://127.0.0.1:9222')` to launch the app, assert the empty Sources landing state, add a receiver, and assert receiver data renders. When no device is connected, print a skip line and return success.
 
-- [ ] **Step 4: Run the job and platform verification.**
+- [ ] **Step 5: Run the job and platform verification.**
 
   Run `bash -n ci/android`, `./ci/android` through the configured simple-ci host, and the local dashboard/app build sequence. Expected: APK compilation succeeds; the device portion either passes or is explicitly skipped.
 
-- [ ] **Step 5: Commit CI support.**
+- [ ] **Step 6: Commit CI support.**
 
   Run `git add ci && git commit -m "ci: build Android app on gpu"`.
 
@@ -197,7 +201,7 @@
 
 - [ ] **Step 1: Run the complete verification matrix.**
 
-  Run `npm test` in `dashboard`, the dashboard build plus `npx cap sync android`, `./gradlew assembleDebug`, `npx cap sync ios`, unsigned `xcodebuild`, `git diff --check`, and `git status --short`. Record device smoke as passed or skipped with its reason.
+  Run `npm test` in `dashboard`, the dashboard build plus `npx cap sync android` and `npx cap copy ios`, the `ci/android` job on `gpu` (which performs `./gradlew assembleDebug`), `git diff --check`, and `git status --short`. The unsigned `xcodebuild` is verified by the Task 4 workflow on `macos-latest`, not locally. Record device smoke as passed or skipped with its reason.
 
 - [ ] **Step 2: Review the branch against the design spec.**
 
