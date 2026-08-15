@@ -108,6 +108,45 @@ The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in th
 The page is no longer a lever: it is gzipped, and its size is recorded in
 [`architecture.md`](architecture.md#the-page-the-firmware-serves).
 
+## The partition table uses 4 MB of a 16 MB chip
+
+`platformio.ini` sets `board = esp32s3box` and no `board_build.partitions`, so the build
+inherits Arduino's `default.csv`: `app0` and `app1` at 1.25 MB each, `spiffs` at 1.44 MB,
+4 MB in total. The board and the bootloader header both declare 16 MB, so 12 MB is not
+addressed by any partition. The image is 1,156,725 bytes, 88.3% of `app0` and 7% of the
+chip, which is why the flash figure reads as tight when it is not.
+
+A table filling the chip, with NVS given room it will not run out of:
+
+| Partition | Type | Subtype | Offset | Size |
+|---|---|---|---|---|
+| `nvs` | data | nvs | `0x9000` | `0x100000` (1 MB) |
+| `otadata` | data | ota | `0x109000` | `0x2000` |
+| `app0` | app | ota_0 | `0x110000` | `0x400000` (4 MB) |
+| `app1` | app | ota_1 | `0x510000` | `0x400000` (4 MB) |
+| `spiffs` | data | spiffs | `0x910000` | `0x6E0000` (6.875 MB) |
+| `coredump` | data | coredump | `0xFF0000` | `0x10000` |
+
+App partitions need 64 KB alignment, which is what leaves the 20 KB gap after `otadata`.
+The image would sit at 27.6% of `app0`, and `MY_DEVICES` stops being a size question.
+
+`nvs` moves and grows, so the alias table is erased on the first boot after reflashing.
+`esptool read_flash 0x9000 0x5000 nvs.bin` before the change captures it; restoring is a
+`POST` per alias, or the SSE replay read back through `GET /events`.
+
+## WiFi credentials are compiled into the image
+
+`load_env.py` turns `.env` into `-D` build flags and the build stops with an `#error`
+without them, so the SSID and password are baked into the binary. Every network change
+needs a rebuild and a reflash, one image cannot be flashed to boards on different
+networks, and the credentials are readable in a flash dump.
+
+Provisioning at runtime is the fix, and most of its cost is already paid:
+`libwifi_provisioning.a` (33,330 bytes) and `libsmartconfig.a` (38,160) are linked into
+the image today and unused. A SoftAP portal on first boot, credentials in NVS, and a
+long press or an unprovisioned boot to clear them would drop `.env` to a build
+convenience rather than a requirement. The 1 MB `nvs` above leaves room for it.
+
 ## The firmware self-test has never been read on a device
 
 `signal_store::selfTest()` and `alias_store::selfTest()` run at startup under
