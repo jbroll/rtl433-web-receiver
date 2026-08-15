@@ -45,6 +45,8 @@ test("a URL that is not http is refused and nothing is stored", async ({ page })
   await page.click("#source-add");
   await expect(page.locator("#source-list li")).toHaveCount(0);
   await expect(page.locator("#source-url")).toHaveAttribute("aria-invalid", "true");
+  await page.fill("#source-url", "ws://still-typing");
+  await expect(page.locator("#source-url")).not.toHaveAttribute("aria-invalid", "true");
 });
 
 test("removing a source takes it out of the panel and out of storage", async ({ page }) => {

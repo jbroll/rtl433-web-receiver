@@ -11,7 +11,10 @@ test('the build inlines everything into one document', async () => {
   assert.match(html, /<script>/)
   assert.doesNotMatch(html, /<script[^>]+\ssrc=/)
   assert.doesNotMatch(html, /<link[^>]+rel=["']?stylesheet/)
-  assert.doesNotMatch(html, /https?:\/\//)
+  // A placeholder attribute value is example text, not a request; only a
+  // reference site (script src, stylesheet href, fetch target) matters here.
+  assert.doesNotMatch(html, /\s(?:src|href)\s*=\s*["']https?:\/\//i)
+  assert.doesNotMatch(html, /\bfetch\(\s*["']https?:\/\//)
 })
 
 test('the device cap comes from the firmware header', async () => {

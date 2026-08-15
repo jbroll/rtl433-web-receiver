@@ -89,6 +89,7 @@ export function installSourcePanel() {
     panel.hidden = !panel.hidden
     if (!panel.hidden) renderSourcePanel()
   }
+  input.oninput = () => input.removeAttribute('aria-invalid')
   form.onsubmit = (ev) => {
     ev.preventDefault()
     if (!addSource(input.value)) {

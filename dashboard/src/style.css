@@ -81,10 +81,10 @@ section[hidden] { display:none; }
 .ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
              border:1px solid var(--line); border-radius:.7rem; background:Canvas;
              padding:.3rem .6rem; font-size:.8rem; }
-#sources-toggle { position:fixed; bottom:1rem; right:7.6rem; z-index:2; cursor:pointer;
+#sources-toggle { position:fixed; bottom:1rem; left:1rem; right:auto; z-index:2; cursor:pointer;
                   width:2.4rem; height:2.4rem; border-radius:50%; font:inherit;
                   background:Canvas; color:inherit; border:1px solid var(--line); }
-#view-sources { position:fixed; bottom:4rem; right:1rem; z-index:3; padding:.7rem;
+#view-sources { position:fixed; bottom:4rem; left:1rem; right:auto; z-index:3; padding:.7rem;
                 background:Canvas; border:1px solid var(--line); border-radius:.7rem;
                 min-width:18rem; }
 #view-sources[hidden] { display:none; }
