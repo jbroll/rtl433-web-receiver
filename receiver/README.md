@@ -58,7 +58,7 @@ attempt times out after 20 seconds before the receiver starts.
 ## The HTTP surface
 
 The receiver serves the source-only subset of the
-[HTTP binding for MQTT](../mqtt-http-bridge/docs/binding.md): stable
+[HTTP binding for MQTT](../bridge/docs/binding.md): stable
 `<source>/<model>/<id>` topics, the rtl_433 message as the payload, and an alias
 at every level.
 

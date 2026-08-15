@@ -19,7 +19,7 @@ Two projects remain, in dependency order.
 
 ## 1. The HTTP binding for MQTT (spec)
 
-`~/src/mqtt-http-bridge/docs/binding.md`. Three operations over stable
+[`../bridge/docs/binding.md`](../../bridge/docs/binding.md). Three operations over stable
 `<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an
 alias at the source, device, and reading levels carried as a `$alias` topic.
 Everything below is written against it. It now lives beside the bridge that
