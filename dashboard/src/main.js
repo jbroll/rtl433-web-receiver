@@ -71,13 +71,17 @@ function onAlias(base, topic, payload) { applyAliasFrame(makeKey(base, topic), p
 
 const sourceState = new Map()
 
-function onState(base, state) {
-  sourceState.set(base, state)
+function renderStatus() {
   const live = [...sourceState.values()].filter((s) => s === 'live').length
   $('status').textContent = live === sourceState.size ? 'live'
                           : live === 0 ? 'reconnecting'
                           : `${live}/${sourceState.size} live`
   renderSourcePanel(sourceState)
+}
+
+function onState(base, state) {
+  sourceState.set(base, state)
+  renderStatus()
 }
 
 const open = new Map() // base -> stream
@@ -96,8 +100,11 @@ function syncSources() {
     clearSource(base)
     for (const key of [...aliases.keys()]) if (key.startsWith(`${base} `)) aliases.delete(key)
   }
+  // stream.close() fires onState synchronously while the base is still in
+  // sourceState, so the summary it computes counts a source that is about to
+  // be deleted. Recompute once the prune loop's deletes have landed.
+  renderStatus()
   render()
-  renderSourcePanel(sourceState)
 }
 
 const TABS = ['devices', 'log', 'cards']

@@ -76,6 +76,18 @@ test("removing a source drops its devices and its cards", async ({ page }) => {
     .toHaveCount(1);
 });
 
+test("removing a source updates the status line to match what remains", async ({ page }) => {
+  const host = await startPage();
+  const a = await startServer({ devices: [ACURITE], source: "srcA" });
+  const b = await startServer({ devices: [OREGON], source: "srcB" });
+  servers.push(host, a, b);
+  await withSources(page, host, [base(a), base(b)]);
+  await expect(page.locator("#status")).toHaveText("live");
+  await page.click("#sources-toggle");
+  await page.locator(`#source-list li:has-text("${base(b)}") button.rm`).click();
+  await expect(page.locator("#status")).toHaveText("live");
+});
+
 test("a rename posts to the source that device came from", async ({ page }) => {
   const host = await startPage();
   const a = await startServer({ devices: [ACURITE], source: "srcA" });
