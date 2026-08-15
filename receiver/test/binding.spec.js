@@ -58,6 +58,16 @@ test("a posted alias comes back byte for byte", async () => {
   expect(got.body).toBe(JSON.stringify("Back fence"));
 });
 
+test("every response allows any origin, and a preflight is 204", async () => {
+  server = await startServer({ devices: [ACURITE] });
+  const got = await server.get(topicOf(ACURITE));
+  expect(got.headers["access-control-allow-origin"]).toBe("*");
+
+  const pre = await server.options(topicOf(ACURITE) + "/$alias");
+  expect(pre.status).toBe(204);
+  expect(pre.headers["access-control-allow-methods"]).toContain("POST");
+});
+
 test("a post of a non-JSON body is 400 and leaves the alias alone", async () => {
   server = await startServer({ devices: [ACURITE] });
   const topic = topicOf(ACURITE) + "/$alias";

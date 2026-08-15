@@ -289,3 +289,23 @@ test('a POST the broker never took is 503, even when another publisher writes th
     await bridge.close()
   }
 })
+
+test('every response allows any origin', async () => {
+  const bridge = await startBridge()
+  try {
+    const get = await fetch(`${bridge.base}/nothing/here/1`)
+    assert.equal(get.headers.get('access-control-allow-origin'), '*')
+
+    const stream = await fetch(`${bridge.base}/events?f=%23`, { headers: { accept: 'text/event-stream' } })
+    assert.equal(stream.headers.get('access-control-allow-origin'), '*')
+    await stream.body.cancel()
+
+    const pre = await fetch(`${bridge.base}/a/b/1`, { method: 'OPTIONS' })
+    assert.equal(pre.status, 204)
+    assert.equal(pre.headers.get('access-control-allow-origin'), '*')
+    assert.match(pre.headers.get('access-control-allow-methods'), /POST/)
+    assert.match(pre.headers.get('access-control-allow-headers'), /content-type/i)
+  } finally {
+    await bridge.close()
+  }
+})

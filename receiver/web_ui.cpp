@@ -278,7 +278,14 @@ static void streamProgmem(Print& out, const char* text) {
   }
 }
 
+// The dashboard is served from a different origin than any receiver it reads,
+// and there is no authentication here for an origin check to protect.
+static void sendCors() {
+  _server.sendHeader("Access-Control-Allow-Origin", "*");
+}
+
 static void handleRoot() {
+  sendCors();
   WiFiClient client = _server.client();
   _server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   _server.sendHeader("Cache-Control", "no-store");
@@ -291,6 +298,7 @@ static void handleRoot() {
 }
 
 static void sendStatus(int code, const char* body) {
+  sendCors();
   _server.sendHeader("Cache-Control", "no-store");
   _server.send(code, "text/plain", body);
 }
@@ -317,6 +325,7 @@ static void handleAliasPost(const char* path) {
     return;
   }
   web_ui::broadcastAlias(path, name);
+  sendCors();
   _server.sendHeader("Cache-Control", "no-store");
   _server.send(204, "text/plain", "");
 }
@@ -329,6 +338,14 @@ static void handleTopic() {
   }
   if (!topic::validTopic(path)) {
     sendStatus(400, "malformed topic");
+    return;
+  }
+  if (_server.method() == HTTP_OPTIONS) {
+    sendCors();
+    _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    _server.sendHeader("Access-Control-Max-Age", "600");
+    _server.send(204, "text/plain", "");
     return;
   }
   if (_server.method() == HTTP_POST) {
@@ -347,6 +364,7 @@ static void handleTopic() {
     }
     FrameBuffer json;
     writeJsonString(json, name);
+    sendCors();
     _server.sendHeader("Cache-Control", "no-store");
     _server.send(200, "application/json", String(json.data()));
     return;
@@ -354,6 +372,7 @@ static void handleTopic() {
   for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
     const DeviceSlot* slot = signal_store::slotAt(i);
     if (slot != NULL && strcmp(slot->key, path) == 0) {
+      sendCors();
       _server.sendHeader("Cache-Control", "no-store");
       _server.send(200, "application/json", slot->payload);
       return;
@@ -407,6 +426,7 @@ static void handleEvents() {
   static const char header[] = "HTTP/1.1 200 OK\r\n"
                                 "Content-Type: text/event-stream\r\n"
                                 "Cache-Control: no-store\r\n"
+                                "Access-Control-Allow-Origin: *\r\n"
                                 "Connection: keep-alive\r\n"
                                 "\r\n"
                                 "retry: 3000\r\n\r\n";

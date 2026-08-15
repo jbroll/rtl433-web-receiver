@@ -188,6 +188,7 @@ function startServer(opts = {}) {
         emitAlias(deviceTopic, name) { publish(deviceTopic + ALIAS_SUFFIX, JSON.stringify(name)); },
         get(topic) { return request("GET", topic); },
         post(topic, body) { return request("POST", topic, body === undefined ? "" : body); },
+        options(topic) { return request("OPTIONS", topic); },
         setBuild(id) { build = id; },
         close() {
           for (const s of streams) s.res.end();

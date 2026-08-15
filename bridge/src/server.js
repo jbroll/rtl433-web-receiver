@@ -28,6 +28,19 @@ export function createBridge({ broker, cache }) {
 async function handle(req, res, { broker, cache, clients }) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
+  // The dashboard is served from a different origin than any bridge it reads,
+  // and there is no authentication here for an origin check to protect.
+  res.setHeader('access-control-allow-origin', '*')
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+      'access-control-max-age': '600',
+    })
+    return res.end()
+  }
+
   if (url.pathname === '/events') {
     if (req.method !== 'GET') return send(res, 405, 'method not allowed')
     if (!broker.connected()) return send(res, 503, 'broker unavailable')

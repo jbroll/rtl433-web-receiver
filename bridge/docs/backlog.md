@@ -74,3 +74,6 @@
   `payload: ""`. A client resolving aliases has to treat an empty `$alias`
   payload from `/events` the same as a missing one, since the HTTP and SSE
   paths disagree about whether the topic exists.
+- `Access-Control-Allow-Origin: *` means a page on any site the user visits can read a
+  reachable bridge and publish to it. Authentication is the fix; an origin allowlist
+  alone is not, since a non-browser client sends whatever origin it likes.

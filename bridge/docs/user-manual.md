@@ -97,3 +97,10 @@ replay; a client that acts on each event should be able to act on a repeat.
 
 `400`, `404`, `405`, and `503` are the only statuses the binding defines. A
 `500` means an unforeseen error inside the bridge, which is a bug.
+
+## Cross-origin
+
+Every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` on any topic is
+`204` with `Access-Control-Allow-Methods: GET, POST, OPTIONS`. A dashboard served from
+anywhere can therefore read this. There is no authentication for an origin check to
+protect, so this exposes nothing a direct request did not.

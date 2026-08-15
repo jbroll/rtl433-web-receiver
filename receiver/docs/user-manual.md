@@ -147,3 +147,10 @@ any other viewer.
 The receiver serves a build of the [dashboard](../../dashboard/README.md). See
 [its user manual](../../dashboard/docs/user-manual.md) for the tabs, the card grid, and
 edit mode.
+
+## Cross-origin
+
+Every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` on any topic is
+`204` with `Access-Control-Allow-Methods: GET, POST, OPTIONS`. A dashboard served from
+anywhere can therefore read this. There is no authentication for an origin check to
+protect, so this exposes nothing a direct request did not.
