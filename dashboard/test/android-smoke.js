@@ -1,19 +1,27 @@
-#!/usr/bin/env node
 // CDP smoke test for the Capacitor Android app.
 // Assumes adb forward tcp:9222 localabstract:webview_devtools_remote is active.
 import { chromium, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { startServer } from "../dashboard/test/harness.js";
-import { ACURITE } from "../dashboard/test/fixtures.js";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { ACURITE } from "./fixtures.js";
+
+const require = createRequire(import.meta.url);
+const { startServer: startBinding } = require("../../receiver/test/binding-server.js");
 
 const CDP_URL = process.env.CDP_URL || "http://127.0.0.1:9222";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const html = readFileSync(path.join(HERE, "..", "dist", "index.html"), "utf8");
 
 let src;
 let browser;
 let reversedPort = null;
 
 try {
-  src = await startServer({ devices: [ACURITE] });
+  src = await startBinding({ html, devices: [ACURITE] });
   const base = src.url.replace(/\/$/, "");
   reversedPort = new URL(src.url).port;
 

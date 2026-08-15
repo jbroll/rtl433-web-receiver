@@ -32,8 +32,9 @@ ls -lh "$APK"
 if adb devices | grep -q '[[:space:]]device$'; then
     echo "[ci/android] adb device found, running CDP smoke test"
     adb install -r "$APK"
+    adb shell am start -n com.rkroll.rtl433/.MainActivity
     adb forward tcp:9222 localabstract:webview_devtools_remote
-    node ci/android-smoke.js
+    node dashboard/test/android-smoke.js
 else
     echo "device smoke skipped: no adb device"
 fi
