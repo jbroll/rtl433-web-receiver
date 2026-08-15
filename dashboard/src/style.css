@@ -1,0 +1,83 @@
+:root { color-scheme: light dark; --line:#8883; }
+body { margin:0; font:14px/1.4 system-ui,sans-serif; }
+header { display:flex; gap:1rem; align-items:baseline; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
+h1 { font-size:1rem; margin:0; font-weight:600; }
+#status { font-size:.8rem; opacity:.7; margin-left:auto; }
+nav button { font:inherit; padding:.3rem .8rem; border:1px solid var(--line); background:none; color:inherit; cursor:pointer; }
+nav button[aria-selected=true] { background:#8882; font-weight:600; }
+table { border-collapse:collapse; width:100%; }
+th,td { text-align:left; padding:.35rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+th { font-weight:600; font-size:.8rem; opacity:.7; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.flash { animation:flash 1s ease-out; }
+@keyframes flash { from { background:rgba(255,215,0,.16); } to { background:transparent; } }
+#devices input, #devices select, #grid-size input, #edit-cards, #forget-cards,
+.card .lbl input, .card .cx { font:inherit; background:Canvas; color:inherit;
+                              border:1px solid var(--line); }
+#devices input[type=text] { font-size:.85rem; width:8rem; padding:.1rem .3rem; }
+#devices select { font-size:.8rem; }
+tr.vrow td { border-bottom:none; padding:.1rem .6rem; font-size:.85rem; opacity:.75; }
+tr.vrow td:first-child { padding-left:2rem; }
+tr.vrow + tr:not(.vrow) td { border-top:1px solid var(--line); }
+#log { font-family:ui-monospace,monospace; font-size:.8rem; }
+#log .nw { white-space:nowrap; }
+#log td { white-space:pre-wrap; word-break:break-all; }
+section[hidden] { display:none; }
+#cards { display:grid; grid-auto-flow:dense; grid-auto-rows:var(--cell,150px);
+         justify-content:start; align-content:start; padding:1.6rem 1rem 1rem; }
+/* Not overflow:hidden: the label straddles the top border like a legend, and
+   clipping the card would cut its text in half. Everything else that could
+   spill clips itself. */
+.card { position:relative; margin:.35rem; border:1px solid var(--line); border-radius:.7rem;
+        padding:.5rem .45rem .6rem; }
+.card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
+             padding:0 .4rem; background:Canvas; font-size:.75rem;
+             display:flex; align-items:baseline; overflow:hidden; }
+.card .lbl .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;
+                 flex:1 1 auto; }
+.card .lbl .rs { opacity:.6; margin-left:.35rem; flex:0 0 auto; white-space:nowrap;
+                 font-variant-numeric:tabular-nums; }
+.card .age { position:absolute; right:.5rem; bottom:.25rem; font-size:.65rem; opacity:.5;
+             font-variant-numeric:tabular-nums; }
+.card .btm { position:absolute; left:.5rem; bottom:.25rem; right:3.2rem; font-size:.65rem;
+             opacity:.5; display:flex; gap:.5rem; overflow:hidden; white-space:nowrap; }
+.card .btm .bn { text-transform:uppercase; letter-spacing:.05em; margin-right:.2em; }
+.card .btm .bv { font-variant-numeric:tabular-nums; }
+.card .body { display:grid; align-items:stretch; gap:.2rem .6rem; height:100%; overflow:hidden; }
+.card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
+             min-width:0; min-height:0; align-self:stretch; overflow:hidden; }
+.card .fn { font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; opacity:.6;
+            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card .fv { font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
+            text-overflow:ellipsis; }
+.card .fv .u { font-size:.5em; opacity:.65; margin-left:.12em; }
+#edit-cards, #forget-cards, #grid-size { position:fixed; bottom:1rem; z-index:2;
+                                         cursor:pointer; }
+#edit-cards { right:1rem; width:2.4rem; height:2.4rem; border-radius:50%; }
+#view-cards.editing #edit-cards { background:#8883; }
+#forget-cards { right:4.2rem; font-size:.75rem; padding:.4rem .7rem;
+                border-radius:1.2rem; display:none; }
+#view-cards.editing #forget-cards { display:block; }
+#grid-size { right:12rem; font-size:.75rem; display:none; align-items:center;
+             gap:.25rem; }
+#view-cards.editing #grid-size { display:flex; }
+#grid-size input { font-size:.75rem; width:3.2rem; padding:.3rem .35rem;
+                   border-radius:1.2rem; text-align:center; }
+#view-cards.editing .card { cursor:grab; touch-action:none; }
+.card.ghost, .lifting { opacity:.35; }
+.card .cx { position:absolute; top:.25rem; left:.3rem; z-index:1; font-size:.7rem;
+            line-height:1; padding:.15rem .3rem; border-radius:.3rem; cursor:pointer;
+            display:none; }
+#view-cards.editing .card .cx { display:block; }
+.card .rz { position:absolute; right:0; bottom:0; width:1.2rem; height:1.2rem; z-index:1;
+            padding:0; border:none; background:none; color:inherit; cursor:nwse-resize;
+            touch-action:none; display:none; }
+.card .rz::after { content:""; position:absolute; right:.25rem; bottom:.25rem;
+                   width:.5rem; height:.5rem; opacity:.55;
+                   border-right:2px solid currentColor; border-bottom:2px solid currentColor; }
+#view-cards.editing .card .rz { display:block; }
+#view-cards.editing .card .age { right:1.4rem; }
+.card .lbl input { font-size:.75rem; width:9rem; }
+.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
+             border:1px solid var(--line); border-radius:.7rem; background:Canvas;
+             padding:.3rem .6rem; font-size:.8rem; }

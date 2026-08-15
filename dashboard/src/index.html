@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>rtl_433 dashboard</title>
+<style>/*CSS*/</style>
+</head>
+<body>
+<header>
+  <h1>rtl_433</h1>
+  <nav>
+    <button id="tab-devices" aria-selected="false">Devices</button>
+    <button id="tab-log" aria-selected="false">Log</button>
+    <button id="tab-cards" aria-selected="true">Cards</button>
+  </nav>
+  <span id="status">connecting</span>
+</header>
+<section id="view-devices" hidden><table>
+<thead><tr><th>Model</th><th>ID</th><th>Reading</th><th class="num">RSSI</th><th class="num">Msgs</th><th class="num">Age</th><th>Alias</th><th>Card</th></tr></thead>
+<tbody id="devices"></tbody>
+</table></section>
+<section id="view-log" hidden><table id="log"><tbody id="logrows"></tbody></table></section>
+<section id="view-cards">
+  <button id="edit-cards" title="Edit layout">&#9998;</button>
+  <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
+  <span id="grid-size" title="Grid columns and rows">
+    <input id="grid-cols" type="number" min="1" max="24" aria-label="Grid columns">
+    <span>&times;</span>
+    <input id="grid-rows" type="number" min="1" max="24" aria-label="Grid rows">
+  </span>
+  <div id="cards"></div>
+</section>
+<script>/*JS*/</script>
+</body>
+</html>
