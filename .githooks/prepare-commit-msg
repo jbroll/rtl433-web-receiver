@@ -1,0 +1,25 @@
+#!/bin/sh
+# Reject merge commits that are not fast-forwards.
+# Worktrees must be rebased onto the target branch before merging.
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+if [ "$COMMIT_SOURCE" != "merge" ]; then
+  exit 0
+fi
+
+MERGE_SHA=$(cat .git/MERGE_HEAD 2>/dev/null) || {
+  echo "Error: cannot read MERGE_HEAD; aborting merge."
+  exit 1
+}
+
+if ! git merge-base --is-ancestor HEAD "$MERGE_SHA" 2>/dev/null; then
+  echo ""
+  echo "Error: non-fast-forward merge is not allowed."
+  echo ""
+  echo "Rebase your branch onto the current HEAD first:"
+  echo "  git rebase <target-branch>"
+  echo ""
+  exit 1
+fi
