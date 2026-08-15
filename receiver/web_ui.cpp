@@ -249,6 +249,15 @@ static void buildFrame(FrameBuffer& frame, const char* topic, const char* payloa
   frame.print("}\n\n");
 }
 
+// alias frame: payload is a quoted string (escaped inline)
+static void buildAliasFrame(FrameBuffer& frame, const char* topic, const char* name) {
+  frame.print("data: {\"topic\":");
+  writeJsonString(frame, topic);
+  frame.print(",\"payload\":");
+  writeJsonString(frame, name);
+  frame.print("}\n\n");
+}
+
 static void sendTo(int i, const FrameBuffer& frame) {
   WiFiClient& c = _sse[i];
   if (!c) {
@@ -469,13 +478,7 @@ static void drainReplay(int i, FrameBuffer& frame) {
       if (!slotWants(i, topic)) {
         continue;
       }
-      FrameBuffer name;
-      writeJsonString(name, alias_store::nameAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS)));
-      if (name.overflowed()) {
-        Log.warning(F("SSE replay alias name overflow, skipping %s" CR), topic);
-        continue;
-      }
-      buildFrame(frame, topic, name.data());
+      buildAliasFrame(frame, topic, alias_store::nameAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS)));
     } else {
       _replay[i] = -1;
       return;
@@ -570,14 +573,8 @@ void broadcast(const DeviceSlot& slot) {
 }
 
 void broadcastAlias(const char* topic, const char* name) {
-  FrameBuffer quoted;
-  writeJsonString(quoted, name);
-  if (quoted.overflowed()) {
-    Log.warning(F("SSE alias name overflow, dropping frame" CR));
-    return;
-  }
   FrameBuffer frame;
-  buildFrame(frame, topic, quoted.data());
+  buildAliasFrame(frame, topic, name);
   if (frame.overflowed()) {
     Log.warning(F("SSE alias frame overflow, dropping frame" CR));
     return;
