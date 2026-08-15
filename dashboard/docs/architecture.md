@@ -47,8 +47,13 @@ tests that import `devices.js` directly set `globalThis.DEVICE_MAX` themselves.
 
 Per the binding, a display name resolves in three steps: the browser's own configuration
 first, the source's published `$alias` next, the stable topic segment last. The dashboard
-has no local naming of its own — a rename posts an alias — so in practice `displayName()`
-is `aliasOf(key) || shortKey(key)`.
+keeps its own aliases in `localStorage` under `rtl433.aliases.v1`, so in practice
+`displayName()` is `aliasOf(key) || shortKey(key)`.
+
+When the dashboard is served by a receiver, a rename still posts to the source's `$alias`
+topic so the receiver can persist it. When the dashboard is served by a separate broker or
+static server, the source is external and has no persistent alias store for that client,
+so the rename stays local and survives reloads from `localStorage`.
 
 ## Sources
 

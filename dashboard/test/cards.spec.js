@@ -191,6 +191,16 @@ test("an alias published on the stream names the card and the device table's box
   await expect(page.locator(`${CARD} .nm`)).toHaveText("Acurite-5n1/396");
 });
 
+test("an alias published by the source survives a reload", async ({ page }) => {
+  await open(page, [ACURITE]);
+  server.emitAlias(ACURITE_KEY, "Back yard");
+  await expect(page.locator(`${CARD} .nm`)).toHaveText("Back yard");
+
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator(`${CARD} .nm`)).toHaveText("Back yard");
+});
+
 test("a card takes the name published for its topic", async ({ page }) => {
   await open(page, [ACURITE]);
   server.emitAlias(topicOf(ACURITE), "Back fence");

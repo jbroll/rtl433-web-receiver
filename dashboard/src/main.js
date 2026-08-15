@@ -1,6 +1,6 @@
 import { setRender } from './render.js'
 import { devices, upsert, clearSource } from './devices.js'
-import { makeKey, applyAliasFrame, isSelf, aliases } from './alias.js'
+import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { loadSources, installSourcePanel, renderSourcePanel, sources, setSourcesChanged,
@@ -212,6 +212,7 @@ function exposeForTests() {
 
 exposeForTests()
 store.loadCardState()
+loadAliases()
 loadSort()
 loadSources()
 setSourcesChanged(syncSources)

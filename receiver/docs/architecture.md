@@ -116,12 +116,14 @@ seen — nothing, since there is no longer anything retained for that topic.
 
 A display name resolves in three steps, per the binding: the browser's own
 configuration for that name first, the published `$alias` next, and the
-stable topic segment last. The page today has no local naming configuration
-of its own — a rename posts to `$alias` rather than writing local state — so
-in practice it resolves through the last two steps: `cardLabel()` is
-`aliasOf(key) || shortKey(key)`. The first step exists in the binding for a
-client, such as the planned standalone dashboard, that keeps its own naming
-independent of what any one source publishes.
+stable topic segment last. The dashboard keeps its own alias table in
+`localStorage`, so in practice it resolves through the first two steps:
+`displayName()` is `aliasOf(key) || shortKey(key)`.
+
+When the page is served by the receiver, a rename still posts to `$alias` so
+the receiver persists it. When the page is served by a separate broker or
+static file server, the source is external and the rename stays in the
+browser's `localStorage`.
 
 ## The receiver's own card
 

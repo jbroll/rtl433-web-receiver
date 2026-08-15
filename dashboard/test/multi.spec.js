@@ -89,7 +89,7 @@ test("removing a source updates the status line to match what remains", async ({
   await expect(page.locator("#status")).toHaveText("live");
 });
 
-test("a rename posts to the source that device came from", async ({ page }) => {
+test("a rename on a broker-served page keeps the alias local and does not post to sources", async ({ page }) => {
   const host = await startPage();
   const a = await startServer({ devices: [ACURITE], source: "srcA" });
   const b = await startServer({ devices: [OREGON], source: "srcB" });
@@ -99,7 +99,48 @@ test("a rename posts to the source that device came from", async ({ page }) => {
   const row = `#devices tr[data-key="${base(b)} ${topicOf(OREGON, "srcB")}"]`;
   await page.locator(`${row} input[type=text]`).fill("Shed");
   await page.locator(`${row} input[type=text]`).press("Enter");
-  await expect.poll(async () =>
-    (await b.get(topicOf(OREGON, "srcB") + "/$alias")).status).toBe(200);
+
+  // The dashboard is served by a separate host, so aliases are local only.
+  expect((await b.get(topicOf(OREGON, "srcB") + "/$alias")).status).toBe(404);
   expect((await a.get(topicOf(ACURITE, "srcA") + "/$alias")).status).toBe(404);
+
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("live");
+  await page.click("#tab-devices");
+  await expect(page.locator(`${row} input[type=text]`)).toHaveValue("Shed");
+});
+
+test("an alias for an external source survives a reload from local storage", async ({ page }) => {
+  const host = await startPage();
+  const a = await startServer({ devices: [ACURITE], source: "srcA" });
+  servers.push(host, a);
+  await withSources(page, host, [base(a)]);
+  await expect(page.locator("#status")).toHaveText("live");
+
+  await page.evaluate(() => {
+    hideNewCards = false;
+    cardState.hidden.length = 0;
+    saveCardState();
+    renderCards();
+  });
+
+  const deviceKey = `${base(a)} ${topicOf(ACURITE, "srcA")}`;
+  const cardSel = `.card[data-key="${deviceKey}"]`;
+  await page.click("#edit-cards");
+  await page.dblclick(`${cardSel} .lbl`);
+  await page.fill(`${cardSel} .lbl input`, "Back fence");
+  await page.press(`${cardSel} .lbl input`, "Enter");
+  await expect(page.locator(`${cardSel} .nm`)).toHaveText("Back fence");
+
+  // The source is not the serving origin, so the rename must not have posted.
+  expect((await a.get(topicOf(ACURITE, "srcA") + "/$alias")).status).toBe(404);
+
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText("live");
+  await page.evaluate(() => {
+    hideNewCards = false;
+    cardState.hidden.length = 0;
+    renderCards();
+  });
+  await expect(page.locator(`${cardSel} .nm`)).toHaveText("Back fence");
 });
