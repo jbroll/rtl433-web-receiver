@@ -15,8 +15,11 @@ column is in use. Model, ID, RSSI, Msgs, Age, and Alias sort. Reading does not,
 since it is every field of a device run together, and neither does Card. A
 device with no value in the sorted column goes last in both directions, so
 reversing never buries the rows that do have one. Ascending Age is the most
-recently heard device first. The choice is stored per browser under
-`rtl433.devicesort.v1` and survives a reload.
+recently heard device first. ID counts numerically rather than as text, so 5
+comes before 396, and a device identified only by its channel sorts after every
+device with an id. A header also sorts from the keyboard, with Enter or Space.
+The choice is stored per browser under `rtl433.devicesort.v1` and survives a
+reload.
 
 The Reading column excludes the fields the page treats as metadata rather than
 a sensor value: `model`, `id`, `channel`, `protocol`, `rssi`, `duration`,

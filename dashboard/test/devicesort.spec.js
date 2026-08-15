@@ -71,6 +71,16 @@ test("the sort survives a reload", async ({ page }) => {
   expect(await models(page)).toEqual(before);
 });
 
+test("a header sorts from the keyboard as well as the mouse", async ({ page }) => {
+  await open(page, THREE);
+  const head = page.locator('th[data-sort="name"]');
+  await head.focus();
+  await head.press("Enter");
+  await expect(head).toHaveAttribute("aria-sort", "descending");
+  await head.press(" ");
+  await expect(head).toHaveAttribute("aria-sort", "ascending");
+});
+
 test("Reading and Card are not sortable", async ({ page }) => {
   await open(page, THREE);
   const heads = await page.locator("#view-devices th").evaluateAll(

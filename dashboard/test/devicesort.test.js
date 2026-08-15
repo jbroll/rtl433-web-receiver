@@ -89,6 +89,16 @@ test('the choice persists and a corrupt or unknown one falls back', () => {
   assert.deepEqual(sort.current(), { by: 'name', dir: 1 })
 })
 
+test('the id column counts numerically and puts channel-only devices after', () => {
+  const big = dev('Big', { id: 396 })
+  const small = dev('Small', { id: 5 })
+  const chA = dev('ChanA', { channel: 2 })
+  const chB = dev('ChanB', { channel: 10 })
+  sort.sortBy('id')
+  assert.deepEqual(sort.sortDevices([chB, big, chA, small]).map(r => r.obj.model),
+                   ['Small', 'Big', 'ChanA', 'ChanB'])
+})
+
 test('an unsortable column is refused rather than stored', () => {
   assert.equal(sort.sortBy('reading'), false)
   assert.deepEqual(sort.current(), { by: 'name', dir: 1 })
