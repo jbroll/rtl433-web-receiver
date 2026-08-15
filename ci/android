@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# simple-ci job: build the rtl433 dashboard, sync the Capacitor Android project,
+# assemble a debug APK, and run a CDP smoke test when an adb tablet is connected.
+set -euo pipefail
+
+export JAVA_HOME=/usr/lib/jvm/openjdk21
+export ANDROID_HOME="$HOME/android-sdk"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$WORKTREE"
+
+echo "[ci/android] dashboard: npm ci"
+npm ci --prefix dashboard
+
+echo "[ci/android] app: npm ci"
+npm ci --prefix app
+
+echo "[ci/android] dashboard: npm run build"
+npm run build --prefix dashboard
+
+echo "[ci/android] capacitor sync android"
+(cd app && npx cap sync android)
+
+echo "[ci/android] gradle assembleDebug"
+(cd app/android && ./gradlew assembleDebug)
+
+APK="app/android/app/build/outputs/apk/debug/app-debug.apk"
+echo "[ci/android] APK: $APK"
+ls -lh "$APK"
+
+if adb devices | grep -q '[[:space:]]device$'; then
+    echo "[ci/android] adb device found, running CDP smoke test"
+    adb install -r "$APK"
+    adb forward tcp:9222 localabstract:webview_devtools_remote
+    node ci/android-smoke.js
+else
+    echo "device smoke skipped: no adb device"
+fi
