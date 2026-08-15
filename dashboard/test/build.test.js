@@ -25,8 +25,12 @@ test('the device cap comes from the firmware header', async () => {
 
   const html = await buildHtml()
   assert.doesNotMatch(html, /DEVICE_MAX/)
-  // The markup's own max="24" would satisfy a bare /24/, so match the
-  // substituted call site instead.
-  assert.match(html, new RegExp(`\\.size\\s*<=\\s*${declared}\\b`))
-  assert.match(html, new RegExp(`\\.slice\\(${declared}\\)`))
+  // The cap is DEVICE_MAX scaled by the number of configured sources, so the
+  // substituted constant shows up multiplied into a variable rather than
+  // inlined directly at the comparison and slice call sites.
+  const capExpr = html.match(new RegExp(`(\\w+)=${declared}\\*`))
+  assert.ok(capExpr, `no ${declared}*<sources> product found in built output`)
+  const cap = capExpr[1]
+  assert.match(html, new RegExp(`\\.size\\s*<=\\s*${cap}\\b`))
+  assert.match(html, new RegExp(`\\.slice\\(${cap}\\)`))
 })

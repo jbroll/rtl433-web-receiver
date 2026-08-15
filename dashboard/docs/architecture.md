@@ -9,7 +9,7 @@ Plain ES modules, no framework, bundled by `esbuild` into one `<script>`.
 | `render.js` | the render callback `main.js` installs, so no module has to import `main.js` back |
 | `units.js` | `el()`, the meta and status field sets, `splitUnit()`, `fmtValue()`, `ageText()`, and reading extraction |
 | `alias.js` | keys, the alias map, name resolution, and the alias POST |
-| `devices.js` | the live device map and its `DEVICE_MAX` cap |
+| `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
 | `store.js` | layout and settings in `localStorage`, and `forgetLayouts()` |
 | `sources.js` | the source list, its storage, and the settings panel |
 | `stream.js` | one source's SSE connection and its reconnect |
@@ -36,8 +36,10 @@ from another source's device of the same name.
 self-contained file with no external requests, which is what a browser loads and what the
 firmware embeds — one artifact, one thing to test.
 
-`DEVICE_MAX` is an esbuild `define` read out of `../receiver/signal_store.h`, so the page
-cannot cap its device table at a different number than the firmware's slot count. Node
+`DEVICE_MAX` is an esbuild `define` read out of `../receiver/signal_store.h`, so it tracks
+one firmware's slot count. `devices.js` uses it as a per-source cap, multiplied by the
+number of configured sources, rather than a cap on the whole device table — a page reading
+several receivers holds up to `DEVICE_MAX` devices from each, not `DEVICE_MAX` total. Node
 tests that import `devices.js` directly set `globalThis.DEVICE_MAX` themselves.
 
 ## Name layering

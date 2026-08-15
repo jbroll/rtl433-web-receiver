@@ -13,7 +13,9 @@ The library dependency is a fork,
 `sx1231-support`, which adds SX1231/RF69 receive support upstream does not have.
 `platformio.ini` points at it and PlatformIO fetches it on the first build.
 
-Node 22 or newer. `pio run` runs `dashboard/build.js` to generate the page it serves.
+Node 22 or newer. `pio run` runs `dashboard/build.js` to generate the page it serves,
+so run `npm install` in `../dashboard` before the first `pio run` — its `build.js`
+imports `esbuild` from `dashboard/node_modules`.
 
 ## Wiring
 

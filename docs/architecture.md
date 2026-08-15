@@ -23,8 +23,11 @@ that commit.
 `receiver/topic.cpp` and `bridge/src/topic.js` implement `validTopic`, `validFilter`, and
 `matchFilter` independently. Neither can share code with the other: one is C++ with no
 heap allocation on an ESP32, the other is node. `receiver/test/host/run.sh` and
-`bridge/test/topic.test.js` cover the same rules from both sides. Changing a rule means
-changing both files and both suites in one commit.
+`bridge/test/topic.test.js` cover the same rules from both sides, but the two
+implementations have already drifted: the receiver's `validTopic` rejects a topic with an
+empty segment, the bridge's does not. `GET /a//c` is 400 on the receiver and not on the
+bridge. `validFilter` diverges the same way. Changing a rule means changing both files and
+both suites in one commit — nothing currently enforces that they agree.
 
 ## The dashboard's two lives
 

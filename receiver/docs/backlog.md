@@ -108,31 +108,6 @@ The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in th
 The page is no longer a lever: it is gzipped, and its size is recorded in
 [`architecture.md`](architecture.md#the-page-the-firmware-serves).
 
-## The grid floors cells at 20px and can overflow the viewport
-
-`measureGrid()` (`dashboard/src/grid.js`) floors the cell side at 20px, which breaks
-the letterboxing the README promises. At 24 columns on a 360px-wide phone
-viewport the grid comes out 480px wide and the page scrolls sideways.
-
-## Cards that overflow the row count jitter the grid
-
-When cards overflow the set row count, the page grows a vertical scrollbar,
-which shrinks `#cards`'s `clientWidth` and so the next cell `measureGrid()`
-computes. It settles rather than looping, but the grid visibly jitters
-between two sizes as it does. Fixing it means measuring against
-`documentElement.clientWidth` or reserving the scrollbar gutter.
-
-## A second pointer can still write layout mid-gesture
-
-`setValueMode`, `setCardHidden`, `applyGridInput`, and a rename committed
-with Enter all call `saveCardState()`, and all are reachable with a second
-finger while a resize is in flight, which the project's rules say must not
-write. No corruption results today: the in-flight resize has written nothing
-yet, and `endResize` re-renders over whatever the second finger did. The
-drag and resize entry points already guard against each other; these four
-do not guard against either. `setValueMode` and `setCardHidden` are now
-reachable from the device table as well as from a card.
-
 ## The firmware self-test has never been read on a device
 
 `signal_store::selfTest()` and `alias_store::selfTest()` run at startup under
@@ -168,25 +143,6 @@ from reading the code rather than from a measurement: no high-water mark has
 been read off a device. A small local buffer for the name removes the question
 without needing one.
 
-## Gaps in the page tests
-
-- Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the
-  Escape path out of a rename.
-- The cell-side test re-derives `measureGrid()`'s own arithmetic inside the
-  page and compares `--cell` against the global that arithmetic wrote, so a
-  mistake mirrored in both places would still pass, and the 20px floor is
-  never exercised. Measuring a rendered 1×1 card's box instead would test the
-  arithmetic independently of it.
-- The test named "no card overflows its box at any size or value count" can
-  only catch overflow to the right and below: `scrollWidth`/`scrollHeight`
-  don't account for content above or left of the box, and `.lbl` sits at
-  `top:-.65em` by design. The name overclaims what the test checks.
-- Nothing drives the two-pointer case where a card drag and a corner resize
-  are in flight at once, which is the only way to reach the mutual-exclusion
-  guards between them. It is testable: the suite already dispatches synthetic
-  bubbling events from `page.evaluate`, and Chromium exposes real multi-touch
-  through `Input.dispatchTouchEvent` over a CDP session.
-
 ## Smaller items
 
 - `WebReceiver.ino:244-246` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
@@ -199,26 +155,6 @@ without needing one.
   only compiles and runs on the device (see above); `topic` is the one module
   host-tested today. A PlatformIO `native` environment would make the other
   two stores' tests a normal `pio test` as well.
-- The card view's font-size factor of 0.42 and its 11–64px clamp were tuned
-  against a handful of synthetic devices. A wrong factor leaves a card sparse or
-  crowded; it cannot overflow, because both axes use `minmax(0,1fr)` and `.fv`
-  ellipsizes.
-- `fitValues()` caps the type size by measuring the text on a canvas at the
-  font family `getComputedStyle(document.body)` reports. That matches what the
-  page renders today, but the measurement ignores letter-spacing and any
-  font-feature settings, so a future style change to `.fv` could make the
-  estimate too small and bring the ellipsis back. It errs about 4px high per
-  value at 64px, which is why it shrinks slightly more than strictly needed.
-  A card whose widest reading cannot fit even at 11px still ellipsizes.
-- `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid
-  has no `gap`; the spacing moved to `.card { margin:.35rem }`. Re-adding a
-  `gap` would overflow the grid by `(cols-1) × gap`. Nothing in the file says
-  so, and no test guards it.
-- A stored `w` or `h` outside 1–24 is discarded rather than clamped, so the
-  card is re-sized from its value count instead of pinned to 24.
-- `#grid-size` is fixed at `right:12rem` and is about 7rem wide, so below
-  roughly 320px of viewport width it reaches the left edge and overlaps the
-  grid in edit mode.
 - `alias_store::remove()` calls `persist()` and ignores its result, so an NVS
   write that fails after a removal is silent and the alias returns on the next
   boot. `set()` reports the same failure to its caller, which answers `503`.

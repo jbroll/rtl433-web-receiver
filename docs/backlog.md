@@ -2,12 +2,14 @@
 
 Work that spans sub-projects. Each sub-project's own backlog holds the rest.
 
-## The topic rules are written twice
+## The topic rules have drifted
 
 `receiver/topic.cpp` and `bridge/src/topic.js` implement the same three functions in two
-languages, verified by two suites that do not share cases. A shared table of topic and
-filter cases, read by both suites, would catch a rule that drifts. Neither side can share
-the implementation: one is allocation-free C++ on an ESP32.
+languages, verified by two suites that do not share cases, and they have already drifted:
+the receiver's `validTopic` rejects a topic with an empty segment (`a//c`), the bridge's
+does not, so `GET /a//c` is 400 on one and not the other. `validFilter` diverges the same
+way. A shared table of topic and filter cases, read by both suites, would catch this.
+Neither side can share the implementation itself: one is allocation-free C++ on an ESP32.
 
 ## The receiver has no `install.md` or `development.md`
 

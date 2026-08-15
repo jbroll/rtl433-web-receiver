@@ -6,14 +6,15 @@ written against, so it is specified on its own and implemented separately.
 
 ## Why
 
-The receiver serves `/api/state`, `/events`, and `/api/status`, all shaped
-around its own device table. Nothing else can feed that page, and the page
-cannot read anything else. Aliases live in one browser's localStorage, so a
-name assigned in one place is invisible everywhere else.
+Before this binding, the receiver served `/api/state`, `/events`, and
+`/api/status`, all shaped around its own device table. Nothing else could feed
+that page, and the page could not read anything else. Aliases lived in one
+browser's localStorage, so a name assigned in one place was invisible
+everywhere else.
 
 Naming every value the same way wherever it comes from, and carrying the alias
-with the value, removes both limits. The receiver becomes one source among
-several rather than the only one.
+with the value, removes both limits. The receiver is one source among several
+rather than the only one.
 
 ## Names
 
@@ -46,8 +47,8 @@ to a topic and returns it unchanged. It does not parse, normalise, reorder, or
 strip fields.
 
 Consumers already know how to read it: the page drops `model`, `id`, `channel`,
-`protocol`, `rssi`, `duration`, `mic`, `message_type`, `sequence_num`, and
-`time` to find the readings.
+`protocol`, `rssi`, `duration`, `mic`, `message_type`, `sequence_num`, `time`,
+`count`, and `build` to find the readings.
 
 ## Operations
 
@@ -108,9 +109,12 @@ appear in a topic.
 An implementation that refuses an operation returns `405` rather than silently
 accepting it, so a client can tell what will actually happen.
 
+Every response carries `Access-Control-Allow-Origin: *`, so a dashboard on any
+origin can read any source.
+
 ## Implementations
 
-Two are planned, differing only in what they refuse.
+Both ship in this repo, differing only in what they refuse.
 
 **A bridge over a real broker** implements all three operations over the whole
 topic space. Retained messages come from the broker's own retain. Publishing to
@@ -121,9 +125,10 @@ under its own `source`, and accepts `POST` only to its own `$alias` topics,
 which it persists to NVS. Every other `POST` is `405`. Its `source` is the
 existing mDNS name, `rtl433-a1b2c3`.
 
-What P deliberately does not have: QoS, an addressable retain flag, sessions,
-last-will messages, unsubscribe, or per-field publishing. A client cannot reach
-them through the HTTP binding, and neither implementation needs them.
+What the binding deliberately does not have: QoS, an addressable retain flag,
+sessions, last-will messages, unsubscribe, or per-field publishing. A client
+cannot reach them through the HTTP binding, and neither implementation needs
+them.
 
 ## Testing
 
@@ -143,12 +148,9 @@ The spec is the test list. Both implementations run the same cases:
 - The receiver returns `405` for a `POST` to a non-`$alias` topic, and an alias
   written to it survives a reboot.
 
-## What this unblocks
+## What this unblocked
 
-- `mqtt-http-bridge`, a standalone service implementing the full binding.
-- Replacing the receiver's `/api/state` and `/events` with the subset above.
-- The dashboard as its own project, reading a configurable list of bridges,
-  with the browser's layout config layered over the aliases each bridge
-  publishes.
-
-Each is its own spec.
+- `bridge/`, a standalone service implementing the full binding.
+- The receiver's `/api/state` and `/events` replaced by the subset above.
+- `dashboard/`, reading a configurable list of sources, with the browser's
+  layout config layered over the aliases each source publishes.

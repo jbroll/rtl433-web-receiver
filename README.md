@@ -15,9 +15,10 @@ They share one protocol, the [HTTP binding for MQTT](bridge/docs/binding.md): st
 `<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an alias at
 every level carried as a `$alias` topic.
 
-    cd receiver && pio run -e esp32s3-generic -t upload
-    cd bridge && npm install && MQTT_URL=mqtt://broker.local:1883 node bin/mqtt-http-bridge.js
-    cd dashboard && npm install && npm run build && npm start
+    (cd dashboard && npm install && npm run build)
+    (cd receiver && cp .env.example .env && pio run -e esp32s3-generic -t upload)
+    (cd bridge && npm install && MQTT_URL=mqtt://broker.local:1883 node bin/mqtt-http-bridge.js)
+    (cd dashboard && npm start)
 
 - [`docs/architecture.md`](docs/architecture.md) — how the three fit together
 - [`docs/backlog.md`](docs/backlog.md) — the roadmap and anything spanning sub-projects

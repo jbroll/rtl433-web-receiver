@@ -11,8 +11,8 @@
 ## From a clone
 
 ```
-git clone <repo> mqtt-http-bridge
-cd mqtt-http-bridge
+git clone <repo> rtl433-web-receiver
+cd rtl433-web-receiver/bridge
 npm install
 MQTT_URL=mqtt://broker.local:1883 node bin/mqtt-http-bridge.js
 ```

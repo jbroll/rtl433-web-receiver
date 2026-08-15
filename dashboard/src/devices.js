@@ -1,8 +1,11 @@
+import { sources } from './sources.js'
+
 export const devices = new Map()
 
 function trim() {
-  if (devices.size <= DEVICE_MAX) return
-  const stale = [...devices.values()].sort((a, b) => b.seenAt - a.seenAt).slice(DEVICE_MAX)
+  const cap = DEVICE_MAX * sources().length
+  if (devices.size <= cap) return
+  const stale = [...devices.values()].sort((a, b) => b.seenAt - a.seenAt).slice(cap)
   for (const d of stale) devices.delete(d.key)
 }
 

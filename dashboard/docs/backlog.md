@@ -10,16 +10,24 @@
   on a 360px viewport the grid comes out 480px wide and the page scrolls sideways.
 - Cards overflowing the row count grow a scrollbar, which shrinks `#cards`'s
   `clientWidth` and so the next cell size. It settles rather than looping, but the grid
-  visibly jitters between two sizes.
+  visibly jitters between two sizes. Fixing it means measuring against
+  `documentElement.clientWidth` or reserving the scrollbar gutter.
 - `setValueMode`, `setCardHidden`, `setGrid`, and a rename committed with Enter all save
-  layout, and all are reachable with a second finger while a resize is in flight.
+  layout, and all are reachable with a second finger while a resize is in flight, which
+  the project's rules say must not write. No corruption results today: the in-flight
+  resize has written nothing yet, and `endResize` re-renders over whatever the second
+  finger did. The drag and resize entry points already guard against each other; these
+  four do not guard against either. `setValueMode` and `setCardHidden` are now reachable
+  from the device table as well as from a card.
 - The font-size factor of 0.42 and the 11–64px clamp were tuned against a handful of
   synthetic devices.
 - `fitValues()` measures on a canvas at the font family `getComputedStyle(document.body)`
   reports, ignoring letter-spacing and font-feature settings, so a style change to `.fv`
-  could bring the ellipsis back. It errs about 4px high per value at 64px.
+  could bring the ellipsis back. It errs about 4px high per value at 64px. A card whose
+  widest reading cannot fit even at 11px still ellipsizes.
 - `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid has no `gap`.
-  Re-adding one would overflow the grid by `(cols-1) × gap`.
+  Re-adding one would overflow the grid by `(cols-1) × gap`. Nothing in the file says so,
+  and no test guards it.
 - A stored `w` or `h` outside 1–24 is discarded rather than clamped, so the card is
   re-sized from its value count instead of pinned to 24.
 - `#grid-size` is fixed at `right:12rem` and about 7rem wide, so below roughly 320px of
@@ -28,11 +36,14 @@
   out of a rename.
 - The cell-side test re-derives `measureGrid()`'s own arithmetic and compares against the
   global that arithmetic wrote, so a mistake mirrored in both places passes, and the 20px
-  floor is never exercised.
+  floor is never exercised. Measuring a rendered 1×1 card's box instead would test the
+  arithmetic independently of it.
 - "no card overflows its box at any size or value count" can only catch overflow right
-  and below: `scrollWidth`/`scrollHeight` ignore content above or left of the box.
+  and below: `scrollWidth`/`scrollHeight` ignore content above or left of the box, and
+  `.lbl` sits at `top:-.65em` by design. The name overclaims what the test checks.
 - Nothing drives a card drag and a corner resize in flight at once, the only way to reach
-  the mutual-exclusion guards. Chromium exposes real multi-touch through
+  the mutual-exclusion guards. It is testable: the suite already dispatches synthetic
+  bubbling events from `page.evaluate`, and Chromium exposes real multi-touch through
   `Input.dispatchTouchEvent` over a CDP session.
 - `main.js` exposes page internals on `window` through `exposeForTests()`, because 26
   tests in `test/cards.spec.js` drive the page through the globals the firmware version
@@ -43,3 +54,10 @@
 - `test/fixtures.js` is a copy of `receiver/test/fixtures.js`, and nothing detects drift
   between them. If a fixture changes on one side, the receiver's binding tests and the
   dashboard's card tests silently disagree about what a device looks like.
+- `test/cards.spec.js`'s `[data-key$="…"]` selectors are unanchored tail matches,
+  unambiguous only while a spec file runs a single source. A second source added to that
+  file would make a suffix match two rows, and the failure would look like a page bug
+  rather than a test that needs `:not(.vrow)`-style narrowing.
+- `dashboard/README.md` carries the install and build commands and the test commands.
+  The bridge splits the same material into `docs/install.md` and `docs/development.md`.
+  The dashboard should match.
