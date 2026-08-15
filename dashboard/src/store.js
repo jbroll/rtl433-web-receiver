@@ -24,7 +24,7 @@ function gridNum(v, fallback) {
   return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback
 }
 
-function defaultSize(count) {
+export function defaultSize(count) {
   const v = Math.max(1, count)
   const w = Math.ceil(Math.sqrt(v))
   return { w: w, h: Math.ceil(v / w) }
@@ -110,6 +110,10 @@ export function ensureCard(key, merged) {
 }
 
 export function cardEntry(key) { return cardState.cards[key] }
+
+export function getCardState() { return cardState }
+
+export function setCardState(s) { cardState = s }
 
 // A value is shown in the body, shown small along the bottom edge, or not at
 // all. Anything a card stored before bottom values existed reads as shown.

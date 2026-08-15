@@ -1,24 +1,4 @@
-const fs = require("fs");
 const http = require("http");
-const path = require("path");
-
-const ROOT = path.join(__dirname, "..");
-
-// The firmware serves these arrays verbatim, so the tests must read the same
-// source rather than a copy that can drift.
-function progmem(file, name) {
-  const full = path.join(ROOT, file);
-  if (!fs.existsSync(full)) return "";
-  const src = fs.readFileSync(full, "utf8");
-  const re = new RegExp(name + "\\[\\]\\s*PROGMEM\\s*=\\s*R\"rawliteral\\(([\\s\\S]*?)\\)rawliteral\";");
-  const m = src.match(re);
-  if (!m) throw new Error("no " + name + " literal in " + file);
-  return m[1];
-}
-
-function page() {
-  return progmem("index_html.h", "INDEX_HTML") + progmem("cards_html.h", "CARDS_HTML");
-}
 
 const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
@@ -98,11 +78,25 @@ function startServer(opts = {}) {
   }
 
   const server = http.createServer(async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Max-Age": "600",
+      });
+      res.end();
+      return;
+    }
     const [rawPath, query] = req.url.split("?");
     const path = decodeURIComponent(rawPath);
     if (path === "/" && req.method === "GET") {
+      if (!opts.html) {
+        res.writeHead(404, { "Content-Type": "text/plain" }).end("no page here");
+        return;
+      }
       res.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-store" });
-      res.end(page());
+      res.end(opts.html);
       return;
     }
     if (path === "/events" && req.method === "GET") {
@@ -207,4 +201,4 @@ function startServer(opts = {}) {
   });
 }
 
-module.exports = { startServer, page, matchFilter, validFilter, validTopic };
+module.exports = { startServer, matchFilter, validFilter, validTopic };

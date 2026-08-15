@@ -24,5 +24,6 @@ test('the device cap comes from the firmware header', async () => {
   assert.doesNotMatch(html, /DEVICE_MAX/)
   // The markup's own max="24" would satisfy a bare /24/, so match the
   // substituted call site instead.
-  assert.match(html, new RegExp(`textContent\\s*=\\s*String\\(${declared}\\)`))
+  assert.match(html, new RegExp(`\\.size\\s*<=\\s*${declared}\\b`))
+  assert.match(html, new RegExp(`\\.slice\\(${declared}\\)`))
 })

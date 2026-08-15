@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 const http = require("http");
-const { startServer } = require("./harness");
+const { startServer } = require("./binding-server");
 const { ACURITE, OREGON, SOURCE, topicOf } = require("./fixtures");
 
 let server;

@@ -7,6 +7,13 @@ export const META = new Set(["model", "id", "channel", "protocol", "rssi", "dura
 export const STATUS_FIELDS = new Set(["battery_ok", "battery", "battery_low", "test", "tamper",
                                "status", "integrity", "alarm", "learn", "unknown"]);
 
+export function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
 export function readings(obj) {
   const out = {};
   if (obj) for (const k of Object.keys(obj)) if (!META.has(k)) out[k] = obj[k];
