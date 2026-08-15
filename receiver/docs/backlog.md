@@ -101,24 +101,16 @@ when oversubscribed, but a viewer in that state sees the table reload
 repeatedly. Raising the slot count or backing off the page's reconnect would
 both help.
 
-## The card page costs more flash than budgeted
+## The compiled decoders are 15% of the image
 
-The Cards tab cost 21,876 bytes against a design expectation of under 15 KB
-when that was last measured as a linked-size difference across three commits
-with `pio run -e esp32s3-generic`. The `CARDS_HTML` literal is 26,162 bytes
-today and `INDEX_HTML` 11,190, so the page is 37 KB of the image. The build
-sits at 90.3% of flash, so nothing is at risk today, but the figure was never
-brought back under the number it was written against. `CARDS_HTML` is not the
-obvious target: comments are 5 KB of the 37 and leading indentation another 2,
-both of which the project's own rules require, so the levers left are
-gzip-encoding the page or minifying it, and each needs the build step the
-design deliberately avoids. The bigger lever is elsewhere: the 319 compiled
-decoders are 172,009 bytes of `.flash.text`, 15% of the image, and `MY_DEVICES` in the
-fork's `rtl_433_devices.h` is what narrows them.
+The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in the fork's
+`rtl_433_devices.h` is what narrows them, and it would also cut the false decodes above.
+The page is no longer a lever: it is gzipped, and its size is recorded in
+[`architecture.md`](architecture.md#the-page-the-firmware-serves).
 
 ## The grid floors cells at 20px and can overflow the viewport
 
-`measureGrid()` (`cards_html.h`) floors the cell side at 20px, which breaks
+`measureGrid()` (`dashboard/src/grid.js`) floors the cell side at 20px, which breaks
 the letterboxing the README promises. At 24 columns on a 360px-wide phone
 viewport the grid comes out 480px wide and the page scrolls sideways.
 

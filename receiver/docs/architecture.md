@@ -43,6 +43,28 @@ client slots (`WEB_UI_SSE_CLIENTS`), each a `WiFiClient` plus up to four
 filters and one replay cursor, are fixed arrays sized at compile time — there
 is no dynamic connection list.
 
+## The page the firmware serves
+
+`GET /` answers with a gzipped byte array in PROGMEM, generated at build time by
+`build_dashboard.py`, which runs `node ../dashboard/build.js --progmem` into
+`$BUILD_DIR/generated/dashboard_html.h`. Node is therefore a requirement for `pio run`;
+it was already one to run the tests.
+
+The array is served with `Content-Encoding: gzip` through the same chunked-write budget
+every other response uses, so a slow reader is dropped rather than stalling `loop()`.
+There is no uncompressed fallback: every browser that can run the page sends
+`Accept-Encoding: gzip`.
+
+The two PROGMEM literals it replaced were 36,819 bytes against a build at 90.4% of flash.
+Measured as a linked-size difference with `pio run -e esp32s3-generic` across the commit
+that made the change:
+
+| | Flash |
+|---|---|
+| Before | 1,184,653 bytes, 90.4% |
+| After | 1,156,725 bytes, 88.3% |
+| Difference | 27,928 bytes |
+
 ## Data flow
 
 The decoder runs on `rtl_433_DecoderTask`, not the loop task, so

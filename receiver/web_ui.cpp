@@ -8,8 +8,7 @@
 #include <lwip/sockets.h>
 
 #include "alias_store.h"
-#include "cards_html.h"
-#include "index_html.h"
+#include "dashboard_html.h"
 #include "signal_store.h"
 #include "topic.h"
 
@@ -268,12 +267,11 @@ static void sendTo(int i, const FrameBuffer& frame) {
 
 } // namespace
 
-static void streamProgmem(Print& out, const char* text) {
-  size_t total = strlen_P(text);
-  char   buf[256];
+static void streamProgmemBytes(Print& out, const unsigned char* data, size_t total) {
+  char buf[256];
   for (size_t off = 0; off < total; off += sizeof(buf)) {
     size_t n = min(sizeof(buf), total - off);
-    memcpy_P(buf, text + off, n);
+    memcpy_P(buf, data + off, n);
     out.write(reinterpret_cast<const uint8_t*>(buf), n);
   }
 }
@@ -285,15 +283,15 @@ static void sendCors() {
 }
 
 static void handleRoot() {
-  sendCors();
   WiFiClient client = _server.client();
   _server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  sendCors();
   _server.sendHeader("Cache-Control", "no-store");
+  _server.sendHeader("Content-Encoding", "gzip");
   _server.send(200, "text/html", "");
 
   ChunkedResponse out(_server, client);
-  streamProgmem(out, INDEX_HTML);
-  streamProgmem(out, CARDS_HTML);
+  streamProgmemBytes(out, DASHBOARD_HTML_GZ, DASHBOARD_HTML_GZ_LEN);
   out.finish();
 }
 

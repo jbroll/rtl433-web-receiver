@@ -13,6 +13,8 @@ The library dependency is a fork,
 `sx1231-support`, which adds SX1231/RF69 receive support upstream does not have.
 `platformio.ini` points at it and PlatformIO fetches it on the first build.
 
+Node 22 or newer. `pio run` runs `dashboard/build.js` to generate the page it serves.
+
 ## Wiring
 
 | Signal | GPIO |
@@ -64,7 +66,7 @@ at every level.
 
 | Request | Returns |
 |---|---|
-| `GET /` | the live page: a card dashboard, a device table, and a raw log, behind tabs; the page opens on Cards |
+| `GET /` | the [dashboard](../dashboard/README.md), gzipped |
 | `GET /<topic>` | the stored message, `Content-Type: application/json`; `404` if there is none |
 | `POST /<topic>` | store an alias, `204`; `405` unless the topic is an `$alias` under this receiver's source |
 | `GET /events?f=…` | SSE stream; each frame's `data` is `{"topic":…,"payload":…}`, with a `:keepalive` comment every 15 s |
