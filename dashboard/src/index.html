@@ -21,6 +21,15 @@
 <tbody id="devices"></tbody>
 </table></section>
 <section id="view-log" hidden><table id="log"><tbody id="logrows"></tbody></table></section>
+<button id="sources-toggle" title="Sources">&#9881;</button>
+<section id="view-sources" hidden>
+  <ul id="source-list"></ul>
+  <form id="source-form">
+    <input id="source-url" type="url" placeholder="bridge.local:8080"
+           aria-label="Source base URL">
+    <button id="source-add" type="submit">Add</button>
+  </form>
+</section>
 <section id="view-cards">
   <button id="edit-cards" title="Edit layout">&#9998;</button>
   <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>

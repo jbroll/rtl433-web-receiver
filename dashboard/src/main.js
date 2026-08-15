@@ -3,6 +3,7 @@ import { devices, upsert } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf } from './alias.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
+import { loadSources, installSourcePanel, renderSourcePanel } from './sources.js'
 import { measureGrid, installGestures, setEditing, editing, gestureInFlight, fitValues,
          cellSide, fontPx, currentDrag, resetFit } from './grid.js'
 import { buildCard } from './card.js'
@@ -68,8 +69,15 @@ function onMessage(base, topic, obj) {
 
 function onAlias(base, topic, payload) { applyAliasFrame(makeKey(base, topic), payload) }
 
+const sourceState = new Map()
+
 function onState(base, state) {
-  $('status').textContent = state === 'live' ? 'live' : state
+  sourceState.set(base, state)
+  const live = [...sourceState.values()].filter((s) => s === 'live').length
+  $('status').textContent = live === sourceState.size ? 'live'
+                          : live === 0 ? 'reconnecting'
+                          : `${live}/${sourceState.size} live`
+  renderSourcePanel(sourceState)
 }
 
 const TABS = ['devices', 'log', 'cards']
@@ -130,6 +138,8 @@ function exposeForTests() {
 
 exposeForTests()
 store.loadCardState()
+loadSources()
+installSourcePanel()
 syncGridInputs()
 installGestures()
 window.addEventListener('resize', render)

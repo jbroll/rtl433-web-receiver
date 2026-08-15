@@ -1,4 +1,5 @@
 import { requestRender } from './render.js'
+import { el } from './units.js'
 
 export const SOURCES_KEY = 'rtl433.sources.v1'
 
@@ -59,4 +60,44 @@ export function removeSource(base) {
   save()
   requestRender()
   return true
+}
+
+let states = new Map()
+
+export function renderSourcePanel(next) {
+  if (next) states = next
+  const ul = document.getElementById('source-list')
+  if (!ul) return
+  ul.replaceChildren(...list.map((base) => {
+    const li = el('li')
+    const dot = el('span', 'dot')
+    dot.dataset.state = states.get(base) || 'connecting'
+    const rm = el('button', 'rm', '✕')
+    rm.title = `Remove ${base}`
+    rm.onclick = () => { removeSource(base); renderSourcePanel() }
+    li.append(dot, el('span', 'url', base), rm)
+    return li
+  }))
+}
+
+export function installSourcePanel() {
+  const toggle = document.getElementById('sources-toggle')
+  const panel = document.getElementById('view-sources')
+  const form = document.getElementById('source-form')
+  const input = document.getElementById('source-url')
+  toggle.onclick = () => {
+    panel.hidden = !panel.hidden
+    if (!panel.hidden) renderSourcePanel()
+  }
+  form.onsubmit = (ev) => {
+    ev.preventDefault()
+    if (!addSource(input.value)) {
+      input.setAttribute('aria-invalid', 'true')
+      return
+    }
+    input.removeAttribute('aria-invalid')
+    input.value = ''
+    renderSourcePanel()
+  }
+  renderSourcePanel()
 }
