@@ -9,6 +9,15 @@ One row per device: Model, ID, Reading (every field merged from messages seen
 so far, since a device like the Acurite 5n1 splits its data across message
 types), RSSI, Msgs, Age, an Alias box, and a Card checkbox.
 
+The table sorts alphabetically by Model. Clicking a column header sorts by that
+column, and clicking the sorted header again reverses it; an arrow marks which
+column is in use. Model, ID, RSSI, Msgs, Age, and Alias sort. Reading does not,
+since it is every field of a device run together, and neither does Card. A
+device with no value in the sorted column goes last in both directions, so
+reversing never buries the rows that do have one. Ascending Age is the most
+recently heard device first. The choice is stored per browser under
+`rtl433.devicesort.v1` and survives a reload.
+
 The Reading column excludes the fields the page treats as metadata rather than
 a sensor value: `model`, `id`, `channel`, `protocol`, `rssi`, `duration`,
 `mic`, `message_type`, `sequence_num`, `time`, `count`, and `build`. A value in

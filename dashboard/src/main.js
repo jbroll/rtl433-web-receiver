@@ -7,8 +7,9 @@ import { loadSources, installSourcePanel, renderSourcePanel, sources, setSources
 import { measureGrid, installGestures, setEditing, editing, gestureInFlight, fitValues,
          cellSide, fontPx, currentDrag, resetFit } from './grid.js'
 import { buildCard } from './card.js'
-import { renderDevices, addLog, renderLog } from './table.js'
+import { renderDevices, addLog, renderLog, installSort } from './table.js'
 import { openSource } from './stream.js'
+import { loadSort } from './devicesort.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -164,11 +165,13 @@ function exposeForTests() {
 
 exposeForTests()
 store.loadCardState()
+loadSort()
 loadSources()
 setSourcesChanged(syncSources)
 installSourcePanel()
 syncGridInputs()
 installGestures()
+installSort()
 window.addEventListener('resize', render)
 setInterval(render, 1000)
 syncSources()

@@ -15,6 +15,7 @@ Plain ES modules, no framework, bundled by `esbuild` into one `<script>`.
 | `stream.js` | one source's SSE connection and its reconnect |
 | `grid.js` | cell arithmetic, the resize and drag gestures, and value fitting |
 | `card.js` | one card's DOM, its value modes, and rename |
+| `devicesort.js` | the device table's sort column, its direction, and its storage |
 | `table.js` | the device table and the log |
 | `main.js` | wiring: the render tick, the tabs, the grid inputs, edit mode |
 

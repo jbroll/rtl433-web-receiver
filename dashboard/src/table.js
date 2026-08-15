@@ -2,6 +2,8 @@ import { devices } from './devices.js'
 import { cardFields, cardHidden, setCardHidden, valueMode, setValueMode } from './store.js'
 import { aliasOf, postAlias, shortKey } from './alias.js'
 import { el, ageText } from './units.js'
+import { sortDevices, sortBy, current, sortable } from './devicesort.js'
+import { requestRender } from './render.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -21,11 +23,34 @@ export function renderDevices() {
   const held = document.activeElement;
   if (tbody.contains(held) && (held.tagName === "SELECT" || held.type === "text")) return;
   const out = [];
-  for (const r of [...devices.values()].sort((a, b) => b.seenAt - a.seenAt)) {
+  for (const r of sortDevices(devices.values())) {
     out.push(deviceRow(r));
     for (const f of cardFields(r.key, r.merged)) out.push(valueRow(r.key, f, r.merged[f]));
   }
   tbody.replaceChildren(...out);
+  markSortedColumn();
+}
+
+function markSortedColumn() {
+  const { by, dir } = current();
+  for (const th of document.querySelectorAll("#view-devices th[data-sort]")) {
+    const on = th.dataset.sort === by;
+    th.setAttribute("aria-sort", on ? (dir === 1 ? "ascending" : "descending") : "none");
+  }
+}
+
+export function installSort() {
+  for (const th of document.querySelectorAll("#view-devices th[data-sort]")) {
+    if (!sortable(th.dataset.sort)) continue;
+    th.tabIndex = 0;
+    th.onclick = () => { if (sortBy(th.dataset.sort)) requestRender(); };
+    th.onkeydown = ev => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      if (sortBy(th.dataset.sort)) requestRender();
+    };
+  }
+  markSortedColumn();
 }
 
 function deviceRow(r) {

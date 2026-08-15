@@ -16,6 +16,11 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
                               border:1px solid var(--line); }
 #devices input[type=text] { font-size:.85rem; width:8rem; padding:.1rem .3rem; }
 #devices select { font-size:.8rem; }
+th[data-sort] { cursor:pointer; user-select:none; white-space:nowrap; }
+th[data-sort]:hover { opacity:1; }
+th[data-sort]::after { content:"\2003"; opacity:.5; font-size:.9em; }
+th[data-sort][aria-sort=ascending]::after { content:" \25B2"; }
+th[data-sort][aria-sort=descending]::after { content:" \25BC"; }
 tr.vrow td { border-bottom:none; padding:.1rem .6rem; font-size:.85rem; opacity:.75; }
 tr.vrow td:first-child { padding-left:2rem; }
 tr.vrow + tr:not(.vrow) td { border-top:1px solid var(--line); }
