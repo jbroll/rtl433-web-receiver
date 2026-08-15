@@ -3,6 +3,12 @@
 Three tabs — Devices, Log, Cards — and the page opens on Cards. The status
 indicator in the header reads `connecting`, `live`, or `reconnecting`.
 
+## Drag-and-drop in edit mode
+
+In edit mode, press and drag a card's label to reorder cards. Press and drag a
+value inside a card to reorder values within that card. While dragging, a ghost
+shows what is being moved and the active drop zone highlights where it will land.
+
 ## Devices
 
 One row per device: Model, ID, Reading (every field merged from messages seen

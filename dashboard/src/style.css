@@ -83,9 +83,6 @@ section[hidden] { display:none; }
 #view-cards.editing .card .rz { display:block; }
 #view-cards.editing .card .age { right:1.4rem; }
 .card .lbl input { font-size:.75rem; width:9rem; }
-.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.75;
-             border:1px solid var(--line); border-radius:.7rem; background:Canvas;
-             padding:.3rem .6rem; font-size:.8rem; }
 #view-sources { padding:.7rem; border:1px solid var(--line); border-radius:.7rem;
                 min-width:18rem; }
 #source-list { list-style:none; margin:0 0 .5rem; padding:0; }
@@ -106,3 +103,24 @@ section[hidden] { display:none; }
 #source-url[aria-invalid=true] { border-color:#c44; }
 #source-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
               color:inherit; border:1px solid var(--line); cursor:pointer; }
+
+.drop-layer { position:fixed; left:0; top:0; right:0; bottom:0; pointer-events:none; z-index:4; }
+.drop-zone { opacity:0; transition:opacity .1s; }
+.drop-zone.active { opacity:1; }
+
+.card-layer .drop-zone.active {
+  border-radius:.35rem;
+  background:color-mix(in srgb, Highlight 25%, transparent);
+  outline:2px solid Highlight;
+}
+
+.value-layer .drop-zone.active {
+  background:Highlight;
+  border-radius:.2rem;
+}
+
+.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.85;
+             border:1px solid var(--line); border-radius:.7rem; background:Canvas;
+             padding:.4rem .7rem; font-size:.85rem; box-shadow:0 4px 12px #0003; }
+.ghostcard.card-ghost { min-width:6rem; text-align:center; font-weight:600; }
+.ghostcard.value-ghost { font-size:.75rem; opacity:.9; }

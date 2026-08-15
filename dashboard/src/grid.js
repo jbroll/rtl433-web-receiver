@@ -107,17 +107,123 @@ export function cancelDrag(key) {
   if (dragging && dragging.key === key) dragging = null;
 }
 
-// The drop takes the slot of the sibling whose midpoint is nearest the pointer,
-// so one dragged from before that sibling lands after it. Returns the node to
-// insert before, null to append, or the dragged node itself for no move.
-function dropSlot(nodes, from, x, y) {
-  let best = from, far = Infinity;
-  nodes.forEach((n, i) => {
-    const r = n.getBoundingClientRect();
-    const d = Math.hypot(x - r.left - r.width / 2, y - r.top - r.height / 2);
-    if (d < far) { far = d; best = i; }
-  });
-  return nodes[best > from ? best + 1 : best] || null;
+function makeZone(layer, left, top, width, height, before) {
+  const z = el('div', 'drop-zone')
+  z.style.position = 'absolute'
+  z.style.left = left + 'px'
+  z.style.top = top + 'px'
+  z.style.width = Math.max(0, width) + 'px'
+  z.style.height = Math.max(0, height) + 'px'
+  z.dataset.before = before
+  layer.append(z)
+  return z
+}
+
+function createDropLayer(kind) {
+  const layer = el('div', 'drop-layer ' + kind + '-layer')
+  layer.style.position = 'fixed'
+  layer.style.left = '0px'
+  layer.style.top = '0px'
+  layer.style.width = '100vw'
+  layer.style.height = '100vh'
+  layer.style.pointerEvents = 'none'
+  layer.style.zIndex = '4'
+  document.body.append(layer)
+  return layer
+}
+
+function clearDropZones() {
+  document.querySelectorAll('.drop-layer').forEach(n => n.remove())
+}
+
+function cardDropZones(layer) {
+  const cards = [...document.querySelectorAll('#cards .card')]
+  if (!cards.length) return []
+  const gridRect = document.getElementById('cards').getBoundingClientRect()
+
+  // Group cards by visual row.
+  const rows = []
+  for (const card of cards) {
+    const r = card.getBoundingClientRect()
+    const row = rows.find(row => Math.abs(row.top - r.top) < 5)
+    if (row) row.cards.push({ card, rect: r })
+    else rows.push({ top: r.top, cards: [{ card, rect: r }] })
+  }
+  rows.sort((a, b) => a.top - b.top)
+  for (const row of rows) row.cards.sort((a, b) => a.rect.left - b.rect.left)
+
+  const zones = []
+  for (let ri = 0; ri < rows.length; ri++) {
+    const row = rows[ri]
+    const rowTop = Math.min(...row.cards.map(c => c.rect.top))
+    const rowBottom = Math.max(...row.cards.map(c => c.rect.bottom))
+    const prevBottom = ri > 0 ? Math.max(...rows[ri - 1].cards.map(c => c.rect.bottom)) : gridRect.top
+    const nextTop = ri < rows.length - 1 ? Math.min(...rows[ri + 1].cards.map(c => c.rect.top)) : gridRect.bottom
+    const y = (prevBottom + rowTop) / 2
+    const y2 = (rowBottom + nextTop) / 2
+
+    // Zone before the first card.
+    zones.push(makeZone(layer, gridRect.left, y, row.cards[0].rect.left - gridRect.left, y2 - y, row.cards[0].card.dataset.key))
+
+    // Zones between cards: each spans a card and means "drop before the next card".
+    for (let i = 0; i < row.cards.length - 1; i++) {
+      const a = row.cards[i].rect
+      const b = row.cards[i + 1].rect
+      zones.push(makeZone(layer, a.left, y, b.left - a.left, y2 - y, row.cards[i + 1].card.dataset.key))
+    }
+
+    // Zone covering the last card and the area after it.
+    const last = row.cards[row.cards.length - 1].rect
+    zones.push(makeZone(layer, last.left, y, gridRect.right - last.left, y2 - y, ''))
+  }
+
+  return zones
+}
+
+function valueDropZones(card, layer) {
+  const values = [...card.querySelectorAll('.val')]
+  if (!values.length) return []
+  const bodyRect = card.querySelector('.body').getBoundingClientRect()
+
+  // Values are in a CSS grid. Adjacent cells share an edge.
+  const cells = values.map(v => ({ v, r: v.getBoundingClientRect() }))
+  const zones = []
+
+  const MIN_EDGE = 8
+
+  // Before first value: a strip at the body edge. Use the first cell's edge.
+  const first = cells[0].r
+  zones.push(makeZone(layer, bodyRect.left - Math.max(0, MIN_EDGE - (first.left - bodyRect.left)), bodyRect.top,
+                      Math.max(MIN_EDGE, first.left - bodyRect.left), bodyRect.height, values[0].dataset.f))
+
+  // After last value.
+  const last = cells[cells.length - 1].r
+  zones.push(makeZone(layer, last.right, bodyRect.top,
+                      Math.max(MIN_EDGE, bodyRect.right - last.right), bodyRect.height, ''))
+
+  // Between horizontally adjacent values.
+  for (let i = 0; i < cells.length; i++) {
+    for (let j = i + 1; j < cells.length; j++) {
+      const a = cells[i].r
+      const b = cells[j].r
+      if (Math.abs(a.right - b.left) < 3 && Math.abs(a.top - b.top) < 3) {
+        zones.push(makeZone(layer, a.right, a.top, b.left - a.right, a.height, b.v.dataset.f))
+      }
+    }
+  }
+
+  // Between vertically adjacent values.
+  for (let i = 0; i < cells.length; i++) {
+    for (let j = i + 1; j < cells.length; j++) {
+      const a = cells[i].r
+      const b = cells[j].r
+      if (Math.abs(a.bottom - b.top) < 3 && Math.abs(a.left - b.left) < 3) {
+        zones.push(makeZone(layer, a.left, a.bottom, a.width, b.top - a.bottom, b.v.dataset.f))
+      }
+    }
+  }
+
+  return zones
 }
 
 export function beginDrag(ev, card, val) {
@@ -168,12 +274,37 @@ function dragMove(ev) {
     // to the card, and a value's click is how it toggles.
     d.card.setPointerCapture(d.pointerId);
     d.card.cancelPress();
-    d.ghost = el("div", "ghostcard", d.field ? splitUnit(d.field).name : displayName(d.key));
+    const ghostCls = 'ghostcard ' + (d.field ? 'value-ghost' : 'card-ghost')
+    d.ghost = el('div', ghostCls, d.field ? splitUnit(d.field).name : displayName(d.key))
     document.body.append(d.ghost);
     d.node.classList.add("lifting");
+    d.zones = d.field
+      ? valueDropZones(d.card, createDropLayer('value'))
+      : cardDropZones(createDropLayer('card'))
   }
   d.ghost.style.left = ev.clientX + 12 + "px";
   d.ghost.style.top = ev.clientY + 12 + "px";
+
+  let active = null
+  for (const z of d.zones || []) {
+    const r = z.getBoundingClientRect()
+    if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+      active = z
+      break
+    }
+  }
+  // Fall back to nearest center if no zone contains the pointer.
+  if (!active) {
+    let best = Infinity
+    for (const z of d.zones || []) {
+      const r = z.getBoundingClientRect()
+      const cx = r.left + r.width / 2
+      const cy = r.top + r.height / 2
+      const dist = Math.hypot(ev.clientX - cx, ev.clientY - cy)
+      if (dist < best) { best = dist; active = z }
+    }
+  }
+  for (const z of d.zones || []) z.classList.toggle('active', z === active)
 }
 
 function endDrag(ev) {
@@ -182,16 +313,22 @@ function endDrag(ev) {
   dragging = null;
   d.card.cancelPress();
   if (d.ghost) d.ghost.remove();
-  d.node.classList.remove("lifting");
+  d.node.classList.remove('lifting');
   if (!d.moved) return;
-  const nodes = d.field ? [...d.card.querySelectorAll(".val")]
-                        : [...document.querySelectorAll("#cards .card")];
-  const before = dropSlot(nodes, nodes.indexOf(d.node), ev.clientX, ev.clientY);
-  if (before !== d.node) {
-    if (d.field) moveValue(d.key, d.field, before ? before.dataset.f : null);
-    else moveCard(d.key, before ? before.dataset.key : null);
+
+  if (d.zones) {
+    const active = d.zones.find(z => z.classList.contains('active'));
+    if (active) {
+      const before = active.dataset.before || null;
+      if (d.field) {
+        if (before !== d.field) moveValue(d.key, d.field, before)
+      } else {
+        if (before !== d.key) moveCard(d.key, before)
+      }
+    }
   }
-  requestRender();
+  clearDropZones()
+  requestRender()
 }
 
 let installed = false;
