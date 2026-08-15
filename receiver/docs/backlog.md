@@ -1,45 +1,8 @@
 # Backlog
 
-Known gaps, in rough priority order. None of these break the receiver as it
-stands; each was found during review or hardware testing and deliberately left.
-
-The roadmap comes first: it is a program of three projects, of which this
-receiver is one. The gaps below are about the receiver as it exists today.
-
-# Roadmap: splitting the receiver into a source, a bridge, and a dashboard
-
-The receiver decodes, holds state, and serves a page shaped around its own
-device table, all in one firmware image. Device keys are
-`<source>/<model>/<id>` topics, matching what a bridge or a second receiver
-would publish, but nothing else can feed this page yet, and it
-cannot read anything else. A wired sensor or a real broker still has no way
-in.
-
-Two projects remain, in dependency order.
-
-## 1. The HTTP binding for MQTT (spec)
-
-[`../bridge/docs/binding.md`](../../bridge/docs/binding.md). Three operations over stable
-`<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an
-alias at the source, device, and reading levels carried as a `$alias` topic.
-Everything below is written against it. It now lives beside the bridge that
-implements it. Done, and the receiver now serves the source-only subset of it.
-
-## 2. `mqtt-http-bridge`
-
-Built as a standalone service implementing the whole binding over a real broker.
-
-## 3. The dashboard as its own project
-
-The page lifted out of `cards_html.h` and `index_html.h` into a project with a
-build step, reading a configurable list of bridges rather than the host it was
-served from. The receiver serves a build of it, so the single-device case still
-works with no extra parts.
-
-Layering stays as it is: the browser's own config wins, the bridge's `$alias`
-next, the stable segment last. A build step also settles the flash cost, the
-duplicated constants, and the minification questions the current PROGMEM page
-cannot answer.
+Known gaps in the receiver, in rough priority order. None break it as it stands; each was
+found during review or hardware testing and deliberately left. Anything spanning
+sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
 ## Nothing filters false decodes
 
@@ -104,14 +67,6 @@ Beyond the `JsonDocument` and `String` noted below: ArduinoJson 7.4.3's default
 allocator is `malloc`/`realloc`, and it reallocs several times per parse. A
 static pool (an `ArduinoJson::Allocator` subclass over a fixed buffer, passed to
 the `JsonDocument` constructor) removes it without touching the parse.
-
-## Constants duplicated between the firmware and the page
-
-`index_html.h:61` caps the browser's device table at `DEVICE_MAX = 24` to match
-`SIGNAL_DEVICE_SLOTS` in `signal_store.h:8`. Change one and nothing catches the
-divergence — the page would silently keep a different number of rows than the
-device tracks. The page is a PROGMEM string with no build step, so the fix is
-to generate the constant into the page at build time.
 
 ## Heap allocation on the decode path
 
@@ -287,6 +242,3 @@ without needing one.
   stopped client is not routed through `releaseSlot()`, so its filters and
   replay cursor stay set. Inert, because every reader gates on `_sse[i]` first
   and `handleEvents()` overwrites both when the slot is reused.
-- `test/harness.js`'s `request()` has no `error` handler on `http.request`, so
-  a client-side socket error surfaces as an uncaught exception rather than a
-  rejected promise. Test-only, and it shows up as a timeout.
