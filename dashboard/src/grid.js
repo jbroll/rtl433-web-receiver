@@ -263,7 +263,8 @@ function dragMove(ev) {
     // to the card, and a value's click is how it toggles.
     d.card.setPointerCapture(d.pointerId);
     d.card.cancelPress();
-    d.ghost = el("div", "ghostcard", d.field ? splitUnit(d.field).name : displayName(d.key));
+    const ghostCls = 'ghostcard ' + (d.field ? 'value-ghost' : 'card-ghost')
+    d.ghost = el('div', ghostCls, d.field ? splitUnit(d.field).name : displayName(d.key))
     document.body.append(d.ghost);
     d.node.classList.add("lifting");
     d.zones = d.field
