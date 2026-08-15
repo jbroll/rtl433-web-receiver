@@ -51,6 +51,17 @@ sources publishing the same topic stay two devices with two cards. A card's stor
 uses the same key, so moving a device between bridges gives it a new card rather than
 inheriting one.
 
+## From dashboard build to mobile app
+
+`dashboard/build.js` emits one self-contained `index.html`. The `app/` sub-project is a
+Capacitor 7 shell whose `capacitor.config.ts` points `webDir` at `../dashboard/dist`. The
+build order is therefore dashboard first, then `npx cap sync <platform>`, then the
+platform build.
+
+The generated `android/` and `ios/` trees are committed so a build host needs only `npm ci`
+and `cap sync`. Build output, local SDK configuration, and the synced web assets under
+`android/app/src/main/assets/public/` are gitignored and regenerated on every sync.
+
 ## Cross-origin
 
 A dashboard served from one origin and reading a bridge on another is a cross-origin

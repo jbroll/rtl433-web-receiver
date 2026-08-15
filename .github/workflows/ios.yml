@@ -1,0 +1,43 @@
+name: iOS unsigned build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: npm run build
+
+      - name: Sync iOS
+        run: npx cap sync ios
+
+      - name: Build unsigned iOS
+        run: xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rtl433-ios-unsigned-build
+          path: app/ios/DerivedData/Build/Products/Debug-iphonesimulator

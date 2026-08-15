@@ -2,7 +2,7 @@
 
 A 433 MHz receiver, an HTTP surface over MQTT, and one dashboard that reads either.
 
-Three sub-projects, each built and tested on its own:
+Four sub-projects, each built and tested on its own:
 
 - [`receiver/`](receiver/README.md) — an ESP32-S3 with an SX1231 radio. Decodes 433 MHz
   sensors, holds their last message, and serves the dashboard and an SSE stream.
@@ -10,6 +10,7 @@ Three sub-projects, each built and tested on its own:
   node service.
 - [`dashboard/`](dashboard/README.md) — the browser page, built to one self-contained
   file. Reads a list of receivers and bridges at once. The receiver embeds a build of it.
+- [`app/`](app/README.md) — a Capacitor 7 shell around the dashboard for Android and iOS.
 
 They share one protocol, the [HTTP binding for MQTT](bridge/docs/binding.md): stable
 `<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an alias at
