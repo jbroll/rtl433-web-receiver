@@ -158,30 +158,6 @@ sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
 `signal_store`'s 31 checks and `alias_store`'s 21 are verified by compilation
 and by reasoning, not by execution.
 
-## An alias surviving a reboot is unverified
-
-`alias_store::selfTest()` covers the in-RAM table and the round trip through a
-serialised blob, but not `Preferences::putString()` actually landing in NVS
-and surviving a power cycle — that needs hardware, like the self-test gap
-above.
-
-## The SSE paths carry a frame-sized buffer for a 32-byte name
-
-`FrameBuffer` is 1363 bytes, sized for a device frame: a 96-byte topic and a
-600-byte payload that doubles under escaping. Two are live at once on the paths
-that publish an alias. `drainReplay()` takes the hoisted `replayFrame` and
-builds a second one per alias entry to hold the quoted name (`web_ui.cpp:454`),
-and `broadcastAlias()` holds `quoted` and `frame` together
-(`web_ui.cpp:555-561`), inside `_server.handleClient()` and alongside the
-`JsonDocument` that parsed the POST body. An alias name is capped at
-`ALIAS_NAME_MAX` 32, so 64 bytes would hold it escaped.
-
-That is about 2.7 KB of the Arduino loop task's default 8 KB stack, which
-`platformio.ini` does not override. Nothing has crashed, but the figure comes
-from reading the code rather than from a measurement: no high-water mark has
-been read off a device. A small local buffer for the name removes the question
-without needing one.
-
 ## Smaller items
 
 - `WebReceiver.ino:244-246` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
