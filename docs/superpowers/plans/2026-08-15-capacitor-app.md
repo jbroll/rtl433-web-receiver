@@ -54,11 +54,11 @@
 
 - [ ] **Step 4: Replace the gear control with a fourth Sources tab.**
 
-  Add `<button id="tab-sources" aria-selected="false">Sources</button>` after Cards, remove `#sources-toggle`, make `TABS` equal `['devices', 'log', 'cards', 'sources']`, and have `showTab()` render the existing `#view-sources` section. Remove the gear-control CSS and retain only layout needed by the Sources section in normal document flow.
+  Add `<button id="tab-sources" aria-selected="false">Sources</button>` after Cards, remove `#sources-toggle`, make `TABS` equal `['devices', 'log', 'cards', 'sources']`, and have `showTab()` render the existing `#view-sources` section. Delete the `#sources-toggle` rule and its fixed-position declarations, and change `#view-sources` from fixed positioning to a normal section with the existing border, padding, and width behavior.
 
 - [ ] **Step 5: Implement stored-list-only loading and the bounded origin probe.**
 
-  In `sources.js`, preserve the distinction between `localStorage.getItem(...) === null` and a parsed empty array, remove the `[location.origin]` fallback, and add the smallest startup-state accessors needed by `main.js`. In `main.js`, open `location.origin` only for an absent key, register it in `open` before synchronization, adopt it on `live`, and select Cards. On `reconnecting` or a 1500 ms timeout, call the same stream close and source cleanup path used by removal, clear source devices and aliases, and select Sources. Messages received before adoption must flow through `onMessage` and render normally. A successful adoption must save the origin and reuse the already-open stream rather than opening a second stream.
+  In `sources.js`, preserve the distinction between `localStorage.getItem(...) === null` and a parsed empty array, remove the `[location.origin]` fallback, and add the smallest startup-state accessors needed by `main.js`. In `main.js`, open `location.origin` only for an absent key, register it in `open` before synchronization, adopt it on `live`, and select Cards. On `reconnecting` or a 1500 ms timeout, call the same stream close and source cleanup path used by removal, clear source devices and aliases, and select Sources. The probe stream's `onMessage` and `onAlias` handlers remain the normal handlers, so messages received before adoption render normally. A successful adoption must save the origin and reuse the already-open stream rather than opening a second stream. `installSourcePanel()` remains installed at startup and retains the form and source-list wiring.
 
 - [ ] **Step 6: Run the focused and complete dashboard tests.**
 
@@ -83,11 +83,22 @@
 
 - [ ] **Step 1: Add the app manifest and exact Capacitor configuration.**
 
-  Create the package manifest with scripts `sync:android`, `sync:ios`, `build:android`, and `build:ios`; install dependencies with `npm install`. Create `capacitor.config.ts` using the exact identity and paths above.
+  Create the package manifest with this scripts block and Capacitor 7 dependencies, then install dependencies with `npm install`:
+
+  ```json
+  "scripts": {
+    "sync:android": "cap sync android",
+    "sync:ios": "cap sync ios",
+    "build:android": "cap sync android && cd android && ./gradlew assembleDebug",
+    "build:ios": "cap sync ios && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug CODE_SIGNING_ALLOWED=NO"
+  }
+  ```
+
+  Create `capacitor.config.ts` using the exact identity and paths above.
 
 - [ ] **Step 2: Generate the platform trees from the dashboard artifact.**
 
-  Run `cd dashboard && npm run build`, then `cd ../app && npx cap add android && npx cap add ios && npx cap sync android && npx cap sync ios`. Keep the generated source trees in git, and add only `android/app/build/`, `android/build/`, `android/.gradle/`, `android/local.properties`, `android/app/src/main/assets/public/`, `android/app/src/main/assets/capacitor.config.json`, and `android/app/src/main/assets/capacitor.plugins.json` to `app/.gitignore`.
+  Run `cd dashboard && npm run build`, then `cd ../app && npx cap add android && npx cap add ios && npx cap sync android && npx cap sync ios`. Keep the generated source trees in git, and add these exact generated-only paths to `app/.gitignore`: `android/app/build/`, `android/build/`, `android/.gradle/`, `android/local.properties`, `android/app/src/main/assets/public/`, `android/app/src/main/assets/capacitor.config.json`, `android/app/src/main/assets/capacitor.plugins.json`, `ios/build/`, `ios/DerivedData/`, and `ios/App/Pods/`.
 
 - [ ] **Step 3: Configure Android cleartext LAN access.**
 
@@ -95,11 +106,19 @@
 
 - [ ] **Step 4: Configure iOS local-network and cleartext access.**
 
-  Add `NSLocalNetworkUsageDescription` to `Info.plist` with text explaining that the app connects to rtl_433 receivers and bridges on the local network. Add the minimum ATS exception required for the current cleartext LAN receivers and bridges.
+  Add `NSLocalNetworkUsageDescription` to `Info.plist` with text explaining that the app connects to rtl_433 receivers and bridges on the local network. Add this ATS dictionary so cleartext HTTP LAN endpoints remain reachable without permitting arbitrary remote loads:
+
+  ```xml
+  <key>NSAppTransportSecurity</key>
+  <dict>
+      <key>NSAllowsLocalNetworking</key>
+      <true/>
+  </dict>
+  ```
 
 - [ ] **Step 5: Compile both platforms independently.**
 
-  Run `cd dashboard && npm run build`, `cd ../app && npx cap sync android`, `cd android && ./gradlew assembleDebug`; then run `cd ../../app && npx cap sync ios && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO`. Expected: both compilation commands succeed without a connected device or signing credentials.
+  Run `cd dashboard && npm run build`, `cd ../app && npx cap sync android`, `cd android && ./gradlew assembleDebug`; then run `cd ../../app && npx cap sync ios && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug CODE_SIGNING_ALLOWED=NO`. Expected: both compilation commands succeed without a connected device or signing credentials.
 
 - [ ] **Step 6: Commit the shell.**
 
@@ -119,15 +138,15 @@
 
 - [ ] **Step 1: Write a shell-level job test or dry-run assertions.**
 
-  Verify the script is executable, contains the exact environment exports, runs dashboard build before `npx cap sync android`, and runs `./gradlew assembleDebug` from `app/android`. Verify the optional device path is guarded by `adb devices` and reports skipped when no tablet is connected.
+  Verify the script is executable, contains the exact environment exports, runs dashboard build before `npx cap sync android`, and runs `./gradlew assembleDebug` from `app/android`. Verify the optional device path uses `if adb devices | grep -q '[[:space:]]device$'; then ... else echo 'device smoke skipped: no adb device'; fi` and reports skipped when no tablet is connected.
 
 - [ ] **Step 2: Implement the simple-ci configuration and job.**
 
-  Follow the repository's existing simple-ci shape: source `~/.config/simple-ci.conf` from `ci/simple-ci.conf`, name the job host `gpu`, and do not store host details in the repository. The executable job must run `npm ci` in `dashboard` and `app` as needed, build the dashboard, sync Android, assemble the debug APK, and then run the device check only when an adb device is present.
+  Follow the repository's existing simple-ci shape in `/home/john/src/KinoQ/ci/simple-ci.conf`: source `~/.config/simple-ci.conf` from `ci/simple-ci.conf`, set the job host to `gpu` in that config, and do not store host details in the repository. The executable job must run `npm ci` in `dashboard` and `app` as needed, build the dashboard, sync Android, assemble the debug APK, and then run the device check only when an adb device is present.
 
 - [ ] **Step 3: Implement the CDP smoke path.**
 
-  When a tablet is connected, install the debug APK, forward the WebView DevTools socket with adb, connect Playwright through CDP, launch the app, assert the empty Sources landing state, add a receiver, and assert receiver data renders. When no device is connected, print a skip line and return success.
+  When a tablet is connected, install the debug APK with `adb install -r android/app/build/outputs/apk/debug/app-debug.apk`, forward the WebView DevTools socket with `adb forward tcp:9222 localabstract:webview_devtools_remote`, and use a Node Playwright smoke script with `chromium.connectOverCDP('http://127.0.0.1:9222')` to launch the app, assert the empty Sources landing state, add a receiver, and assert receiver data renders. When no device is connected, print a skip line and return success.
 
 - [ ] **Step 4: Run the job and platform verification.**
 
@@ -153,11 +172,11 @@
 
 - [ ] **Step 1: Add the GitHub workflow.**
 
-  Create a workflow triggered by pushes and pull requests that checks out the repository, runs `npm ci` in `dashboard` and `app`, runs `npm run build` in `dashboard`, runs `npx cap sync ios` in `app`, invokes `xcodebuild` for the generated workspace with `CODE_SIGNING_ALLOWED=NO`, and uploads the derived build directory with `actions/upload-artifact`.
+  Create a workflow triggered by pushes and pull requests that checks out the repository, runs `npm ci` in `dashboard` and `app`, runs `npm run build` in `dashboard`, runs `npx cap sync ios` in `app`, invokes `xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug -derivedDataPath ios/DerivedData CODE_SIGNING_ALLOWED=NO`, and uploads `app/ios/DerivedData/Build/Products/Debug-iphonesimulator` as artifact `rtl433-ios-unsigned-build`.
 
 - [ ] **Step 2: Write app documentation.**
 
-  Document the exact Android and iOS build order, `npx cap sync` behavior, `adb install -r` installation, adb DevTools socket forwarding and CDP smoke checks, local-network cleartext requirements, and that signed distribution and IPA creation require Apple credentials and provisioning.
+  In `app/README.md` provide the app identity and one dashboard-build-to-platform-build example. In `app/docs/development.md`, use headings `Local Android`, `Local iOS`, `Platform Sync`, `Android Installation`, `CDP Smoke Check`, and `Unsigned Versus Signed`; document the exact Android and iOS build order, `npx cap sync` behavior, `adb install -r` installation, adb DevTools socket forwarding and CDP smoke checks, local-network cleartext requirements, and that signed distribution and IPA creation require Apple credentials and provisioning.
 
 - [ ] **Step 3: Update permanent project documentation.**
 
