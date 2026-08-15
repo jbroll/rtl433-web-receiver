@@ -393,7 +393,7 @@ static void handleEvents() {
     String v = _server.arg(i);
     if (count >= WEB_UI_SSE_FILTERS || v.length() >= WEB_UI_FILTER_MAX ||
         !topic::validFilter(v.c_str())) {
-      _server.send(400, "text/plain", "bad filter");
+      sendStatus(400, "bad filter");
       return;
     }
     strcpy(filters[count++], v.c_str());

@@ -27,6 +27,7 @@ function openStream(url, query) {
       });
       resolve({
         status: res.statusCode,
+        headers: res.headers,
         frames: frames,
         async settle() { await new Promise(r => setTimeout(r, 150)); return frames; },
         close() { req.destroy(); },
@@ -122,6 +123,14 @@ test("an invalid filter is 400", async () => {
   server = await startServer({});
   const s = await openStream(server.url, "?f=" + encodeURIComponent("a/#/c"));
   expect(s.status).toBe(400);
+  s.close();
+});
+
+test("an invalid filter's 400 still allows any origin", async () => {
+  server = await startServer({});
+  const s = await openStream(server.url, "?f=" + encodeURIComponent("a/#/c"));
+  expect(s.status).toBe(400);
+  expect(s.headers["access-control-allow-origin"]).toBe("*");
   s.close();
 });
 
