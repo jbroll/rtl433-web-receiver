@@ -22,7 +22,7 @@ function fakeStorage() {
 
 beforeEach(() => {
   fakeStorage()
-  devices.clear()
+  devices.value = new Map()
   store.setHideNewCards(true)
   store.loadCardState()
 })
@@ -30,7 +30,7 @@ beforeEach(() => {
 test('a new card appends, hides, and puts status fields at the bottom', () => {
   store.ensureCard(K, READ)
   assert.deepEqual(store.orderedKeys(), [])
-  devices.set(K, { key: K, merged: READ })
+  devices.value.set(K, { key: K, merged: READ })
   assert.deepEqual(store.orderedKeys(), [K])
   assert.equal(store.cardHidden(K), true)
   assert.deepEqual(store.visibleValues(K, READ), ['temperature_F', 'humidity'])
@@ -78,7 +78,7 @@ test('forgetting layouts clears storage and reseeds the devices on screen', () =
   store.ensureCard(K, READ)
   store.setCardHidden(K, false)
   store.saveCardState()
-  devices.set(K, { key: K, merged: READ })
+  devices.value.set(K, { key: K, merged: READ })
   store.forgetLayouts()
   assert.equal(store.cardHidden(K), false)
   assert.deepEqual(store.grid(), { cols: 6, rows: 4 })

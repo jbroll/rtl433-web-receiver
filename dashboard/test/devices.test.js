@@ -19,7 +19,7 @@ beforeEach(() => {
   fakeStorage()
   globalThis.location = { origin: 'http://origin.test' }
   src.loadSources()
-  devices.clear()
+  devices.value = new Map()
 })
 
 test('the device cap scales with the number of configured sources', () => {
@@ -34,6 +34,6 @@ test('the device cap scales with the number of configured sources', () => {
     upsert({ key: `http://c.d src/Acurite/${i}`, seenAt: i })
   }
 
-  assert.ok(devices.size > DEVICE_MAX, `expected more than ${DEVICE_MAX} devices, got ${devices.size}`)
-  assert.equal(devices.size, DEVICE_MAX * 2)
+  assert.ok(devices.value.size > DEVICE_MAX, `expected more than ${DEVICE_MAX} devices, got ${devices.value.size}`)
+  assert.equal(devices.value.size, DEVICE_MAX * 2)
 })

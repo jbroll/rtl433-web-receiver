@@ -37,7 +37,7 @@ beforeEach(() => {
   fakeStorage()
   fakeLocation(BASE)
   fakeFetch()
-  aliases.clear()
+  aliases.value = new Map()
   loadAliases()
 })
 
@@ -56,21 +56,21 @@ test('loadAliases ignores non-string and empty values', () => {
     d: null,
   }))
   loadAliases()
-  assert.equal(aliases.get('a'), 'keep')
-  assert.equal(aliases.has('b'), false)
-  assert.equal(aliases.has('c'), false)
-  assert.equal(aliases.has('d'), false)
+  assert.equal(aliases.value.get('a'), 'keep')
+  assert.equal(aliases.value.has('b'), false)
+  assert.equal(aliases.value.has('c'), false)
+  assert.equal(aliases.value.has('d'), false)
 })
 
 test('loadAliases leaves the map empty when storage is empty', () => {
   loadAliases()
-  assert.equal(aliases.size, 0)
+  assert.equal(aliases.value.size, 0)
 })
 
 test('loadAliases leaves the map empty when storage is corrupt', () => {
   localStorage.setItem(ALIASES_KEY, '{not json')
   loadAliases()
-  assert.equal(aliases.size, 0)
+  assert.equal(aliases.value.size, 0)
 })
 
 test('applyAliasFrame sets an alias and persists it', () => {
@@ -80,7 +80,7 @@ test('applyAliasFrame sets an alias and persists it', () => {
 })
 
 test('applyAliasFrame removes an alias and persists the removal', () => {
-  aliases.set(K, 'Back fence')
+  aliases.value.set(K, 'Back fence')
   applyAliasFrame(`${K}/$alias`, '')
   assert.equal(aliasOf(K), '')
   assert.equal(localStorage.getItem(ALIASES_KEY), '{}')
@@ -93,7 +93,7 @@ test('postAlias sets an alias and persists it', () => {
 })
 
 test('postAlias removes an alias and persists the removal', () => {
-  aliases.set(K, 'Back fence')
+  aliases.value.set(K, 'Back fence')
   postAlias(K, '')
   assert.equal(aliasOf(K), '')
   assert.equal(localStorage.getItem(ALIASES_KEY), '{}')

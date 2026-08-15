@@ -21,21 +21,21 @@ beforeEach(() => {
 
 test('with nothing configured there are no sources and the key is absent', () => {
   assert.deepEqual(src.configured(), [])
-  assert.deepEqual(src.sources(), [])
+  assert.deepEqual(src.sources.value, [])
   assert.equal(src.storageState(), 'absent')
 })
 
 test('a stored empty list is empty, not absent', () => {
   localStorage.setItem(src.SOURCES_KEY, '[]')
   src.loadSources()
-  assert.deepEqual(src.sources(), [])
+  assert.deepEqual(src.sources.value, [])
   assert.equal(src.storageState(), 'empty')
 })
 
 test('a stored populated list is populated', () => {
   src.addSource('http://a.b')
   src.loadSources()
-  assert.deepEqual(src.sources(), ['http://a.b'])
+  assert.deepEqual(src.sources.value, ['http://a.b'])
   assert.equal(src.storageState(), 'populated')
 })
 
@@ -56,9 +56,9 @@ test('added sources persist and reload', () => {
   assert.equal(src.addSource('http://a.b/'), true)
   assert.equal(src.addSource('http://a.b'), false)
   assert.equal(src.addSource('http://c.d:80'), true)
-  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d'])
+  assert.deepEqual(src.sources.value, ['http://a.b', 'http://c.d'])
   src.loadSources()
-  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d'])
+  assert.deepEqual(src.sources.value, ['http://a.b', 'http://c.d'])
 })
 
 test('a URL with a query, fragment, or credentials is refused', () => {
@@ -73,7 +73,7 @@ test('removing the last source leaves an empty list', () => {
   src.addSource('http://a.b')
   assert.equal(src.removeSource('http://a.b'), true)
   assert.equal(src.removeSource('http://a.b'), false)
-  assert.deepEqual(src.sources(), [])
+  assert.deepEqual(src.sources.value, [])
   src.loadSources()
   assert.equal(src.storageState(), 'empty')
 })
@@ -81,10 +81,10 @@ test('removing the last source leaves an empty list', () => {
 test('malformed storage yields no sources and no origin source', () => {
   localStorage.setItem(src.SOURCES_KEY, 'not json')
   src.loadSources()
-  assert.deepEqual(src.sources(), [])
+  assert.deepEqual(src.sources.value, [])
   localStorage.setItem(src.SOURCES_KEY, '{"a":1}')
   src.loadSources()
-  assert.deepEqual(src.sources(), [])
+  assert.deepEqual(src.sources.value, [])
 })
 
 test('a storage exception keeps adoption in memory and turns saves into no-ops', () => {
@@ -98,6 +98,6 @@ test('a storage exception keeps adoption in memory and turns saves into no-ops',
   assert.equal(src.storageState(), 'absent')
   assert.equal(src.addSource('http://a.b'), true)
   assert.equal(src.addSource('http://c.d'), true)
-  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d'])
+  assert.deepEqual(src.sources.value, ['http://a.b', 'http://c.d'])
   assert.deepEqual(writes, [])
 })

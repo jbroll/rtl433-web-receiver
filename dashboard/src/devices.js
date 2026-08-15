@@ -1,21 +1,47 @@
+import { signal } from '@preact/signals'
 import { sources } from './sources.js'
 
-export const devices = new Map()
+export const devices = signal(new Map())
 
 function trim() {
-  const cap = DEVICE_MAX * sources().length
-  if (devices.size <= cap) return
-  const stale = [...devices.values()].sort((a, b) => b.seenAt - a.seenAt).slice(cap)
-  for (const d of stale) devices.delete(d.key)
+  const cap = DEVICE_MAX * sources.value.length
+  if (devices.value.size <= cap) return
+  const stale = [...devices.value.values()].sort((a, b) => b.seenAt.value - a.seenAt.value).slice(cap)
+  for (const d of stale) devices.value.delete(d.key)
+  devices.value = devices.value
 }
 
 export function upsert(rec) {
-  devices.set(rec.key, rec)
-  trim()
+  const existing = devices.value.get(rec.key)
+  if (existing) {
+    existing.rssi.value = rec.rssi
+    existing.count.value = rec.count
+    existing.seenAt.value = rec.seenAt
+    existing.flashUntil.value = rec.flashUntil
+    existing.obj.value = rec.obj
+    existing.raw.value = rec.raw
+    existing.merged.value = rec.merged
+  } else {
+    const next = new Map(devices.value)
+    next.set(rec.key, {
+      key: rec.key,
+      rssi: signal(rec.rssi),
+      count: signal(rec.count),
+      seenAt: signal(rec.seenAt),
+      flashUntil: signal(rec.flashUntil),
+      obj: signal(rec.obj),
+      raw: signal(rec.raw),
+      merged: signal(rec.merged),
+    })
+    devices.value = next
+    trim()
+  }
 }
 
 export function clearSource(base) {
-  for (const key of [...devices.keys()]) {
-    if (key.startsWith(`${base} `)) devices.delete(key)
+  const next = new Map(devices.value)
+  for (const key of next.keys()) {
+    if (key.startsWith(`${base} `)) next.delete(key)
   }
+  devices.value = next
 }

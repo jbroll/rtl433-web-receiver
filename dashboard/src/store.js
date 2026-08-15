@@ -1,21 +1,16 @@
+import { signal } from '@preact/signals'
 import { devices } from './devices.js'
 import { aliases, isSelf } from './alias.js'
 import { STATUS_FIELDS } from './units.js'
-import { requestRender } from './render.js'
 
 const CARDS_KEY = 'rtl433.dashboard.v1'
 
-let cardState = blankState()
+export const cardState = signal(blankState())
 let storageBroken = false
-
-// A decode from a protocol nobody owns still makes a device, so a new one gets
-// no card until the device table's checkbox asks for one. The receiver's own
-// telemetry is the one device that cannot be noise, so it starts shown.
 let hideNewCards = true
 
 const GRID_MIN = 1, GRID_MAX = 24
 
-// Null prototype: a stored "__proto__" key must not become a prototype link.
 function blankState() {
   return { grid: { cols: 6, rows: 4 }, order: [], hidden: [], cards: Object.create(null) }
 }
@@ -24,7 +19,16 @@ function gridNum(v, fallback) {
   return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback
 }
 
-// Exported only for the browser suite; no module here calls it externally.
+function bump() {
+  const s = cardState.value
+  cardState.value = {
+    grid: s.grid,
+    order: s.order,
+    hidden: s.hidden,
+    cards: Object.assign(Object.create(null), s.cards),
+  }
+}
+
 export function defaultSize(count) {
   const v = Math.max(1, count)
   const w = Math.ceil(Math.sqrt(v))
@@ -32,7 +36,7 @@ export function defaultSize(count) {
 }
 
 export function loadCardState() {
-  cardState = blankState()
+  cardState.value = blankState()
   let raw
   try {
     raw = localStorage.getItem(CARDS_KEY)
@@ -42,7 +46,7 @@ export function loadCardState() {
   try { s = JSON.parse(raw) } catch (e) { return }
   if (!s || typeof s !== 'object') return
   const g = s.grid && typeof s.grid === 'object' ? s.grid : {}
-  cardState = {
+  const loaded = {
     grid: { cols: gridNum(g.cols, 6), rows: gridNum(g.rows, 4) },
     order: Array.isArray(s.order) ? s.order.filter(k => typeof k === 'string') : [],
     hidden: Array.isArray(s.hidden) ? s.hidden.filter(k => typeof k === 'string') : [],
@@ -52,36 +56,36 @@ export function loadCardState() {
   for (const k of Object.keys(cards)) {
     const c = cards[k]
     if (!c || typeof c !== 'object') continue
-    cardState.cards[k] = {
+    loaded.cards[k] = {
       w: gridNum(c.w, 0), h: gridNum(c.h, 0),
       valueOrder: Array.isArray(c.valueOrder) ? c.valueOrder.filter(f => typeof f === 'string') : [],
       hiddenValues: Array.isArray(c.hiddenValues) ? c.hiddenValues.filter(f => typeof f === 'string') : [],
       bottomValues: Array.isArray(c.bottomValues) ? c.bottomValues.filter(f => typeof f === 'string') : [],
     }
   }
+  cardState.value = loaded
 }
 
-// Every key ever decoded seeds a card, and a 433 band yields one-off noise for
-// as long as it is listened to, so without this order/hidden/cards grow until
-// localStorage refuses the write. An entry the user acted on is kept whether or
-// not its device is still around; one they never showed goes with the device.
 function pruneCardState() {
-  const keep = new Set(cardState.order.filter(
-    k => devices.has(k) || !cardHidden(k) || aliases.has(k)))
-  cardState.order = cardState.order.filter(k => keep.has(k))
-  cardState.hidden = cardState.hidden.filter(k => keep.has(k))
-  for (const k of Object.keys(cardState.cards)) if (!keep.has(k)) delete cardState.cards[k]
+  const s = cardState.value
+  const keep = new Set(s.order.filter(
+    k => devices.value.has(k) || !cardHidden(k) || aliases.value.has(k)))
+  s.order = s.order.filter(k => keep.has(k))
+  s.hidden = s.hidden.filter(k => keep.has(k))
+  for (const k of Object.keys(s.cards)) if (!keep.has(k)) delete s.cards[k]
 }
 
 export function saveCardState() {
   if (storageBroken) return
   pruneCardState()
-  try { localStorage.setItem(CARDS_KEY, JSON.stringify(cardState)) }
+  try { localStorage.setItem(CARDS_KEY, JSON.stringify(cardState.value)) }
   catch (e) { storageBroken = true }
+  bump()
 }
 
 export function ensureCard(key, merged) {
-  let c = cardState.cards[key]
+  const s = cardState.value
+  let c = s.cards[key]
   const fields = Object.keys(merged || {})
   if (!c) {
     c = {
@@ -89,9 +93,9 @@ export function ensureCard(key, merged) {
       hiddenValues: [],
       bottomValues: fields.filter(f => STATUS_FIELDS.has(f)),
     }
-    cardState.cards[key] = c
-    if (hideNewCards && !isSelf(key) && cardState.hidden.indexOf(key) < 0) {
-      cardState.hidden.push(key)
+    s.cards[key] = c
+    if (hideNewCards && !isSelf(key) && s.hidden.indexOf(key) < 0) {
+      s.hidden.push(key)
     }
   } else {
     if (!c.bottomValues) c.bottomValues = []
@@ -106,23 +110,18 @@ export function ensureCard(key, merged) {
     c.w = size.w
     c.h = size.h
   }
-  if (cardState.order.indexOf(key) < 0) cardState.order.push(key)
+  if (s.order.indexOf(key) < 0) s.order.push(key)
   return c
 }
 
-export function cardEntry(key) { return cardState.cards[key] }
+export function cardEntry(key) { return cardState.value.cards[key] }
 
-// Only the browser suite calls these two: setCardState() replaces cardState
-// wholesale, bypassing blankState()'s null-prototype guard and every filter in
-// loadCardState() on whatever the caller hands it.
-export function getCardState() { return cardState }
+export function getCardState() { return cardState.value }
 
-export function setCardState(s) { cardState = s }
+export function setCardState(s) { cardState.value = s }
 
-// A value is shown in the body, shown small along the bottom edge, or not at
-// all. Anything a card stored before bottom values existed reads as shown.
 export function valueMode(key, field) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   if (!c) return 'shown'
   if (c.hiddenValues.indexOf(field) >= 0) return 'hidden'
   if (c.bottomValues && c.bottomValues.indexOf(field) >= 0) return 'bottom'
@@ -130,7 +129,7 @@ export function valueMode(key, field) {
 }
 
 export function setValueMode(key, field, mode) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   if (!c) return
   if (!c.bottomValues) c.bottomValues = []
   for (const list of [c.hiddenValues, c.bottomValues]) {
@@ -140,51 +139,50 @@ export function setValueMode(key, field, mode) {
   if (mode === 'hidden') c.hiddenValues.push(field)
   else if (mode === 'bottom') c.bottomValues.push(field)
   saveCardState()
-  requestRender()
 }
 
 export function visibleValues(key, merged) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   if (!c) return []
   return c.valueOrder.filter(f => merged[f] !== undefined && valueMode(key, f) === 'shown')
 }
 
 export function bottomFields(key, merged) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   if (!c) return []
   return c.valueOrder.filter(f => merged[f] !== undefined && valueMode(key, f) === 'bottom')
 }
 
 export function cardFields(key, merged) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   return c ? c.valueOrder.filter(f => merged[f] !== undefined) : Object.keys(merged)
 }
 
-export function cardHidden(key) { return cardState.hidden.indexOf(key) >= 0 }
+export function cardHidden(key) { return cardState.value.hidden.indexOf(key) >= 0 }
 
 export function setCardHidden(key, hidden) {
-  const i = cardState.hidden.indexOf(key)
+  const s = cardState.value
+  const i = s.hidden.indexOf(key)
   if (hidden === (i >= 0)) return
-  if (hidden) cardState.hidden.push(key); else cardState.hidden.splice(i, 1)
+  if (hidden) s.hidden.push(key); else s.hidden.splice(i, 1)
   saveCardState()
-  requestRender()
 }
 
-export function orderedKeys() { return cardState.order.filter(k => devices.has(k)) }
+export function orderedKeys() { return cardState.value.order.filter(k => devices.value.has(k)) }
 
 export function moveCard(key, beforeKey) {
-  const order = cardState.order
+  const s = cardState.value
+  const order = s.order
   const from = order.indexOf(key)
   if (from < 0) return
   order.splice(from, 1)
   const to = beforeKey === null ? order.length : order.indexOf(beforeKey)
   order.splice(to < 0 ? order.length : to, 0, key)
   saveCardState()
-  requestRender()
 }
 
 export function moveValue(key, field, beforeField) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   if (!c) return
   const order = c.valueOrder
   const from = order.indexOf(field)
@@ -193,32 +191,30 @@ export function moveValue(key, field, beforeField) {
   const to = beforeField === null ? order.length : order.indexOf(beforeField)
   order.splice(to < 0 ? order.length : to, 0, field)
   saveCardState()
-  requestRender()
 }
 
 export function setCardSize(key, w, h) {
-  const c = cardState.cards[key]
+  const c = cardState.value.cards[key]
   if (c) { c.w = w; c.h = h; saveCardState() }
 }
 
-export function grid() { return cardState.grid }
+export function grid() { return cardState.value.grid }
 
 export function setGrid(axis, n) {
   const v = gridNum(n, 0)
   if (v) {
-    cardState.grid[axis] = v
+    cardState.value.grid[axis] = v
     saveCardState()
   }
 }
 
 export function forgetLayouts() {
   try { localStorage.removeItem(CARDS_KEY) } catch (e) { storageBroken = true }
-  cardState = blankState()
-  // The devices on screen were opted into once already, so re-seed them shown.
-  // Under the hide-new rule this would blank the dashboard rather than reset it.
+  cardState.value = blankState()
   const hideNew = hideNewCards
   hideNewCards = false
-  requestRender()
+  for (const rec of devices.value.values()) ensureCard(rec.key, rec.merged.value)
+  bump()
   hideNewCards = hideNew
 }
 

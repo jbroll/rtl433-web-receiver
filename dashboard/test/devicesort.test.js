@@ -1,5 +1,6 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { signal } from '@preact/signals'
 
 import { aliases } from '../src/alias.js'
 import * as sort from '../src/devicesort.js'
@@ -8,7 +9,13 @@ const BASE = 'http://a'
 
 function dev(model, extra = {}) {
   const key = `${BASE} src/${model}/${extra.id ?? 0}`
-  return { key, obj: { model, ...extra }, seenAt: extra.seenAt ?? 0, ...extra }
+  return {
+    key,
+    obj: signal({ model, ...extra }),
+    seenAt: signal(extra.seenAt ?? 0),
+    rssi: signal(extra.rssi),
+    count: signal(extra.count),
+  }
 }
 
 function fakeStorage() {
@@ -23,7 +30,7 @@ function fakeStorage() {
 
 beforeEach(() => {
   fakeStorage()
-  aliases.clear()
+  aliases.value = new Map()
   sort.loadSort()
 })
 
@@ -31,7 +38,7 @@ const A = dev('Acurite-5n1', { id: 396, rssi: -72, count: 9, seenAt: 100 })
 const O = dev('Oregon-THN132N', { id: 23, rssi: -40, count: 2, seenAt: 300 })
 const F = dev('Fineoffset-WH2', { id: 174, rssi: -95, count: 40, seenAt: 200 })
 
-const names = (l) => sort.sortDevices(l).map((r) => r.obj.model)
+const names = (l) => sort.sortDevices(l).map((r) => r.obj.value.model)
 
 test('the default is alphabetical, not last seen', () => {
   assert.deepEqual(sort.current(), { by: 'name', dir: 1 })
@@ -69,8 +76,8 @@ test('a device missing the field sorts last whichever way the column points', ()
 })
 
 test('the alias column sorts by the published name', () => {
-  aliases.set(O.key, 'Back fence')
-  aliases.set(A.key, 'Zenith')
+  aliases.value.set(O.key, 'Back fence')
+  aliases.value.set(A.key, 'Zenith')
   sort.sortBy('alias')
   assert.deepEqual(names([A, O, F]), ['Oregon-THN132N', 'Acurite-5n1', 'Fineoffset-WH2'])
 })
@@ -95,7 +102,7 @@ test('the id column counts numerically and puts channel-only devices after', () 
   const chA = dev('ChanA', { channel: 2 })
   const chB = dev('ChanB', { channel: 10 })
   sort.sortBy('id')
-  assert.deepEqual(sort.sortDevices([chB, big, chA, small]).map(r => r.obj.model),
+  assert.deepEqual(sort.sortDevices([chB, big, chA, small]).map(r => r.obj.value.model),
                    ['Small', 'Big', 'ChanA', 'ChanB'])
 })
 
