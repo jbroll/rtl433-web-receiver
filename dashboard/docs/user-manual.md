@@ -33,10 +33,12 @@ label sets; both post to `<topic>/$alias`, so a name assigned in either place
 is visible to every viewer. Emptying the box posts `""`, which removes the
 alias and puts the topic's own key back as the name.
 
-A new device gets no card. The Card checkbox is how it gets one, and it is the
-same setting as the ✕ on the card in edit mode, so a device hidden either way
-shows unchecked here. This is what keeps decodes from protocols nobody owns —
-which arrive on any 433 MHz receiver — off the dashboard by default.
+A new device gets no card. The Card checkbox is how it gets one, and it reads
+the same setting the ✕ on a card writes, so a device hidden from the Cards tab
+shows unchecked here. The ✕ only hides; since a hidden card is not drawn at all,
+this checkbox is the only way to bring one back. This is what keeps decodes from
+protocols nobody owns, which arrive on any 433 MHz receiver, off the dashboard
+by default.
 
 The table rebuilds every second but holds still while a text box or a select
 in it has focus, so an entry in progress is never interrupted. Only the tab on
