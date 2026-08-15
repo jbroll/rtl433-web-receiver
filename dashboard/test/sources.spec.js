@@ -22,7 +22,7 @@ test("the settings panel lists nothing until a source is added", async ({ page }
   await expect(page.locator("#source-url")).toBeVisible();
 });
 
-test("adding a source stores it and lists it with a starting connection state", async ({ page }) => {
+test("adding a source stores it and connects it", async ({ page }) => {
   const host = await startPage();
   const src = await startServer({ devices: [ACURITE] });
   servers.push(host, src);
@@ -32,7 +32,7 @@ test("adding a source stores it and lists it with a starting connection state", 
   await page.click("#source-add");
   await expect(page.locator("#source-list li")).toHaveCount(1);
   await expect(page.locator("#source-list li .url")).toHaveText(base);
-  await expect(page.locator("#source-list li .dot")).toHaveAttribute("data-state", "connecting");
+  await expect(page.locator("#source-list li .dot")).toHaveAttribute("data-state", "live");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("rtl433.sources.v1"))))
     .toEqual([base]);
 });
