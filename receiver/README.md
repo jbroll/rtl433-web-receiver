@@ -47,7 +47,21 @@ The radio pin map and OOK settings are in `platformio.ini`.
 
     pio run -e esp32s3-generic
     pio run -e esp32s3-generic -t upload
-    pio device monitor
+
+## Serial monitor
+
+`pio device monitor` needs an interactive terminal, so it fails when run through
+a pipe or from a non-interactive session. Use `monitor.py` instead:
+
+    python3 monitor.py
+
+Run for a fixed duration, timestamp lines, and suppress startup noise:
+
+    python3 monitor.py --duration 30 --timestamp --quiet
+
+`monitor.py` auto-detects the first USB serial port and reads the baud rate from
+`platformio.ini`. Pass `--port` and `--baud` to override. It resets the board on
+connect by default; use `--no-reset` to leave it running.
 
 ## Use
 
