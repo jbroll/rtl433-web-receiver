@@ -61,9 +61,16 @@ export function postAlias(key, name) {
   // When it is served by a separate broker or static server, the source is
   // external and has no persistent alias store, so keep the name locally.
   if (sourceOf(key) !== location.origin) return
-  fetch(`${sourceOf(key)}/${topicOf(key)}${ALIAS_SUFFIX}`, {
+  const url = `${sourceOf(key)}/${topicOf(key)}${ALIAS_SUFFIX}`
+  fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(trimmed),
-  }).catch(() => {})
+  }).then(res => {
+    if (!res.ok) {
+      console.error(`POST ${url} failed: ${res.status}`)
+    }
+  }).catch(err => {
+    console.error(`POST ${url} failed: ${err.message || err}`)
+  })
 }
