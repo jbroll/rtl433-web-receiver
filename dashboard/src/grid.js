@@ -107,19 +107,6 @@ export function cancelDrag(key) {
   if (dragging && dragging.key === key) dragging = null;
 }
 
-// The drop takes the slot of the sibling whose midpoint is nearest the pointer,
-// so one dragged from before that sibling lands after it. Returns the node to
-// insert before, null to append, or the dragged node itself for no move.
-function dropSlot(nodes, from, x, y) {
-  let best = from, far = Infinity;
-  nodes.forEach((n, i) => {
-    const r = n.getBoundingClientRect();
-    const d = Math.hypot(x - r.left - r.width / 2, y - r.top - r.height / 2);
-    if (d < far) { far = d; best = i; }
-  });
-  return nodes[best > from ? best + 1 : best] || null;
-}
-
 function makeZone(layer, left, top, width, height, before) {
   const z = el('div', 'drop-zone')
   z.style.position = 'absolute'
@@ -134,12 +121,11 @@ function makeZone(layer, left, top, width, height, before) {
 
 function createDropLayer(container, kind) {
   const layer = el('div', 'drop-layer ' + kind + '-layer')
-  const r = container.getBoundingClientRect()
   layer.style.position = 'fixed'
-  layer.style.left = r.left + 'px'
-  layer.style.top = r.top + 'px'
-  layer.style.width = r.width + 'px'
-  layer.style.height = r.height + 'px'
+  layer.style.left = '0px'
+  layer.style.top = '0px'
+  layer.style.width = '100vw'
+  layer.style.height = '100vh'
   layer.style.pointerEvents = 'none'
   layer.style.zIndex = '4'
   document.body.append(layer)
@@ -167,27 +153,21 @@ function cardDropZones(layer) {
   for (const row of rows) row.cards.sort((a, b) => a.rect.left - b.rect.left)
 
   const zones = []
-  const first = rows[0].cards[0].rect
-  zones.push(makeZone(layer, gridRect.left, first.top, first.left - gridRect.left, first.height, rows[0].cards[0].card.dataset.key))
+  for (let ri = 0; ri < rows.length; ri++) {
+    const row = rows[ri]
+    const rowTop = Math.min(...row.cards.map(c => c.rect.top))
+    const rowBottom = Math.max(...row.cards.map(c => c.rect.bottom))
+    const prevBottom = ri > 0 ? Math.max(...rows[ri - 1].cards.map(c => c.rect.bottom)) : gridRect.top
+    const nextTop = ri < rows.length - 1 ? Math.min(...rows[ri + 1].cards.map(c => c.rect.top)) : gridRect.bottom
+    const y = (prevBottom + rowTop) / 2
+    const y2 = (rowBottom + nextTop) / 2
 
-  const lastRow = rows[rows.length - 1]
-  const last = lastRow.cards[lastRow.cards.length - 1]
-  zones.push(makeZone(layer, last.rect.right, last.rect.top, gridRect.right - last.rect.right, last.rect.height, ''))
-
-  for (const row of rows) {
-    for (let i = 0; i < row.cards.length - 1; i++) {
-      const a = row.cards[i].rect
-      const b = row.cards[i + 1].rect
-      zones.push(makeZone(layer, a.right, a.top, b.left - a.right, a.height, b.card.dataset.key))
+    for (let i = 0; i < row.cards.length; i++) {
+      const left = i === 0 ? gridRect.left : row.cards[i].rect.left
+      const right = i === row.cards.length - 1 ? gridRect.right : row.cards[i + 1].rect.left
+      const before = i === row.cards.length - 1 ? '' : row.cards[i + 1].card.dataset.key
+      zones.push(makeZone(layer, left, y, right - left, y2 - y, before))
     }
-  }
-
-  for (let i = 0; i < rows.length - 1; i++) {
-    const tops = rows[i].cards.map(c => c.rect.bottom)
-    const bottoms = rows[i + 1].cards.map(c => c.rect.top)
-    const y = Math.max(...tops)
-    const y2 = Math.min(...bottoms)
-    zones.push(makeZone(layer, gridRect.left, y, gridRect.width, y2 - y, rows[i + 1].cards[0].card.dataset.key))
   }
 
   return zones
@@ -286,9 +266,33 @@ function dragMove(ev) {
     d.ghost = el("div", "ghostcard", d.field ? splitUnit(d.field).name : displayName(d.key));
     document.body.append(d.ghost);
     d.node.classList.add("lifting");
+    d.zones = d.field
+      ? valueDropZones(d.card, createDropLayer(d.card.querySelector('.body'), 'value'))
+      : cardDropZones(createDropLayer(document.getElementById('cards'), 'card'))
   }
   d.ghost.style.left = ev.clientX + 12 + "px";
   d.ghost.style.top = ev.clientY + 12 + "px";
+
+  let active = null
+  for (const z of d.zones || []) {
+    const r = z.getBoundingClientRect()
+    if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+      active = z
+      break
+    }
+  }
+  // Fall back to nearest center if no zone contains the pointer.
+  if (!active) {
+    let best = Infinity
+    for (const z of d.zones || []) {
+      const r = z.getBoundingClientRect()
+      const cx = r.left + r.width / 2
+      const cy = r.top + r.height / 2
+      const dist = Math.hypot(ev.clientX - cx, ev.clientY - cy)
+      if (dist < best) { best = dist; active = z }
+    }
+  }
+  for (const z of d.zones || []) z.classList.toggle('active', z === active)
 }
 
 function endDrag(ev) {
@@ -297,16 +301,19 @@ function endDrag(ev) {
   dragging = null;
   d.card.cancelPress();
   if (d.ghost) d.ghost.remove();
-  d.node.classList.remove("lifting");
+  d.node.classList.remove('lifting');
   if (!d.moved) return;
-  const nodes = d.field ? [...d.card.querySelectorAll(".val")]
-                        : [...document.querySelectorAll("#cards .card")];
-  const before = dropSlot(nodes, nodes.indexOf(d.node), ev.clientX, ev.clientY);
-  if (before !== d.node) {
-    if (d.field) moveValue(d.key, d.field, before ? before.dataset.f : null);
-    else moveCard(d.key, before ? before.dataset.key : null);
+
+  if (d.zones) {
+    const active = d.zones.find(z => z.classList.contains('active'));
+    if (active) {
+      const before = active.dataset.before || null;
+      if (d.field) moveValue(d.key, d.field, before)
+      else moveCard(d.key, before)
+    }
   }
-  requestRender();
+  clearDropZones()
+  requestRender()
 }
 
 let installed = false;
