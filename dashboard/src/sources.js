@@ -5,23 +5,16 @@ export const SOURCES_KEY = 'rtl433.sources.v1'
 let list = []
 let storageBroken = false
 
-// WHATWG URL parsing drops a port that matches its scheme's default (":80" on
-// http, ":443" on https), so url.origin alone would turn "http://c.d:80" into
-// "http://c.d" and collide it with the plain form. Recover the explicit port
-// from the raw text before it is lost.
-const DEFAULT_PORT = { 'http:': '80', 'https:': '443' }
-
 export function normalizeBase(raw) {
-  const trimmed = String(raw).trim()
   let url
-  try { url = new URL(trimmed) } catch (e) { return null }
+  try { url = new URL(String(raw).trim()) } catch (e) { return null }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
-  const authority = trimmed.replace(/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//, '').replace(/[/?#].*$/, '')
-  const explicitPort = authority.match(/:(\d+)$/)
-  const port = url.port || (explicitPort && explicitPort[1] === DEFAULT_PORT[url.protocol] ? explicitPort[1] : '')
-  const host = url.hostname + (port ? ':' + port : '')
+  // A query, fragment, or credentials would be silently dropped from the
+  // returned string, losing information (and collapsing distinct sources
+  // into one key) instead of surfacing the problem to the caller.
+  if (url.search || url.hash || url.username || url.password) return null
   const path = url.pathname.replace(/\/+$/, '')
-  return url.protocol + '//' + host + path
+  return url.origin + path
 }
 
 export function loadSources() {

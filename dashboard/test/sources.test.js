@@ -40,9 +40,17 @@ test('added sources replace the origin default and persist', () => {
   assert.equal(src.addSource('http://a.b/'), true)
   assert.equal(src.addSource('http://a.b'), false)
   assert.equal(src.addSource('http://c.d:80'), true)
-  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d:80'])
+  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d'])
   src.loadSources()
-  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d:80'])
+  assert.deepEqual(src.sources(), ['http://a.b', 'http://c.d'])
+})
+
+test('a URL with a query, fragment, or credentials is refused', () => {
+  assert.equal(src.normalizeBase('http://a.b?x=1'), null)
+  assert.equal(src.normalizeBase('http://a.b#frag'), null)
+  assert.equal(src.normalizeBase('http://user:pass@a.b'), null)
+  assert.equal(src.normalizeBase('http://user@a.b'), null)
+  assert.equal(src.normalizeBase('http://a.b/mqtt'), 'http://a.b/mqtt')
 })
 
 test('removing the last source falls back to the origin', () => {
