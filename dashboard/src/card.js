@@ -1,4 +1,4 @@
-import { cardEntry, visibleValues, bottomFields, cardHidden, setCardHidden, grid } from './store.js'
+import { cardEntry, visibleValues, bottomFields, setCardHidden, grid } from './store.js'
 import { aliasOf, displayName, postAlias } from './alias.js'
 import { el, splitUnit, fmtValue, ageText } from './units.js'
 import { valueFont, textWidthEm, trackFit, beginDrag, beginResize, editing, setRenaming,
@@ -42,10 +42,10 @@ export function buildCard(rec) {
     body.append(v);
   }
 
-  if (cardHidden(key)) card.classList.add("ghost");
-
+  // A hidden card is never built, so this only ever hides. The device table's
+  // checkbox is what brings one back.
   const cx = el("button", "cx", "✕");
-  cx.onclick = ev => { ev.stopPropagation(); setCardHidden(key, !cardHidden(key)); };
+  cx.onclick = ev => { ev.stopPropagation(); setCardHidden(key, true); };
 
   const rz = el("button", "rz", "");
   // Only a second touch can start one gesture during the other, and a drag

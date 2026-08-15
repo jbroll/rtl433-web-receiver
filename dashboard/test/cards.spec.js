@@ -483,21 +483,31 @@ test("hiding a value in a card smaller than its value count grows the rest", asy
   expect(await font()).toBeGreaterThan(before);
 });
 
-test("hiding a card ghosts it in edit mode and drops it in normal mode", async ({ page }) => {
+test("hiding a card drops it in edit mode as well as normal mode", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
   await page.click(CARD + " .cx");
-  await expect(page.locator(CARD)).toHaveClass(/ghost/);
-  await expect(page.locator("#cards .card").last())
-    .toHaveAttribute("data-key", storeKey(server, ACURITE_KEY));
-
-  await page.click("#edit-cards");
   await expect(page.locator(CARD)).toHaveCount(0);
+  await expect(page.locator("#cards .card")).toHaveCount(1);
   expect((await cardState(page)).hidden).toEqual([storeKey(server, ACURITE_KEY)]);
 
   await page.click("#edit-cards");
+  await expect(page.locator(CARD)).toHaveCount(0);
+  await expect(page.locator("#cards .card")).toHaveCount(1);
+});
+
+// The card is gone from the grid, so its own ✕ can no longer bring it back.
+test("the devices tab is what re-enables a hidden card", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
   await page.click(CARD + " .cx");
-  await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
+  await expect(page.locator(CARD)).toHaveCount(0);
+
+  await page.click("#tab-devices");
+  await page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"] input[type=checkbox]`)
+    .check();
+  await page.click("#tab-cards");
+  await expect(page.locator(CARD)).toHaveCount(1);
   expect((await cardState(page)).hidden).toEqual([]);
 });
 
@@ -548,7 +558,6 @@ test("Forget layouts clears stored state and rebuilds defaults", async ({ page }
   await page.click("#forget-cards");
 
   expect(await cardState(page)).toBeNull();
-  await expect(page.locator(CARD)).not.toHaveClass(/ghost/);
   expect(await spans(page, CARD)).toEqual({ col: "span 2 auto", row: "span 2 auto" });
   await expect(page.locator("#cards .card")).toHaveCount(2);
 });

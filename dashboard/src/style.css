@@ -64,7 +64,7 @@ section[hidden] { display:none; }
 #grid-size input { font-size:.75rem; width:3.2rem; padding:.3rem .35rem;
                    border-radius:1.2rem; text-align:center; }
 #view-cards.editing .card { cursor:grab; touch-action:none; }
-.card.ghost, .lifting { opacity:.35; }
+.lifting { opacity:.35; }
 .card .cx { position:absolute; top:.25rem; left:.3rem; z-index:1; font-size:.7rem;
             line-height:1; padding:.15rem .3rem; border-radius:.3rem; cursor:pointer;
             display:none; }

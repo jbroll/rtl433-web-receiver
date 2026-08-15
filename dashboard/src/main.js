@@ -28,7 +28,6 @@ function renderCards() {
   measureGrid()
   const keys = store.orderedKeys()
   const shown = keys.filter((k) => !store.cardHidden(k))
-  if (editing()) shown.push(...keys.filter(store.cardHidden))
   resetFit()
   grid.replaceChildren(...shown.map((k) => buildCard(devices.get(k))))
   fitValues()

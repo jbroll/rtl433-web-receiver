@@ -88,7 +88,8 @@ The pencil button opens edit mode, which arranges the card and nothing else:
 cards drag to reorder, values drag to reorder within their card, the corner
 handle resizes, ✕ hides the card, and double-clicking the label renames it (and
 posts the alias). A card shows the same values in edit mode as out of it; what
-appears is the card's own controls, plus hidden cards drawn as ghosts. A long
+appears is the card's own controls. A hidden card is not drawn in either mode,
+so the Devices tab's checkbox is what brings one back. A long
 device name in the label ellipsizes rather than overflowing the card; readings
 round to one or two decimal places for display, without changing the stored
 values.
