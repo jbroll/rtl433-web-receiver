@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import { buildHtml, deviceMax } from '../build.js'
 
@@ -14,9 +15,14 @@ test('the build inlines everything into one document', async () => {
 })
 
 test('the device cap comes from the firmware header', async () => {
-  const n = await deviceMax()
-  assert.equal(n, 24)
+  const header = await readFile(
+    new URL('../../receiver/signal_store.h', import.meta.url), 'utf8')
+  const declared = Number(header.match(/^#define\s+SIGNAL_DEVICE_SLOTS\s+(\d+)/m)[1])
+  assert.equal(await deviceMax(), declared)
+
   const html = await buildHtml()
   assert.doesNotMatch(html, /DEVICE_MAX/)
-  assert.match(html, /24/)
+  // The markup's own max="24" would satisfy a bare /24/, so match the
+  // substituted call site instead.
+  assert.match(html, new RegExp(`textContent\\s*=\\s*String\\(${declared}\\)`))
 })
