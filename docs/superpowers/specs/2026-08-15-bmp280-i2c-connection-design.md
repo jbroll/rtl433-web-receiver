@@ -271,6 +271,81 @@ the new `I2C_SDA` / `I2C_SCL` nets, J6/J7/J8, R3/R4, and the dropped microSD.
 - Any pins on the back of the carrier or any change to the antenna, radio, or
   whip keepouts.
 
+## Alternative pin mapping (future test)
+
+A second way to get both the RFM69 and a dedicated I2C bus without sacrificing
+the microSD socket. Documented here as an option to build and test later; the
+SDMMC mapping above stays the committed design until this is verified on
+hardware.
+
+The SDMMC plan puts I2C on GPIO 39/40 and keeps the radio fully wired, but it
+gives up the microSD socket. This alternative keeps microSD (39/40) and instead
+frees two pins by dropping the radio RESET and DIO0 lines, then moves the SPI
+clock onto the `VDD_SPI` strapping pin GPIO 45.
+
+### Why GPIO 45 is safe here
+
+GPIO 45 is sampled at reset: high selects `VDD_SPI` = 1.8 V, low selects 3.3 V.
+The WROOM flash is 3.3 V, so 45 must be low at boot. It is a normal
+bidirectional GPIO (`I/O/T` in the datasheet, not input-only; the Freenove's
+on-board LED is on GPIO 2, which is what is unavailable), and strapping only
+matters at the reset sample. As an SPI *output* (SCK) it is driven by the ESP32
+and needs no external pull-up, so nothing holds it high at reset: its internal
+weak pull-down keeps it low and the part boots to 3.3 V `VDD_SPI`. After boot the
+firmware drives it normally. Put a pull-down (internal or a 10 k), never a
+pull-up, on the 45 trace.
+
+This is why 45 belongs on the SPI side and not on I2C: I2C is open-drain and
+must idle high, so an I2C line on 45 would need a pull-up that fights the
+strapping pull-down and would select 1.8 V at boot.
+
+### Allocation
+
+| Function | GPIO | Note |
+|---|---|---|
+| MISO | 41 | MTDI/JTAG as GPIO is bidirectional; costs JTAG TDI |
+| MOSI | 42 | |
+| SCK | 45 | strapping: pull-down only, no pull-up |
+| NSS | 1 | moved off GPIO 2 (on-board LED) |
+| DIO2 | 47 | continuous data |
+| I2C SDA | 14 | 10 k pull-up, no strapping risk |
+| I2C SCL | 21 | was DIO0 (inert); 10 k pull-up |
+| NeoPixel | 48 | |
+| LED | 2 | unavailable (Freenove on-board) |
+
+Radio drops RESET (14, reused for I2C) and DIO0 (21, reused for I2C) plus the
+already-NC DIO1. That is seven pins (1, 14, 21, 41, 42, 45, 47) for the RFM69 +
+I2C. microSD (39/40) and the NeoPixel (48) are untouched. DIO0 is inert in
+`rtl_433_ESP` (see above), and RESET must be set `RADIOLIB_NC` rather than wired,
+so the radio initializes without a reset pulse.
+
+### platformio.ini flags for this alternative
+
+```ini
+'-DRF_MODULE_MISO=41'
+'-DRF_MODULE_MOSI=42'
+'-DRF_MODULE_SCK=45'
+'-DRF_MODULE_CS=1'           ; was 2, GPIO 2 is the on-board LED
+'-DRF_MODULE_RST=RADIOLIB_NC' ; RESET line dropped, reused for I2C
+'-DRF_MODULE_DIO0=RADIOLIB_NC'; DIO0 dropped, reused for I2C
+'-DRF_MODULE_DIO1=RADIOLIB_NC'
+'-DRF_MODULE_DIO2=47'
+```
+
+Firmware I2C is `Wire.begin(14, 21)` at the default 100 kHz. The carrier change
+is a re-route of the NSS and SCK nets off GPIO 2 and GPIO 41 onto GPIO 1 and
+GPIO 45, plus the I2C pull-ups moved to GPIO 14/21 instead of 39/40; the
+SDMMC nets (38/39/40) are left intact so the microSD socket stays usable.
+
+### Open items before adopting
+
+- Confirm on hardware that the RFM69 initializes reliably with `RADIOLIB_NC`
+  RESET (no soft-reset) across cold boots and after brownouts.
+- Confirm the GPIO 45 SCK trace's pull-down is enough to keep `VDD_SPI` at 3.3 V
+  through the reset window with the RFM69 and carrier loads attached.
+- Decide whether losing JTAG TDI (GPIO 41) is acceptable, or swap MISO to GPIO 1
+  and NSS to GPIO 41.
+
 ## Implementation outline
 
 The detailed plan is produced by the writing-plans skill after the spec is
