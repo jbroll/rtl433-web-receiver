@@ -115,12 +115,15 @@ levels:
 
 ## Retained replay
 
-On connect, before any live frame, a subscriber receives the message currently
-stored for every topic it is subscribed to: every device slot in turn, then
-every alias, each slot visited once whether or not it currently holds
-anything. This is table order, not the order devices were last heard from, so
-a device heard from partway through a subscriber's replay does not shift
-frames already sent or still to come.
+On connect, before any live frame, a subscriber receives the latest frame
+retained for each message type of every device it is subscribed to, then
+every alias, each sub visited once whether or not it currently holds
+anything. A device that emits more than one `message_type` is delivered as
+one frame per retained message type on connect, in sub-table order. The
+dashboard merges these frames into a single card. This is table order, not
+the order devices were last heard from, so a device heard from partway
+through a subscriber's replay does not shift frames already sent or still to
+come.
 
 ## Aliases
 
