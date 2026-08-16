@@ -11,7 +11,6 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
 import { measureGrid, installGestures, editing, gestureInFlight,
          fitValues, resetFit, cellSide, fontPx, currentDrag } from './grid.js'
 import { buildCard } from './card.js'
-import { renderDevices, installSort } from './table.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
@@ -44,7 +43,6 @@ function syncGridInputs() {
 
 function renderAll() {
   renderCards()
-  renderDevices()
   syncGridInputs()
 }
 
@@ -200,7 +198,6 @@ loadAliases()
 loadSort()
 loadSources()
 installGestures()
-installSort()
 window.addEventListener('resize', measureGrid)
 
 const TABS = ['devices', 'log', 'cards', 'sources']

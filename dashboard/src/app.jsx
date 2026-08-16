@@ -3,6 +3,7 @@ import { editing } from './grid.js'
 import { sourceState } from './sources.js'
 import { SourcesView } from './sources.jsx'
 import { LogView } from './log.jsx'
+import { DevicesView } from './devices-table.jsx'
 
 export const tab = signal('cards')
 
@@ -36,21 +37,7 @@ export function App() {
         <Status />
       </header>
       <section id="view-devices" hidden={tab.value !== 'devices'}>
-        <table>
-          <thead>
-            <tr>
-              <th data-sort="name">Model</th>
-              <th data-sort="id">ID</th>
-              <th>Reading</th>
-              <th class="num" data-sort="rssi">RSSI</th>
-              <th class="num" data-sort="count">Msgs</th>
-              <th class="num" data-sort="age">Age</th>
-              <th data-sort="alias">Alias</th>
-              <th>Card</th>
-            </tr>
-          </thead>
-          <tbody id="devices"></tbody>
-        </table>
+        <DevicesView />
       </section>
       <LogView />
       <section id="view-sources" hidden={tab.value !== 'sources'}>
