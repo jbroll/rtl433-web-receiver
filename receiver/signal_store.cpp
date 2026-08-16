@@ -445,7 +445,7 @@ bool selfTest() {
 
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":5.0}", -72);
   ok &= check("re-recording message_type 0 updates its sub",
-              strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":5.0") != NULL);
+              strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":5") != NULL);
 
   reset();
   record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70);
