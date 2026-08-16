@@ -85,6 +85,16 @@ static int findSlot(const char* key) {
   return -1;
 }
 
+// A freed slot must not keep subs: their payloads would replay under the
+// reused slot's key until the hour sweep.
+static void freeSlotSubs(int slotIdx) {
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)slotIdx) {
+      _subs[i].used = false;
+    }
+  }
+}
+
 static int claimSlot() {
   for (int i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
     if (!_devices[i].used) {
@@ -98,13 +108,7 @@ static int claimSlot() {
       oldest = i;
     }
   }
-  // Free the evicted slot's subs so its payloads do not replay under the
-  // reused slot's key until the hour sweep.
-  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
-    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)oldest) {
-      _subs[i].used = false;
-    }
-  }
+  freeSlotSubs(oldest);
   memset(&_devices[oldest], 0, sizeof(DeviceSlot));
   return oldest;
 }
@@ -291,6 +295,7 @@ void sweepStale(unsigned long now, unsigned long staleMs) {
   }
   for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
     if (_devices[i].used && (unsigned long)(now - _devices[i].lastSeen) > staleMs) {
+      freeSlotSubs(i);
       _devices[i].used = false;
       _seq[i] = 0;
       _deviceCount--;
