@@ -428,6 +428,7 @@ bool selfTest() {
   record("{\"model\":\"Wrap\",\"id\":3,\"temperature_C\":3}", -50);
   unsigned long nearWrap = (unsigned long)-1 - 100;
   _devices[0].lastSeen = nearWrap;
+  _subs[0].lastSeen = nearWrap; // sweepStale also sweeps subs; spare the wrap's sub too
   sweepStale(nearWrap + 151, 60000); // wraps to 50; 151ms elapsed, inside the window
   ok &= check("a device inside the window survives a millis rollover",
               deviceCount() == 1);
