@@ -24,21 +24,25 @@ export function measureGrid() {
   grid.style.setProperty("--cell", cell + "px")
   grid.style.gridTemplateColumns = "repeat(" + g.cols + ",var(--cell))"
   grid.style.gridTemplateRows = "repeat(" + g.rows + ",var(--cell))"
+  computeUniformFontSize()
 }
 
 const FONT_MIN = 11
 export { FONT_MIN }
 
-export function fontPx(h, cellPx, rows) {
-  const px = Math.round(0.42 * h * cellPx / Math.max(1, rows))
+function fontPxBase(cellPx) {
+  const px = Math.round(0.42 * cellPx)
   return Math.max(FONT_MIN, px) + "px"
 }
 
-export function valueFont(h, cellPxOrRows, rows) {
-  if (rows !== undefined) {
-    return fontPx(h, cellPxOrRows, rows)
-  }
-  return fontPx(h, cellSignal.value, cellPxOrRows)
+let uniformFontSize = ""
+
+export function computeUniformFontSize() {
+  uniformFontSize = fontPxBase(cellSignal.value)
+}
+
+export function valueFont() {
+  return uniformFontSize
 }
 
 let textProbe = null, probeFont = ""
@@ -58,8 +62,8 @@ export function textWidthEm(num, unit) {
 
 let fitting = []
 
-export function trackFit(node, card, em) {
-  fitting.push({ node: node, card: card, em: em })
+export function trackFit(node, card, em, rowHeight) {
+  fitting.push({ node: node, card: card, em: em, rowHeight: rowHeight })
 }
 
 export function resetFit() {
@@ -68,19 +72,19 @@ export function resetFit() {
 
 export function fitValues() {
   const boxes = fitting.map(f => f.node.parentNode.clientWidth)
-  const caps = new Map()
+  let globalCap = Infinity
   fitting.forEach((f, i) => {
     if (!boxes[i]) return
     const cap = Math.floor(boxes[i] / f.em)
-    if (!caps.has(f.card) || cap < caps.get(f.card)) caps.set(f.card, cap)
+    if (cap < globalCap) globalCap = cap
   })
+  if (!isFinite(globalCap)) globalCap = 200
   for (const f of fitting) {
-    const cap = caps.get(f.card)
-    const newSize = Math.max(FONT_MIN, cap)
-    const oldSize = parseFloat(f.node.style.fontSize)
-    if (newSize < oldSize) {
-      f.node.style.fontSize = newSize + "px"
-    }
+    const rowH = f.rowHeight || f.node.parentNode.clientHeight
+    const fnH = 18
+    const availH = Math.max(FONT_MIN, rowH - fnH)
+    const newSize = Math.max(FONT_MIN, Math.min(globalCap, availH, 200))
+    f.node.style.fontSize = newSize + "px"
   }
   fitting = []
 }

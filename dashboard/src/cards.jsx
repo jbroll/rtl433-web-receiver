@@ -7,7 +7,7 @@ import { aliasOf, displayName, postAlias } from './alias.js'
 import { splitUnit, fmtValue, ageText } from './units.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, valueFont, textWidthEm, cellSignal,
-         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize } from './grid.js'
+         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize, computeUniformFontSize } from './grid.js'
 import { tick } from './tick.js'
 
 const shownKeys = computed(() => {
@@ -29,10 +29,11 @@ export function CardsView() {
     if (gridRef.current) measureGrid()
   })
 
-  // fitValues runs after paint, after all layout effects (including trackFit) have completed
+  // fitValues runs after measureGrid updates cellSignal and uniformFontSize, after paint
   useEffect(() => {
+    cellSignal.value
     if (gridRef.current) fitValues()
-  })
+  }, [cellSignal.value])
 
   // Handle window resize
   useEffect(() => {
@@ -167,7 +168,7 @@ function RenameInput({ rec }) {
 
 function Body({ rec, vis, h, w, cardKey }) {
   const valueRows = Math.max(h, Math.ceil(vis.length / w))
-  const font = valueFont(h, valueRows)
+  const font = valueFont()
 
   return (
     <div
@@ -196,7 +197,9 @@ function Value({ rec, field, font, cardKey }) {
     if (!valEl) return
     const card = valEl.closest('.card')
     if (card) {
-      trackFit(valEl, card, textWidthEm(num, parts.unit))
+      const valParent = valEl.parentNode
+      const rowHeight = valParent ? valParent.clientHeight : 0
+      trackFit(valEl, card, textWidthEm(num, parts.unit), rowHeight)
     }
   }, [num, parts.unit, font])
 
