@@ -20,6 +20,18 @@ export function CardsView() {
     }
   }, [devices.value.size, cardState.value])
 
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (gridRef.current) {
+        measureGrid()
+        fitValues()
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   const keys = cardState.value.order.filter(k => devices.value.has(k))
   const shown = keys.filter(k => !cardState.value.hidden.includes(k))
 

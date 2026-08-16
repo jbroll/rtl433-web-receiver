@@ -7,31 +7,12 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
-import { measureGrid, installGestures, editing, gestureInFlight,
-         fitValues, resetFit, cellSide, fontPx, currentDrag } from './grid.js'
+import { measureGrid, installGestures, cellSide, valueFont, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
 
-const $ = (id) => document.getElementById(id)
-
 let build = null
-
-function syncGridInputs() {
-  const cols = $('grid-cols')
-  const rows = $('grid-rows')
-  if (cols) cols.value = String(store.grid().cols)
-  if (rows) rows.value = String(store.grid().rows)
-}
-
-function renderAll() {
-  syncGridInputs()
-}
-
-// Re-run the legacy render pipeline whenever a relevant signal changes.
-// Reading tick here also makes this effect run once per second, replacing
-// the old setInterval(render, 1000).
-// CardsView now handles card rendering via Preact signals
 
 function onMessage(base, topic, obj) {
   if (!obj || typeof obj !== 'object') return
@@ -51,13 +32,11 @@ function onMessage(base, topic, obj) {
     flashUntil: Date.now() + 1000,
   })
   store.ensureCard(key, merged)
-  renderAll()
   if (!isSelf(key)) addLog(at, raw)
 }
 
 function onAlias(base, topic, payload) {
   applyAliasFrame(makeKey(base, topic), payload)
-  renderAll()
 }
 
 function onState(base, state) {
@@ -159,15 +138,17 @@ function exposeForTests() {
 
   Object.assign(window, {
     devices: deviceProxy,
-    measureGrid, fmtValue, valueFont: fontPx,
+    measureGrid, fmtValue, valueFont,
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
-    cellSide: { get: cellSide },
-    dragging: { get: currentDrag },
+    cellSide: { get: () => cellSide() },
+    dragging: { get: () => dragging.value },
+    resizing: { get: () => resizing.value },
+    gestureInFlight: { get: () => gestureInFlight() },
     hideNewCards: { set: store.setHideNewCards },
   })
 }
@@ -180,37 +161,9 @@ loadAliases()
 loadSort()
 loadSources()
 installGestures()
-window.addEventListener('resize', measureGrid)
-
-const TABS = ['devices', 'log', 'cards', 'sources']
-function showTab(name) {
-  for (const n of TABS) {
-    $('tab-' + n).setAttribute('aria-selected', String(n === name))
-    $('view-' + n).hidden = n !== name
-  }
-  tab.value = name
-  renderAll()
-}
-for (const n of TABS) $('tab-' + n).onclick = () => showTab(n)
-
-$('edit-cards').onclick = () => { editing.value = !editing.value; renderAll() }
-$('forget-cards').onclick = () => {
-  if (confirm('Forget every saved card layout in this browser?')) {
-    store.forgetLayouts()
-    renderAll()
-  }
-}
-function applyGridInput(input, axis) {
-  store.setGrid(axis, parseInt(input.value, 10))
-  input.value = String(store.grid()[axis])
-}
-$('grid-cols').onchange = (ev) => applyGridInput(ev.target, 'cols')
-$('grid-rows').onchange = (ev) => applyGridInput(ev.target, 'rows')
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()
 else tab.value = stored === 'empty' ? 'sources' : 'cards'
 
 syncSources()
-syncGridInputs()
-renderAll()

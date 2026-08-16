@@ -7,39 +7,7 @@
 <style>/*CSS*/</style>
 </head>
 <body>
-<header>
-  <h1>rtl_433</h1>
-  <nav>
-    <button id="tab-devices" aria-selected="false">Devices</button>
-    <button id="tab-log" aria-selected="false">Log</button>
-    <button id="tab-cards" aria-selected="true">Cards</button>
-    <button id="tab-sources" aria-selected="false">Sources</button>
-  </nav>
-  <span id="status">connecting</span>
-</header>
-<section id="view-devices" hidden><table>
-<thead><tr><th data-sort="name">Model</th><th data-sort="id">ID</th><th>Reading</th><th class="num" data-sort="rssi">RSSI</th><th class="num" data-sort="count">Msgs</th><th class="num" data-sort="age">Age</th><th data-sort="alias">Alias</th><th>Card</th></tr></thead>
-<tbody id="devices"></tbody>
-</table></section>
-<section id="view-log" hidden><table id="log"><tbody id="logrows"></tbody></table></section>
-<section id="view-sources" hidden>
-  <ul id="source-list"></ul>
-  <form id="source-form">
-    <input id="source-url" type="url" placeholder="http://bridge.local:8080"
-           aria-label="Source base URL">
-    <button id="source-add" type="submit">Add</button>
-  </form>
-</section>
-<section id="view-cards">
-  <button id="edit-cards" title="Edit layout">&#9998;</button>
-  <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
-  <span id="grid-size" title="Grid columns and rows">
-    <input id="grid-cols" type="number" min="1" max="24" aria-label="Grid columns">
-    <span>&times;</span>
-    <input id="grid-rows" type="number" min="1" max="24" aria-label="Grid rows">
-  </span>
-  <div id="cards"></div>
-</section>
+<!-- mount point -->
 <script>/*JS*/</script>
 </body>
 </html>

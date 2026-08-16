@@ -32,7 +32,12 @@ export function fontPx(h, cellPx, rows) {
   return Math.min(FONT_MAX, Math.max(FONT_MIN, px)) + "px";
 }
 
-export function valueFont(h, rows) { return fontPx(h, cell, rows) }
+export function valueFont(h, cellPxOrRows, rows) {
+  if (rows !== undefined) {
+    return fontPx(h, cellPxOrRows, rows)
+  }
+  return fontPx(h, cell, cellPxOrRows)
+}
 
 // Width of a value at a 1px font, the unit's .5em and .12em margin included.
 // Measured on a canvas rather than in the document: fitting every value by

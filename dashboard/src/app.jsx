@@ -1,10 +1,11 @@
 import { signal } from '@preact/signals'
-import { editing } from './grid.js'
+import { editing, setEditing } from './grid.js'
 import { sourceState } from './sources.js'
 import { SourcesView } from './sources.jsx'
 import { LogView } from './log.jsx'
 import { DevicesView } from './devices-table.jsx'
 import { CardsView } from './cards.jsx'
+import { setGrid, forgetLayouts, grid } from './store.js'
 
 export const tab = signal('cards')
 
@@ -30,6 +31,7 @@ export function App() {
               key={n}
               id={`tab-${n}`}
               aria-selected={tab.value === n}
+              onClick={() => { tab.value = n }}
             >
               {n[0].toUpperCase() + n.slice(1)}
             </button>
@@ -45,12 +47,46 @@ export function App() {
         <SourcesView />
       </section>
       <section id="view-cards" class={editing.value ? 'editing' : ''} hidden={tab.value !== 'cards'}>
-        <button id="edit-cards" title="Edit layout">&#9998;</button>
-        <button id="forget-cards" title="Forget saved layouts">Forget layouts</button>
+        <button
+          id="edit-cards"
+          title="Edit layout"
+          onClick={() => { setEditing(!editing.value) }}
+        >
+          &#9998;
+        </button>
+        <button
+          id="forget-cards"
+          title="Forget saved layouts"
+          onClick={() => {
+            if (confirm('Forget every saved card layout in this browser?')) {
+              forgetLayouts()
+            }
+          }}
+        >
+          Forget layouts
+        </button>
         <span id="grid-size" title="Grid columns and rows">
-          <input id="grid-cols" type="number" min="1" max="24" aria-label="Grid columns" />
+          <input
+            id="grid-cols"
+            type="number"
+            min="1"
+            max="24"
+            aria-label="Grid columns"
+            value={grid().cols}
+            onChange={(ev) => { setGrid('cols', parseInt(ev.target.value, 10)) }}
+            onBlur={(ev) => { const v = parseInt(ev.target.value, 10); if (!Number.isInteger(v) || v < 1 || v > 24) ev.target.value = String(grid().cols); }}
+          />
           <span>&times;</span>
-          <input id="grid-rows" type="number" min="1" max="24" aria-label="Grid rows" />
+          <input
+            id="grid-rows"
+            type="number"
+            min="1"
+            max="24"
+            aria-label="Grid rows"
+            value={grid().rows}
+            onChange={(ev) => { setGrid('rows', parseInt(ev.target.value, 10)) }}
+            onBlur={(ev) => { const v = parseInt(ev.target.value, 10); if (!Number.isInteger(v) || v < 1 || v > 24) ev.target.value = String(grid().rows); }}
+          />
         </span>
         <CardsView />
       </section>
