@@ -301,6 +301,29 @@ void sweepStale(unsigned long now, unsigned long staleMs) {
       _deviceCount--;
     }
   }
+  sweepSubStale(now, SUB_STALE_MS);
+}
+
+void sweepSubStale(unsigned long now, unsigned long staleMs) {
+  if (staleMs == 0) return;
+  for (uint8_t i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (!_subs[i].used) continue;
+    if ((unsigned long)(now - _subs[i].lastSeen) <= staleMs) continue;
+    uint8_t slotIdx = _subs[i].slotIdx;
+    _subs[i].used = false;
+    _subs[i].slotIdx = 0xFF;
+    _subs[i].seq = 0;
+    // Free the slot if no subs remain.
+    bool any = false;
+    for (uint8_t j = 0; j < SIGNAL_SUB_TABLE; j++) {
+      if (_subs[j].used && _subs[j].slotIdx == slotIdx) { any = true; break; }
+    }
+    if (!any && _devices[slotIdx].used) {
+      _devices[slotIdx].used = false;
+      _seq[slotIdx] = 0;
+      _deviceCount--;
+    }
+  }
 }
 
 #ifdef FAKE_SIGNALS
@@ -321,15 +344,15 @@ bool selfTest() {
   ok &= check("key is source/model/id",
               strcmp(device(0).key, "rtl433-a1b2c3/Acurite-Tower/1234") == 0);
   ok &= check("rssi is stamped into the payload",
-              strstr(device(0).payload, "\"rssi\":-70") != NULL);
+              strstr(latestPayload(device(0)), "\"rssi\":-70") != NULL);
   ok &= check("count is stamped into the payload",
-              strstr(device(0).payload, "\"count\":1") != NULL);
+              strstr(latestPayload(device(0)), "\"count\":1") != NULL);
 
   record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.6}", -71);
   ok &= check("same key updates in place", deviceCount() == 1);
   ok &= check("count increments", device(0).count == 2);
   ok &= check("the stamped count follows",
-              strstr(device(0).payload, "\"count\":2") != NULL);
+              strstr(latestPayload(device(0)), "\"count\":2") != NULL);
 
   ok &= check("channel is the id segment when id is absent",
               record("{\"model\":\"Nexus-TH\",\"channel\":2}", -60) &&
@@ -411,6 +434,31 @@ bool selfTest() {
   sweepStale(nearWrap + 70000, 60000); // wraps to 69899; 70000ms elapsed, past the window
   ok &= check("a device past the window is swept across a millis rollover",
               deviceCount() == 0);
+
+  reset();
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);
+  ok &= check("two message_types create two subs", deviceCount() == 1);
+  ok &= check("latest payload is the most recent message_type",
+              strstr(latestPayload(device(0)), "\"rain_mm\"") != NULL);
+
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":5.0}", -72);
+  ok &= check("re-recording message_type 0 updates its sub",
+              strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":5.0") != NULL);
+
+  reset();
+  record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70);
+  ok &= check("device without message_type has one sub",
+              deviceCount() == 1);
+
+  reset();
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);
+  {
+    unsigned long base = _subs[0].lastSeen;
+    sweepSubStale(base + SUB_STALE_MS + 1, SUB_STALE_MS);
+    ok &= check("stale sub is swept", deviceCount() == 0);
+  }
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
