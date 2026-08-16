@@ -34,8 +34,9 @@ function matchFilter(filter, topic) {
 function startServer(opts = {}) {
   const source = opts.source || SOURCE;
   let build = opts.build || "test";
-  // topic -> JSON text, exactly what a GET returns and a frame embeds.
+  // topic -> Map(msgType -> { json, seq })
   const retained = new Map();
+  let globalSeq = 0;
   const counts = new Map();
   const streams = new Set();
 
@@ -46,7 +47,14 @@ function startServer(opts = {}) {
   }
 
   function publish(topic, json) {
-    retained.set(topic, json);
+    let subs = retained.get(topic);
+    if (!subs) {
+      subs = new Map();
+      retained.set(topic, subs);
+    }
+    const payload = JSON.parse(json);
+    const msgType = payload.message_type !== undefined ? String(payload.message_type) : "";
+    subs.set(msgType, { json, seq: ++globalSeq });
     const frame = "data: {\"topic\":" + JSON.stringify(topic) + ",\"payload\":" + json + "}\n\n";
     for (const s of streams) {
       if (s.filters.some(f => matchFilter(f, topic))) s.res.write(frame);
@@ -116,9 +124,11 @@ function startServer(opts = {}) {
       const entry = { res: res, filters: filters };
       streams.add(entry);
       req.on("close", () => streams.delete(entry));
-      for (const [topic, json] of retained) {
-        if (filters.some(f => matchFilter(f, topic))) {
-          res.write("data: {\"topic\":" + JSON.stringify(topic) + ",\"payload\":" + json + "}\n\n");
+      for (const [topic, subs] of retained) {
+        if (!filters.some(f => matchFilter(f, topic))) continue;
+        const entries = [...subs.values()].sort((a, b) => a.seq - b.seq);
+        for (const e of entries) {
+          res.write("data: {\"topic\":" + JSON.stringify(topic) + ",\"payload\":" + e.json + "}\n\n");
         }
       }
       return;
@@ -150,7 +160,15 @@ function startServer(opts = {}) {
       res.writeHead(405).end("not allowed");
       return;
     }
-    const json = retained.get(topic);
+    const subs = retained.get(topic);
+    let json;
+    if (subs) {
+      let latest = null;
+      for (const e of subs.values()) {
+        if (!latest || e.seq > latest.seq) latest = e;
+      }
+      json = latest ? latest.json : undefined;
+    }
     if (json === undefined) {
       res.writeHead(404).end("no message");
       return;
