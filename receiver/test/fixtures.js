@@ -35,6 +35,20 @@ const RECEIVER = {
   noise_dBm: -104, heap_kB: 177,
 };
 
+const ACURITE_WIND = {
+  model: "Acurite-5n1", id: 396, channel: "A", protocol: 40,
+  message_type: 0, battery_ok: 1,
+  wind_avg_mi_h: 4.6, wind_max_mi_h: 9.1,
+  mic: "CHECKSUM",
+};
+
+const ACURITE_RAIN = {
+  model: "Acurite-5n1", id: 396, channel: "A", protocol: 40,
+  message_type: 1, battery_ok: 1,
+  rain_mm: 0.5,
+  mic: "CHECKSUM",
+};
+
 const SOURCE = "rtl433-test";
 
 // The same rule as signal_store::buildKey(): id, then channel, then 0.
@@ -44,4 +58,4 @@ function topicOf(payload, source) {
   return (source || SOURCE) + "/" + payload.model + "/" + id;
 }
 
-module.exports = { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, SOURCE, topicOf };
+module.exports = { ACURITE, ACURITE_WIND, ACURITE_RAIN, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, SOURCE, topicOf };

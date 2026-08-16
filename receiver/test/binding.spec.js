@@ -1,7 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const http = require("http");
 const { startServer } = require("./binding-server");
-const { ACURITE, OREGON, SOURCE, topicOf } = require("./fixtures");
+const { ACURITE, ACURITE_WIND, ACURITE_RAIN, OREGON, SOURCE, topicOf } = require("./fixtures");
 
 let server;
 
@@ -46,6 +46,18 @@ test("a topic with no message is 404 and a stored one returns its body", async (
   expect(found.status).toBe(200);
   expect(found.headers["content-type"]).toContain("application/json");
   expect(JSON.parse(found.body).model).toBe("Acurite-5n1");
+});
+
+test("GET of a multi-type topic returns the latest message_type", async () => {
+  server = await startServer({ devices: [ACURITE_WIND] });
+  const topic = topicOf(ACURITE_WIND);
+  expect(JSON.parse((await server.get(topic)).body).message_type).toBe(0);
+
+  server.emit(ACURITE_RAIN);
+  expect(JSON.parse((await server.get(topic)).body).message_type).toBe(1);
+
+  server.emit(ACURITE_WIND);
+  expect(JSON.parse((await server.get(topic)).body).message_type).toBe(0);
 });
 
 test("a posted alias comes back byte for byte", async () => {
@@ -156,6 +168,20 @@ test("a subscriber receives retained messages before any live one", async () => 
   const topics = (await s.settle()).map(f => f.topic);
   expect(topics.indexOf(topicOf(OREGON))).toBe(topics.length - 1);
   expect(topics.slice(0, -1).sort()).toEqual([alias, topicOf(ACURITE)].sort());
+  s.close();
+});
+
+test("a splitter device replays every message_type on connect", async () => {
+  server = await startServer({ devices: [ACURITE_WIND, ACURITE_RAIN] });
+  const s = await openStream(server.url);
+  server.emit(OREGON);
+  const frames = await s.settle();
+  const topic = topicOf(ACURITE_WIND);
+  const acurite = frames.filter(f => f.topic === topic);
+  expect(acurite).toHaveLength(2);
+  expect(acurite.map(f => f.payload.message_type).sort()).toEqual([0, 1]);
+  const oregonIdx = frames.map(f => f.topic).indexOf(topicOf(OREGON));
+  expect(oregonIdx).toBe(frames.length - 1);
   s.close();
 });
 
