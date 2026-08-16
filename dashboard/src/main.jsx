@@ -1,5 +1,4 @@
 import { render } from 'preact'
-import { untracked } from '@preact/signals'
 import { App, tab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
@@ -10,29 +9,13 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
          setSourceState } from './sources.js'
 import { measureGrid, installGestures, editing, gestureInFlight,
          fitValues, resetFit, cellSide, fontPx, currentDrag } from './grid.js'
-import { buildCard } from './card.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
-import { startRenderLoop } from './render-loop.js'
 
 const $ = (id) => document.getElementById(id)
 
 let build = null
-
-function renderCards() {
-  const grid = $('cards')
-  if (!grid) return
-  if (untracked(() => gestureInFlight())) return
-  for (const rec of devices.value.values()) store.ensureCard(rec.key, rec.merged.value)
-  if ($('view-cards').hidden) return
-  measureGrid()
-  const keys = store.orderedKeys()
-  const shown = keys.filter((k) => !store.cardHidden(k))
-  resetFit()
-  grid.replaceChildren(...shown.map((k) => buildCard(devices.value.get(k))))
-  fitValues()
-}
 
 function syncGridInputs() {
   const cols = $('grid-cols')
@@ -42,14 +25,13 @@ function syncGridInputs() {
 }
 
 function renderAll() {
-  renderCards()
   syncGridInputs()
 }
 
 // Re-run the legacy render pipeline whenever a relevant signal changes.
 // Reading tick here also makes this effect run once per second, replacing
 // the old setInterval(render, 1000).
-startRenderLoop(renderAll)
+// CardsView now handles card rendering via Preact signals
 
 function onMessage(base, topic, obj) {
   if (!obj || typeof obj !== 'object') return

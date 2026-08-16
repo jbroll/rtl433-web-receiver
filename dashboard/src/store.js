@@ -22,7 +22,7 @@ function gridNum(v, fallback) {
 function bump() {
   const s = cardState.value
   cardState.value = {
-    grid: s.grid,
+    grid: { ...s.grid },
     order: s.order,
     hidden: s.hidden,
     cards: Object.assign(Object.create(null), s.cards),
@@ -210,7 +210,10 @@ export function grid() { return cardState.value.grid }
 export function setGrid(axis, n) {
   const v = gridNum(n, 0)
   if (v) {
-    cardState.value.grid[axis] = v
+    cardState.value = {
+      ...cardState.value,
+      grid: { ...cardState.value.grid, [axis]: v },
+    }
     saveCardState()
   }
 }

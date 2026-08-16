@@ -4,6 +4,7 @@ import { sourceState } from './sources.js'
 import { SourcesView } from './sources.jsx'
 import { LogView } from './log.jsx'
 import { DevicesView } from './devices-table.jsx'
+import { CardsView } from './cards.jsx'
 
 export const tab = signal('cards')
 
@@ -51,7 +52,7 @@ export function App() {
           <span>&times;</span>
           <input id="grid-rows" type="number" min="1" max="24" aria-label="Grid rows" />
         </span>
-        <div id="cards"></div>
+        <CardsView />
       </section>
     </>
   )
