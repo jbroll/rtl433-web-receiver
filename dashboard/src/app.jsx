@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals'
 import { editing } from './grid.js'
 import { sourceState } from './sources.js'
+import { SourcesView } from './sources.jsx'
 
 export const tab = signal('cards')
 
@@ -54,16 +55,7 @@ export function App() {
         <table id="log"><tbody id="logrows"></tbody></table>
       </section>
       <section id="view-sources" hidden={tab.value !== 'sources'}>
-        <ul id="source-list"></ul>
-        <form id="source-form">
-          <input
-            id="source-url"
-            type="url"
-            placeholder="http://bridge.local:8080"
-            aria-label="Source base URL"
-          />
-          <button id="source-add" type="submit">Add</button>
-        </form>
+        <SourcesView />
       </section>
       <section id="view-cards" class={editing.value ? 'editing' : ''} hidden={tab.value !== 'cards'}>
         <button id="edit-cards" title="Edit layout">&#9998;</button>

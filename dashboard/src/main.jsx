@@ -7,7 +7,7 @@ import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
-         setSourceState, renderSourcePanel } from './sources.js'
+         setSourceState } from './sources.js'
 import { measureGrid, installGestures, editing, gestureInFlight,
          fitValues, resetFit, cellSide, fontPx, currentDrag } from './grid.js'
 import { buildCard } from './card.js'
@@ -45,7 +45,6 @@ function renderAll() {
   renderCards()
   renderDevices()
   renderLog()
-  if (tab.value === 'sources') renderSourcePanel()
   syncGridInputs()
 }
 
@@ -83,7 +82,6 @@ function onAlias(base, topic, payload) {
 
 function onState(base, state) {
   setSourceState(base, state)
-  renderSourcePanel(sourceState.value)
 }
 
 const open = new Map()
@@ -212,7 +210,6 @@ function showTab(name) {
     $('view-' + n).hidden = n !== name
   }
   tab.value = name
-  if (name === 'sources') renderSourcePanel()
   renderAll()
 }
 for (const n of TABS) $('tab-' + n).onclick = () => showTab(n)
@@ -230,21 +227,6 @@ function applyGridInput(input, axis) {
 }
 $('grid-cols').onchange = (ev) => applyGridInput(ev.target, 'cols')
 $('grid-rows').onchange = (ev) => applyGridInput(ev.target, 'rows')
-const sourceForm = $('source-form')
-const sourceUrl = $('source-url')
-if (sourceForm && sourceUrl) {
-  sourceUrl.oninput = () => sourceUrl.removeAttribute('aria-invalid')
-  sourceForm.onsubmit = (ev) => {
-    ev.preventDefault()
-    if (!addSource(sourceUrl.value)) {
-      sourceUrl.setAttribute('aria-invalid', 'true')
-      return
-    }
-    sourceUrl.removeAttribute('aria-invalid')
-    sourceUrl.value = ''
-    renderSourcePanel()
-  }
-}
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()
