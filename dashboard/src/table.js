@@ -3,7 +3,7 @@ import { cardFields, cardHidden, setCardHidden, valueMode, setValueMode } from '
 import { aliasOf, postAlias, shortKey } from './alias.js'
 import { el, ageText } from './units.js'
 import { sortDevices, sortBy, current, sortable } from './devicesort.js'
-import { requestRender } from './render.js'
+import { tick } from './tick.js'
 
 const $ = (id) => document.getElementById(id)
 
@@ -11,21 +11,18 @@ const LOG_MAX = 200;
 let logRows = [];
 
 function reading(rec) {
-  return Object.keys(rec.merged).map(k => k + ": " + rec.merged[k]).join("  ");
+  return Object.keys(rec.merged.value).map(k => k + ": " + rec.merged.value[k]).join("  ");
 }
 
 export function renderDevices() {
   if ($("view-devices").hidden) return;
   const tbody = $("devices");
-  // A rebuild takes an open control out from under whoever is using it. Only
-  // the ones that hold a value need that; a checkbox keeps focus after a click
-  // and would otherwise freeze the table for good.
   const held = document.activeElement;
   if (tbody.contains(held) && (held.tagName === "SELECT" || held.type === "text")) return;
   const out = [];
-  for (const r of sortDevices(devices.values())) {
+  for (const r of sortDevices(devices.value.values())) {
     out.push(deviceRow(r));
-    for (const f of cardFields(r.key, r.merged)) out.push(valueRow(r.key, f, r.merged[f]));
+    for (const f of cardFields(r.key, r.merged.value)) out.push(valueRow(r.key, f, r.merged.value[f]));
   }
   tbody.replaceChildren(...out);
   markSortedColumn();
@@ -43,28 +40,28 @@ export function installSort() {
   for (const th of document.querySelectorAll("#view-devices th[data-sort]")) {
     if (!sortable(th.dataset.sort)) continue;
     th.tabIndex = 0;
-    th.onclick = () => { if (sortBy(th.dataset.sort)) requestRender(); };
+    th.onclick = () => { sortBy(th.dataset.sort) };
     th.onkeydown = ev => {
       if (ev.key !== "Enter" && ev.key !== " ") return;
       ev.preventDefault();
-      if (sortBy(th.dataset.sort)) requestRender();
+      sortBy(th.dataset.sort);
     };
   }
   markSortedColumn();
 }
 
 function deviceRow(r) {
-  const obj = r.obj;
+  const obj = r.obj.value;
   const name = obj && obj.model ? obj.model : shortKey(r.key);
-  const tr = el("tr", r.flashUntil > Date.now() ? "flash" : "");
+  const tr = el("tr", r.flashUntil.value > tick.value ? "flash" : "");
   tr.dataset.key = r.key;
   const cells = [
     name,
     obj && obj.id !== undefined ? obj.id : (obj && obj.channel !== undefined ? "ch" + obj.channel : ""),
     reading(r),
-    r.rssi === undefined ? "" : r.rssi,
-    r.count === undefined ? "" : r.count,
-    ageText(Date.now() - r.seenAt)
+    r.rssi.value === undefined ? "" : r.rssi.value,
+    r.count.value === undefined ? "" : r.count.value,
+    ageText(Date.now() - r.seenAt.value)
   ];
   cells.forEach((v, i) => tr.append(el("td", i >= 3 ? "num" : "", v)));
 
@@ -88,7 +85,6 @@ function deviceRow(r) {
   return tr;
 }
 
-// Built once and cloned: a busy table is a couple of hundred of these a second.
 const MODES = el("select");
 for (const m of ["shown", "bottom", "hidden"]) {
   const opt = el("option", "", m);
@@ -96,7 +92,6 @@ for (const m of ["shown", "bottom", "hidden"]) {
   MODES.append(opt);
 }
 
-// One row per reading, under its device: what the card does with that value.
 function valueRow(key, field, value) {
   const tr = el("tr", "vrow");
   tr.dataset.key = key;

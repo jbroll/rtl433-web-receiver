@@ -3,12 +3,13 @@ import { aliasOf, displayName, postAlias } from './alias.js'
 import { el, splitUnit, fmtValue, ageText } from './units.js'
 import { valueFont, textWidthEm, trackFit, beginDrag, beginResize, editing, setRenaming,
          currentDrag, currentResize, cancelDrag } from './grid.js'
-import { requestRender } from './render.js'
+import { tick } from './tick.js'
+import { scheduleRender } from './render-loop.js'
 
 export function buildCard(rec) {
   const key = rec.key;
   const c = cardEntry(key);
-  const vis = visibleValues(key, rec.merged);
+  const vis = visibleValues(key, rec.merged.value);
   const g = grid();
   const w = Math.max(1, Math.min(c.w, g.cols));
   const h = Math.max(1, Math.min(c.h, g.rows));
@@ -17,13 +18,13 @@ export function buildCard(rec) {
   card.style.gridColumn = "span " + w;
   card.style.gridRow = "span " + h;
   card.dataset.key = key;
-  if (rec.flashUntil > Date.now()) card.classList.add("flash");
+  if (rec.flashUntil.value > tick.value) card.classList.add("flash");
 
   const lbl = el("div", "lbl");
-  lbl.append(el("span", "nm", displayName(key)), el("span", "rs", rec.rssi === undefined ? "" : String(rec.rssi)));
+  lbl.append(el("span", "nm", displayName(key)), el("span", "rs", rec.rssi.value === undefined ? "" : String(rec.rssi.value)));
 
   const body = el("div", "body");
-  const bottom = bottomFields(key, rec.merged);
+  const bottom = bottomFields(key, rec.merged.value);
   const valueRows = Math.max(h, Math.ceil(vis.length / w));
   body.style.gridTemplateColumns = "repeat(" + w + ",minmax(0,1fr))";
   body.style.gridTemplateRows = "repeat(" + valueRows + ",minmax(0,1fr))";
@@ -33,7 +34,7 @@ export function buildCard(rec) {
     v.dataset.f = f;
     const parts = splitUnit(f);
     v.append(el("div", "fn", parts.name));
-    const num = fmtValue(rec.merged[f]);
+    const num = fmtValue(rec.merged.value[f]);
     const fv = el("div", "fv", num);
     fv.style.fontSize = font;
     trackFit(fv, card, textWidthEm(num, parts.unit));
@@ -42,41 +43,28 @@ export function buildCard(rec) {
     body.append(v);
   }
 
-  // A hidden card is never built, so this only ever hides. The device table's
-  // checkbox is what brings one back.
   const cx = el("button", "cx", "✕");
   cx.onclick = ev => { ev.stopPropagation(); setCardHidden(key, true); };
 
   const rz = el("button", "rz", "");
-  // Only a second touch can start one gesture during the other, and a drag
-  // ending mid-resize would save layout the suppressed renderer has not drawn.
   rz.onpointerdown = ev => {
-    if (!editing() || ev.button !== 0 || currentDrag()) return;
+    if (!editing.value || ev.button !== 0 || currentDrag()) return;
     ev.stopPropagation();
-    // c.w/c.h, not the clamped w/h this card is drawn at: a resize must move
-    // relative to the stored size, not destroy it by starting from a shrunk render.
     beginResize(ev, card, c.w, c.h);
   };
 
-  // dblclick/pointerdown stay wired to lbl for its whole lifetime, and both
-  // bubble up from the rename <input> startRename() puts inside it. Without
-  // the renaming guard, interacting with the open input (double-clicking a
-  // word, a long press to select text) would restart the rename and wipe it.
   lbl.ondblclick = ev => {
-    if (!editing() || lbl.dataset.renaming) return;
+    if (!editing.value || lbl.dataset.renaming) return;
     ev.stopPropagation();
     startRename(key, lbl);
   };
   let pressTimer = 0;
-  // A drag takes pointer capture, after which lbl never sees the pointerup that
-  // would clear this timer, so the drag clears it instead.
   card.cancelPress = () => { clearTimeout(pressTimer); pressTimer = 0; };
   lbl.onpointerdown = () => {
-    if (!editing() || lbl.dataset.renaming || pressTimer) return;
+    if (!editing.value || lbl.dataset.renaming || pressTimer) return;
     pressTimer = setTimeout(() => {
       pressTimer = 0;
-      if (!editing() || lbl.dataset.renaming) return;
-      // A press held still this long is a rename, so drop the drag it started.
+      if (!editing.value || lbl.dataset.renaming) return;
       cancelDrag(key);
       startRename(key, lbl);
     }, 600);
@@ -84,7 +72,7 @@ export function buildCard(rec) {
   lbl.onpointerup = lbl.onpointercancel = card.cancelPress;
 
   card.onpointerdown = ev => {
-    if (!editing() || ev.button !== 0 || currentResize()) return;
+    if (!editing.value || ev.button !== 0 || currentResize()) return;
     if (ev.target.closest("button") || ev.target.closest("input")) return;
     beginDrag(ev, card, ev.target.closest(".val"));
   };
@@ -94,11 +82,11 @@ export function buildCard(rec) {
     const parts = splitUnit(f);
     const item = el("span");
     item.append(el("span", "bn", parts.name),
-                el("span", "bv", fmtValue(rec.merged[f]) + parts.unit));
+                el("span", "bv", fmtValue(rec.merged.value[f]) + parts.unit));
     strip.append(item);
   }
 
-  card.append(lbl, body, strip, el("div", "age", ageText(Date.now() - rec.seenAt)), cx, rz);
+  card.append(lbl, body, strip, el("div", "age", ageText(Date.now() - rec.seenAt.value)), cx, rz);
   return card;
 }
 
@@ -116,7 +104,8 @@ function startRename(key, lbl) {
     done = true;
     delete lbl.dataset.renaming;
     setRenaming(false);
-    if (commit) postAlias(key, input.value); else requestRender();
+    if (commit) postAlias(key, input.value);
+    else scheduleRender();
   };
   input.onkeydown = ev => {
     if (ev.key === "Enter") finish(true);

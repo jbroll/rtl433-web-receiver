@@ -1,1 +1,255 @@
-import './main.js'
+import { render } from 'preact'
+import { untracked } from '@preact/signals'
+import { App, tab } from './app.jsx'
+import { tick } from './tick.js'
+import { devices, upsert, clearSource } from './devices.js'
+import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
+import { mergeReadings, fmtValue } from './units.js'
+import * as store from './store.js'
+import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
+         setSourceState, renderSourcePanel } from './sources.js'
+import { measureGrid, installGestures, editing, gestureInFlight,
+         fitValues, resetFit, cellSide, fontPx, currentDrag } from './grid.js'
+import { buildCard } from './card.js'
+import { renderDevices, addLog, renderLog, installSort } from './table.js'
+import { openSource } from './stream.js'
+import { loadSort } from './devicesort.js'
+import { startRenderLoop } from './render-loop.js'
+
+const $ = (id) => document.getElementById(id)
+
+let build = null
+
+function renderCards() {
+  const grid = $('cards')
+  if (!grid) return
+  if (untracked(() => gestureInFlight())) return
+  for (const rec of devices.value.values()) store.ensureCard(rec.key, rec.merged.value)
+  if ($('view-cards').hidden) return
+  measureGrid()
+  const keys = store.orderedKeys()
+  const shown = keys.filter((k) => !store.cardHidden(k))
+  resetFit()
+  grid.replaceChildren(...shown.map((k) => buildCard(devices.value.get(k))))
+  fitValues()
+}
+
+function syncGridInputs() {
+  const cols = $('grid-cols')
+  const rows = $('grid-rows')
+  if (cols) cols.value = String(store.grid().cols)
+  if (rows) rows.value = String(store.grid().rows)
+}
+
+function renderAll() {
+  renderCards()
+  renderDevices()
+  renderLog()
+  if (tab.value === 'sources') renderSourcePanel()
+  syncGridInputs()
+}
+
+// Re-run the legacy render pipeline whenever a relevant signal changes.
+// Reading tick here also makes this effect run once per second, replacing
+// the old setInterval(render, 1000).
+startRenderLoop(renderAll)
+
+function onMessage(base, topic, obj) {
+  if (!obj || typeof obj !== 'object') return
+  const key = makeKey(base, topic)
+  const stamped = obj.time ? Date.parse(obj.time) : NaN
+  const at = Number.isFinite(stamped) ? stamped : Date.now()
+  if (isSelf(key) && typeof obj.build === 'string' && base === location.origin) {
+    if (build === null) build = obj.build
+    else if (obj.build !== build) { location.reload(); return }
+  }
+  const prev = devices.value.get(key)
+  const raw = JSON.stringify(obj)
+  const merged = mergeReadings(prev && prev.merged.value, obj)
+  upsert({
+    key, obj, raw, rssi: obj.rssi, count: obj.count, seenAt: at, at,
+    merged,
+    flashUntil: Date.now() + 1000,
+  })
+  store.ensureCard(key, merged)
+  renderAll()
+  if (!isSelf(key)) addLog(at, raw)
+}
+
+function onAlias(base, topic, payload) {
+  applyAliasFrame(makeKey(base, topic), payload)
+  renderAll()
+}
+
+function onState(base, state) {
+  setSourceState(base, state)
+  renderSourcePanel(sourceState.value)
+}
+
+const open = new Map()
+let probe = null
+
+function dropSource(base, stream) {
+  stream.close()
+  open.delete(base)
+  const nextState = new Map(sourceState.value)
+  nextState.delete(base)
+  sourceState.value = nextState
+  clearSource(base)
+  const nextAliases = new Map(aliases.value)
+  for (const key of nextAliases.keys()) if (key.startsWith(`${base} `)) nextAliases.delete(key)
+  aliases.value = nextAliases
+}
+
+function probeOrigin() {
+  const base = location.origin
+  const stream = openSource(base, { onMessage, onAlias, onState: onProbeState })
+  open.set(base, stream)
+  probe = { base, stream, timer: setTimeout(abortProbe, 1500) }
+}
+
+function onProbeState(base, state) {
+  onState(base, state)
+  if (!probe || base !== probe.base) return
+  if (state === 'live') adoptProbe()
+  else if (state === 'reconnecting') abortProbe()
+}
+
+function adoptProbe() {
+  const base = probe.base
+  clearTimeout(probe.timer)
+  probe = null
+  addSource(base)
+  tab.value = 'cards'
+}
+
+function abortProbe() {
+  const { base, stream } = probe
+  clearTimeout(probe.timer)
+  probe = null
+  dropSource(base, stream)
+  tab.value = 'sources'
+}
+
+function syncSources() {
+  const want = sources.value
+  for (const base of want) {
+    if (open.has(base)) continue
+    open.set(base, openSource(base, { onMessage, onAlias, onState }))
+  }
+  for (const [base, stream] of open) {
+    if (want.indexOf(base) >= 0) continue
+    if (probe && base === probe.base) continue
+    dropSource(base, stream)
+  }
+  const next = new Map(sourceState.value)
+  for (const base of next.keys()) {
+    if (want.indexOf(base) >= 0) continue
+    if (probe && base === probe.base) continue
+    next.delete(base)
+  }
+  sourceState.value = next
+}
+
+setSourcesChanged(syncSources)
+
+function wrapRec(rec) {
+  return {
+    get key() { return rec.key },
+    get rssi() { return rec.rssi.value },
+    get count() { return rec.count.value },
+    get seenAt() { return rec.seenAt.value },
+    get flashUntil() { return rec.flashUntil.value },
+    get obj() { return rec.obj.value },
+    get raw() { return rec.raw.value },
+    get merged() { return rec.merged.value },
+  }
+}
+
+function exposeForTests() {
+  const deviceProxy = {
+    get size() { return devices.value.size },
+    get(key) { const rec = devices.value.get(key); return rec ? wrapRec(rec) : undefined },
+    clear() { devices.value = new Map() },
+    has(key) { return devices.value.has(key) },
+    values() { return [...devices.value.values()].map(wrapRec) },
+    keys() { return devices.value.keys() },
+    entries() { return [...devices.value.entries()].map(([k, r]) => [k, wrapRec(r)]) },
+    forEach(fn) { devices.value.forEach((r, k) => fn(wrapRec(r), k, deviceProxy)) },
+    [Symbol.iterator]() { return this.entries()[Symbol.iterator]() },
+  }
+
+  Object.assign(window, {
+    devices: deviceProxy,
+    measureGrid, fmtValue, valueFont: fontPx,
+    ensureCard: store.ensureCard, visibleValues: store.visibleValues,
+    saveCardState: store.saveCardState, defaultSize: store.defaultSize,
+    setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
+  })
+  Object.defineProperties(window, {
+    cardState: { get: store.getCardState, set: store.setCardState },
+    cellSide: { get: cellSide },
+    dragging: { get: currentDrag },
+    hideNewCards: { set: store.setHideNewCards },
+  })
+}
+
+render(<App />, document.body)
+
+exposeForTests()
+store.loadCardState()
+loadAliases()
+loadSort()
+loadSources()
+installGestures()
+installSort()
+window.addEventListener('resize', measureGrid)
+
+const TABS = ['devices', 'log', 'cards', 'sources']
+function showTab(name) {
+  for (const n of TABS) {
+    $('tab-' + n).setAttribute('aria-selected', String(n === name))
+    $('view-' + n).hidden = n !== name
+  }
+  tab.value = name
+  if (name === 'sources') renderSourcePanel()
+  renderAll()
+}
+for (const n of TABS) $('tab-' + n).onclick = () => showTab(n)
+
+$('edit-cards').onclick = () => { editing.value = !editing.value; renderAll() }
+$('forget-cards').onclick = () => {
+  if (confirm('Forget every saved card layout in this browser?')) {
+    store.forgetLayouts()
+    renderAll()
+  }
+}
+function applyGridInput(input, axis) {
+  store.setGrid(axis, parseInt(input.value, 10))
+  input.value = String(store.grid()[axis])
+}
+$('grid-cols').onchange = (ev) => applyGridInput(ev.target, 'cols')
+$('grid-rows').onchange = (ev) => applyGridInput(ev.target, 'rows')
+const sourceForm = $('source-form')
+const sourceUrl = $('source-url')
+if (sourceForm && sourceUrl) {
+  sourceUrl.oninput = () => sourceUrl.removeAttribute('aria-invalid')
+  sourceForm.onsubmit = (ev) => {
+    ev.preventDefault()
+    if (!addSource(sourceUrl.value)) {
+      sourceUrl.setAttribute('aria-invalid', 'true')
+      return
+    }
+    sourceUrl.removeAttribute('aria-invalid')
+    sourceUrl.value = ''
+    renderSourcePanel()
+  }
+}
+
+const stored = storageState()
+if (stored === 'absent') probeOrigin()
+else tab.value = stored === 'empty' ? 'sources' : 'cards'
+
+syncSources()
+syncGridInputs()
+renderAll()

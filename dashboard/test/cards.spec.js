@@ -40,10 +40,9 @@ async function open(page, devices) {
 // from every device shown, and the ones about hiding opt back out.
 async function showEveryCard(page) {
   await page.evaluate(() => {
-    hideNewCards = false;
+    setHideNewCards(false);
     cardState.hidden.length = 0;
     saveCardState();
-    renderCards();
   });
 }
 
@@ -250,17 +249,14 @@ async function cardState(page) {
 
 async function setSize(page, key, w, h) {
   await page.evaluate(([k, w, h]) => {
-    cardState.cards[k].w = w;
-    cardState.cards[k].h = h;
-    renderCards();
+    setCardSize(k, w, h);
   }, [storeKey(server, key), w, h]);
 }
 
 async function setGrid(page, cols, rows) {
   await page.evaluate(([c, r]) => {
-    cardState.grid = { cols: c, rows: r };
-    measureGrid();
-    renderCards();
+    setGrid('cols', c);
+    setGrid('rows', r);
   }, [cols, rows]);
 }
 

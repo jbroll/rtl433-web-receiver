@@ -118,10 +118,9 @@ test("an alias for an external source survives a reload from local storage", asy
   await expect(page.locator("#status")).toHaveText("live");
 
   await page.evaluate(() => {
-    hideNewCards = false;
+    setHideNewCards(false);
     cardState.hidden.length = 0;
     saveCardState();
-    renderCards();
   });
 
   const deviceKey = `${base(a)} ${topicOf(ACURITE, "srcA")}`;
@@ -138,9 +137,9 @@ test("an alias for an external source survives a reload from local storage", asy
   await page.reload();
   await expect(page.locator("#status")).toHaveText("live");
   await page.evaluate(() => {
-    hideNewCards = false;
+    setHideNewCards(false);
     cardState.hidden.length = 0;
-    renderCards();
+    saveCardState();
   });
   await expect(page.locator(`${cardSel} .nm`)).toHaveText("Back fence");
 });

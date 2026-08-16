@@ -194,8 +194,15 @@ export function moveValue(key, field, beforeField) {
 }
 
 export function setCardSize(key, w, h) {
-  const c = cardState.value.cards[key]
-  if (c) { c.w = w; c.h = h; saveCardState() }
+  const s = cardState.value
+  let c = s.cards[key]
+  if (!c) {
+    c = { valueOrder: [], hiddenValues: [], bottomValues: [] }
+    s.cards[key] = c
+  }
+  c.w = w
+  c.h = h
+  saveCardState()
 }
 
 export function grid() { return cardState.value.grid }
@@ -210,12 +217,15 @@ export function setGrid(axis, n) {
 
 export function forgetLayouts() {
   try { localStorage.removeItem(CARDS_KEY) } catch (e) { storageBroken = true }
-  cardState.value = blankState()
   const hideNew = hideNewCards
   hideNewCards = false
-  for (const rec of devices.value.values()) ensureCard(rec.key, rec.merged.value)
-  bump()
-  hideNewCards = hideNew
+  try {
+    cardState.value = blankState()
+    for (const rec of devices.value.values()) ensureCard(rec.key, rec.merged.value)
+    bump()
+  } finally {
+    hideNewCards = hideNew
+  }
 }
 
 export function setHideNewCards(v) { hideNewCards = v }
