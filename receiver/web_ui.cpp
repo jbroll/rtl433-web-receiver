@@ -590,7 +590,7 @@ void broadcastAlias(const char* topic, const char* name) {
     return;
   }
   int aliasIndex = alias_store::indexOf(topic);
-  broadcastFrame(topic, aliasIndex < 0 ? -1 : SIGNAL_DEVICE_SLOTS + aliasIndex, frame);
+  broadcastFrame(topic, aliasIndex < 0 ? -1 : SIGNAL_SUB_TABLE + aliasIndex, frame);
 }
 
 } // namespace web_ui
