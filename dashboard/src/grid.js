@@ -1,6 +1,6 @@
 import { moveCard, moveValue, setCardSize, grid as gridSize } from './store.js'
 import { displayName } from './alias.js'
-import { splitUnit } from './units.js'
+import { splitUnit, el } from './units.js'
 import { signal } from '@preact/signals'
 
 const $ = (id) => document.getElementById(id)
@@ -116,6 +116,121 @@ function dropSlot(nodes, from, x, y) {
     if (d < far) { far = d; best = i }
   })
   return nodes[best > from ? best + 1 : best] || null
+}
+
+function makeZone(layer, left, top, width, height, before) {
+  const z = el('div', 'drop-zone')
+  z.style.position = 'absolute'
+  z.style.left = left + 'px'
+  z.style.top = top + 'px'
+  z.style.width = Math.max(0, width) + 'px'
+  z.style.height = Math.max(0, height) + 'px'
+  z.dataset.before = before
+  layer.append(z)
+  return z
+}
+
+function createDropLayer(container, kind) {
+  const layer = el('div', 'drop-layer ' + kind + '-layer')
+  const r = container.getBoundingClientRect()
+  layer.style.position = 'fixed'
+  layer.style.left = r.left + 'px'
+  layer.style.top = r.top + 'px'
+  layer.style.width = r.width + 'px'
+  layer.style.height = r.height + 'px'
+  layer.style.pointerEvents = 'none'
+  layer.style.zIndex = '4'
+  document.body.append(layer)
+  return layer
+}
+
+function clearDropZones() {
+  document.querySelectorAll('.drop-layer').forEach(n => n.remove())
+}
+
+function cardDropZones(layer) {
+  const cards = [...document.querySelectorAll('#cards .card')]
+  if (!cards.length) return []
+  const gridRect = document.getElementById('cards').getBoundingClientRect()
+
+  // Group cards by visual row.
+  const rows = []
+  for (const card of cards) {
+    const r = card.getBoundingClientRect()
+    const row = rows.find(row => Math.abs(row.top - r.top) < 5)
+    if (row) row.cards.push({ card, rect: r })
+    else rows.push({ top: r.top, cards: [{ card, rect: r }] })
+  }
+  rows.sort((a, b) => a.top - b.top)
+  for (const row of rows) row.cards.sort((a, b) => a.rect.left - b.rect.left)
+
+  const zones = []
+  const first = rows[0].cards[0].rect
+  zones.push(makeZone(layer, gridRect.left, first.top, first.left - gridRect.left, first.height, rows[0].cards[0].card.dataset.key))
+
+  const lastRow = rows[rows.length - 1]
+  const last = lastRow.cards[lastRow.cards.length - 1]
+  zones.push(makeZone(layer, last.rect.right, last.rect.top, gridRect.right - last.rect.right, last.rect.height, ''))
+
+  for (const row of rows) {
+    for (let i = 0; i < row.cards.length - 1; i++) {
+      const a = row.cards[i].rect
+      const b = row.cards[i + 1].rect
+      zones.push(makeZone(layer, a.right, a.top, b.left - a.right, a.height, b.card.dataset.key))
+    }
+  }
+
+  for (let i = 0; i < rows.length - 1; i++) {
+    const tops = rows[i].cards.map(c => c.rect.bottom)
+    const bottoms = rows[i + 1].cards.map(c => c.rect.top)
+    const y = Math.max(...tops)
+    const y2 = Math.min(...bottoms)
+    zones.push(makeZone(layer, gridRect.left, y, gridRect.width, y2 - y, rows[i + 1].cards[0].card.dataset.key))
+  }
+
+  return zones
+}
+
+function valueDropZones(card, layer) {
+  const values = [...card.querySelectorAll('.val')]
+  if (!values.length) return []
+  const bodyRect = card.querySelector('.body').getBoundingClientRect()
+
+  // Values are in a CSS grid. Adjacent cells share an edge.
+  const cells = values.map(v => ({ v, r: v.getBoundingClientRect() }))
+  const zones = []
+
+  // Before first value: a strip at the body edge. Use the first cell's edge.
+  const first = cells[0].r
+  zones.push(makeZone(layer, bodyRect.left, bodyRect.top, first.left - bodyRect.left, bodyRect.height, values[0].dataset.f))
+
+  // After last value.
+  const last = cells[cells.length - 1].r
+  zones.push(makeZone(layer, last.right, bodyRect.top, bodyRect.right - last.right, bodyRect.height, ''))
+
+  // Between horizontally adjacent values.
+  for (let i = 0; i < cells.length; i++) {
+    for (let j = i + 1; j < cells.length; j++) {
+      const a = cells[i].r
+      const b = cells[j].r
+      if (Math.abs(a.right - b.left) < 3 && a.top === b.top) {
+        zones.push(makeZone(layer, a.right, a.top, b.left - a.right, a.height, b.v.dataset.f))
+      }
+    }
+  }
+
+  // Between vertically adjacent values.
+  for (let i = 0; i < cells.length; i++) {
+    for (let j = i + 1; j < cells.length; j++) {
+      const a = cells[i].r
+      const b = cells[j].r
+      if (Math.abs(a.bottom - b.top) < 3 && a.left === b.left) {
+        zones.push(makeZone(layer, a.left, a.bottom, a.width, b.top - a.bottom, b.v.dataset.f))
+      }
+    }
+  }
+
+  return zones
 }
 
 export function beginDrag(ev, card, val) {
