@@ -548,7 +548,7 @@ void loop() {
   }
 }
 
-// index is the topic's raw flat index (a sub-table index, or SIGNAL_DEVICE_SLOTS
+// index is the topic's raw flat index (a sub-table index, or SIGNAL_SUB_TABLE
 // + alias slot), or -1 when it has none (an alias that was just removed).
 static void broadcastFrame(const char* topic, int index, const FrameBuffer& frame) {
   for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
