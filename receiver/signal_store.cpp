@@ -14,10 +14,12 @@ static uint32_t   _seqCounter = 0;
 static uint32_t   _total = 0;
 static uint32_t   _dropped = 0;
 static char       _source[SIGNAL_SOURCE_MAX] = "rtl433";
+static DeviceSub  _subs[SIGNAL_SUB_TABLE];
 
 void reset() {
   memset(_devices, 0, sizeof(_devices));
   memset(_seq, 0, sizeof(_seq));
+  memset(_subs, 0, sizeof(_subs));
   _deviceCount = 0;
   _seqCounter = 0;
   _total = 0;
@@ -96,7 +98,51 @@ static int claimSlot() {
       oldest = i;
     }
   }
+  // Free the evicted slot's subs so its payloads do not replay under the
+  // reused slot's key until the hour sweep.
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)oldest) {
+      _subs[i].used = false;
+    }
+  }
   memset(&_devices[oldest], 0, sizeof(DeviceSlot));
+  return oldest;
+}
+
+static int findSub(int slotIdx, const char* msgType) {
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)slotIdx &&
+        strcmp(_subs[i].msgType, msgType) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int claimSub(int slotIdx, const char* msgType) {
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (!_subs[i].used) {
+      _subs[i].used = true;
+      _subs[i].slotIdx = slotIdx;
+      copyTruncated(_subs[i].msgType, sizeof(_subs[i].msgType), msgType);
+      return i;
+    }
+  }
+  // Table full: evict this device's lowest-seq sub if it has more than one.
+  int deviceSubs[SIGNAL_SUB_TABLE];
+  int n = 0;
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)slotIdx) {
+      deviceSubs[n++] = i;
+    }
+  }
+  if (n <= 1) return -1;  // preserve the device's existing type
+  int oldest = deviceSubs[0];
+  for (int i = 1; i < n; i++) {
+    if (_subs[deviceSubs[i]].seq < _subs[oldest].seq) oldest = deviceSubs[i];
+  }
+  copyTruncated(_subs[oldest].msgType, sizeof(_subs[oldest].msgType), msgType);
+  _subs[oldest].lastSeen = 0;
   return oldest;
 }
 
@@ -147,10 +193,27 @@ bool record(const char* payload, int rssi, bool isDecode) {
     _devices[idx].used = true;
   }
   DeviceSlot& slot = _devices[idx];
-  serializeJson(doc, slot.payload, sizeof(slot.payload));
-  slot.lastSeen = millis();
+
+  char msgType[16] = "";
+  if (!doc["message_type"].isNull()) {
+    copyTruncated(msgType, sizeof(msgType), doc["message_type"].as<String>().c_str());
+  }
+
+  int subIdx = findSub(idx, msgType);
+  if (subIdx < 0) {
+    subIdx = claimSub(idx, msgType);
+    if (subIdx < 0) {
+      _dropped++;
+      return false;
+    }
+  }
+
+  DeviceSub& sub = _subs[subIdx];
+  serializeJson(doc, sub.payload, sizeof(sub.payload));
+  sub.lastSeen = millis();
+  slot.lastSeen = sub.lastSeen;
+  sub.seq = _seq[idx] = ++_seqCounter;
   slot.count = count;
-  _seq[idx] = ++_seqCounter;
 
   if (isDecode) {
     _total++;
@@ -197,6 +260,18 @@ int indexOf(const DeviceSlot& slot) {
     return -1;
   }
   return (int)(&slot - &_devices[0]);
+}
+
+const char* latestPayload(const DeviceSlot& slot) {
+  int idx = indexOf(slot);
+  if (idx < 0) return nullptr;
+  int latest = -1;
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)idx) {
+      if (latest < 0 || _subs[i].seq > _subs[latest].seq) latest = i;
+    }
+  }
+  return latest < 0 ? nullptr : _subs[latest].payload;
 }
 
 uint32_t totalRecorded() {
