@@ -27,7 +27,7 @@ static bool      _started = false;
 #define WEB_UI_SSE_FILTERS 4
 #define WEB_UI_FILTER_MAX  65
 #define SSE_KEEPALIVE_MS   15000
-// A browser reading 24 payloads of 600 bytes in one pass overflows the socket's
+// A browser reading 32 payloads of 600 bytes in one pass overflows the socket's
 // send buffer and is dropped, so the replay is drained a few frames per loop().
 #define REPLAY_PER_LOOP    3
 
@@ -379,9 +379,11 @@ static void handleTopic() {
   for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
     const DeviceSlot* slot = signal_store::slotAt(i);
     if (slot != NULL && strcmp(slot->key, path) == 0) {
+      const char* payload = signal_store::latestPayload(*slot);
+      if (payload == NULL) break;
       sendCors();
       _server.sendHeader("Cache-Control", "no-store");
-      _server.send(200, "application/json", slot->payload);
+      _server.send(200, "application/json", payload);
       return;
     }
   }
@@ -451,34 +453,38 @@ static void handleEvents() {
   Log.notice(F("SSE client attached to slot %d, %d filters" CR), slot, (int)count);
 }
 
-// The cursor walks raw device slots and then the alias table, so a device heard
+// The cursor walks the sub table and then the alias table, so a device heard
 // from mid-replay is delivered with its newer payload when the cursor reaches
-// it, and one evicted mid-replay is simply not delivered. The alias table now
-// has holes like the device table, so every index is visited and NULLs skip.
+// it, and one evicted mid-replay is simply not delivered. The sub table now
+// has holes like the alias table, so every index is visited and NULLs skip.
 static void drainReplay(int i, FrameBuffer& frame) {
   for (int sent = 0; sent < REPLAY_PER_LOOP && _replay[i] >= 0; ) {
     int16_t at = _replay[i]++;
     const char* topic = NULL;
     frame.reset();
-    if (at < SIGNAL_DEVICE_SLOTS) {
-      const DeviceSlot* slot = signal_store::slotAt((uint8_t)at);
-      if (slot == NULL) {
+    if (at < SIGNAL_SUB_TABLE) {
+      const DeviceSub* sub = signal_store::subAt((uint8_t)at);
+      if (sub == NULL || !sub->used) {
+        continue;
+      }
+      const DeviceSlot* slot = signal_store::slotAt(sub->slotIdx);
+      if (slot == NULL || !slot->used) {
         continue;
       }
       topic = slot->key;
       if (!slotWants(i, topic)) {
         continue;
       }
-      buildFrame(frame, topic, slot->payload);
-    } else if (at < SIGNAL_DEVICE_SLOTS + ALIAS_SLOTS) {
-      topic = alias_store::topicAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS));
+      buildFrame(frame, topic, sub->payload);
+    } else if (at < SIGNAL_SUB_TABLE + ALIAS_SLOTS) {
+      topic = alias_store::topicAt((uint8_t)(at - SIGNAL_SUB_TABLE));
       if (topic == NULL) {
         continue;
       }
       if (!slotWants(i, topic)) {
         continue;
       }
-      buildAliasFrame(frame, topic, alias_store::nameAt((uint8_t)(at - SIGNAL_DEVICE_SLOTS)));
+      buildAliasFrame(frame, topic, alias_store::nameAt((uint8_t)(at - SIGNAL_SUB_TABLE)));
     } else {
       _replay[i] = -1;
       return;
@@ -542,8 +548,8 @@ void loop() {
   }
 }
 
-// index is the topic's raw table index (device slot, or SIGNAL_DEVICE_SLOTS +
-// alias slot), or -1 when it has none (an alias that was just removed).
+// index is the topic's raw flat index (a sub-table index, or SIGNAL_DEVICE_SLOTS
+// + alias slot), or -1 when it has none (an alias that was just removed).
 static void broadcastFrame(const char* topic, int index, const FrameBuffer& frame) {
   for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
     if (!_sse[i]) {
@@ -563,13 +569,17 @@ static void broadcastFrame(const char* topic, int index, const FrameBuffer& fram
 }
 
 void broadcast(const DeviceSlot& slot) {
+  int subIdx = signal_store::latestSubIndex(slot);
+  if (subIdx < 0) {
+    return;
+  }
   FrameBuffer frame;
-  buildFrame(frame, slot.key, slot.payload);
+  buildFrame(frame, slot.key, signal_store::subPayload(subIdx));
   if (frame.overflowed()) {
     Log.warning(F("SSE frame overflow, dropping frame" CR));
     return;
   }
-  broadcastFrame(slot.key, signal_store::indexOf(slot), frame);
+  broadcastFrame(slot.key, subIdx, frame);
 }
 
 void broadcastAlias(const char* topic, const char* name) {

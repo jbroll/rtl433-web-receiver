@@ -51,6 +51,9 @@ uint32_t          totalRecorded();
 uint32_t          droppedCount();
 const char*       latestPayload(const DeviceSlot& slot);
 void              sweepSubStale(unsigned long now, unsigned long staleMs);
+const DeviceSub*  subAt(uint8_t i);
+int               latestSubIndex(const DeviceSlot& slot);
+const char*       subPayload(int subIdx);
 #ifdef FAKE_SIGNALS
 bool selfTest();
 #endif

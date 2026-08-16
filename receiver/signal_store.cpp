@@ -278,6 +278,28 @@ const char* latestPayload(const DeviceSlot& slot) {
   return latest < 0 ? nullptr : _subs[latest].payload;
 }
 
+const DeviceSub* subAt(uint8_t i) {
+  if (i >= SIGNAL_SUB_TABLE || !_subs[i].used) return NULL;
+  return &_subs[i];
+}
+
+int latestSubIndex(const DeviceSlot& slot) {
+  int idx = indexOf(slot);
+  if (idx < 0) return -1;
+  int latest = -1;
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && _subs[i].slotIdx == (uint8_t)idx) {
+      if (latest < 0 || _subs[i].seq > _subs[latest].seq) latest = i;
+    }
+  }
+  return latest;
+}
+
+const char* subPayload(int subIdx) {
+  if (subIdx < 0 || subIdx >= SIGNAL_SUB_TABLE || !_subs[subIdx].used) return NULL;
+  return _subs[subIdx].payload;
+}
+
 uint32_t totalRecorded() {
   return _total;
 }
