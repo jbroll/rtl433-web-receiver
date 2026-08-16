@@ -7,9 +7,6 @@ import { tick } from './tick.js'
 
 const $ = (id) => document.getElementById(id)
 
-const LOG_MAX = 200;
-let logRows = [];
-
 function reading(rec) {
   return Object.keys(rec.merged.value).map(k => k + ": " + rec.merged.value[k]).join("  ");
 }
@@ -106,20 +103,4 @@ function valueRow(key, field, value) {
   mode.append(pick);
   tr.append(name, val, mode);
   return tr;
-}
-
-export function addLog(at, raw) {
-  logRows.unshift({ at: at, raw: raw });
-  if (logRows.length > LOG_MAX) logRows.length = LOG_MAX;
-  renderLog();
-}
-
-export function renderLog() {
-  if ($("view-log").hidden) return;
-  $("logrows").replaceChildren(...logRows.map(e => {
-    const tr = el("tr");
-    const t = el("td", "nw", new Date(e.at).toLocaleTimeString());
-    tr.append(t, el("td", "", e.raw));
-    return tr;
-  }));
 }

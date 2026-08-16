@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { editing } from './grid.js'
 import { sourceState } from './sources.js'
 import { SourcesView } from './sources.jsx'
+import { LogView } from './log.jsx'
 
 export const tab = signal('cards')
 
@@ -51,9 +52,7 @@ export function App() {
           <tbody id="devices"></tbody>
         </table>
       </section>
-      <section id="view-log" hidden={tab.value !== 'log'}>
-        <table id="log"><tbody id="logrows"></tbody></table>
-      </section>
+      <LogView />
       <section id="view-sources" hidden={tab.value !== 'sources'}>
         <SourcesView />
       </section>

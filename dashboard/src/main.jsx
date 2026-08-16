@@ -11,7 +11,8 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
 import { measureGrid, installGestures, editing, gestureInFlight,
          fitValues, resetFit, cellSide, fontPx, currentDrag } from './grid.js'
 import { buildCard } from './card.js'
-import { renderDevices, addLog, renderLog, installSort } from './table.js'
+import { renderDevices, installSort } from './table.js'
+import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
 import { startRenderLoop } from './render-loop.js'
@@ -44,7 +45,6 @@ function syncGridInputs() {
 function renderAll() {
   renderCards()
   renderDevices()
-  renderLog()
   syncGridInputs()
 }
 
