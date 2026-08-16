@@ -1,6 +1,5 @@
 import { memo } from 'preact/compat'
 import { useLayoutEffect, useEffect, useRef } from 'preact/hooks'
-import { computed } from '@preact/signals'
 import { devices } from './devices.js'
 import { cardState, cardEntry, visibleValues, bottomFields, setCardHidden } from './store.js'
 import { aliasOf, displayName, postAlias } from './alias.js'
@@ -10,19 +9,12 @@ import { editing, renaming, dragging, resizing, gestureInFlight,
          trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize, computeUniformFontSize } from './grid.js'
 import { tick } from './tick.js'
 
-const shownKeys = computed(() => {
-  const order = cardState.value.order
-  const hidden = cardState.value.hidden
-  const result = order.filter(k => devices.value.has(k) && !hidden.includes(k))
-  console.log('[shownKeys] computed', { order, hidden, result })
-  return result
-})
-
 export function CardsView() {
   const gridRef = useRef(null)
 
-  // Read cellSignal to trigger re-render on cell size changes (resize)
+  // Read cellSignal and cardState to trigger re-render on changes
   cellSignal.value
+  cardState.value
 
   // measureGrid on render (synchronous, before paint)
   useLayoutEffect(() => {
@@ -47,8 +39,10 @@ export function CardsView() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Use computed signal for reactive shown keys
-  const shown = shownKeys.value
+  // Compute shown keys directly from signals for reactivity
+  const order = cardState.value.order
+  const hidden = cardState.value.hidden
+  const shown = order.filter(k => devices.value.has(k) && !hidden.includes(k))
 
   return (
     <div id="cards" ref={gridRef}>

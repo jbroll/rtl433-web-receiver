@@ -153,40 +153,23 @@ function cardDropZones(layer) {
   if (!cards.length) return []
   const gridRect = document.getElementById('cards').getBoundingClientRect()
 
-  // Group cards by visual row.
-  const rows = []
-  for (const card of cards) {
-    const r = card.getBoundingClientRect()
-    const row = rows.find(row => Math.abs(row.top - r.top) < 5)
-    if (row) row.cards.push({ card, rect: r })
-    else rows.push({ top: r.top, cards: [{ card, rect: r }] })
-  }
-  rows.sort((a, b) => a.top - b.top)
-  for (const row of rows) row.cards.sort((a, b) => a.rect.left - b.rect.left)
-
+  // Cards are in visual order (DOM order matches shownKeys order)
   const zones = []
-  const first = rows[0].cards[0].rect
-  zones.push(makeZone(layer, gridRect.left, first.top, first.left - gridRect.left, first.height, rows[0].cards[0].card.dataset.key))
 
-  const lastRow = rows[rows.length - 1]
-  const last = lastRow.cards[lastRow.cards.length - 1]
-  zones.push(makeZone(layer, last.rect.right, last.rect.top, gridRect.right - last.rect.right, last.rect.height, ''))
+  // Zone before first card
+  const first = cards[0].getBoundingClientRect()
+  zones.push(makeZone(layer, gridRect.left, first.top, first.left - gridRect.left, first.height, cards[0].dataset.key))
 
-  for (const row of rows) {
-    for (let i = 0; i < row.cards.length - 1; i++) {
-      const a = row.cards[i].rect
-      const b = row.cards[i + 1].rect
-      zones.push(makeZone(layer, a.right, a.top, b.left - a.right, a.height, b.card.dataset.key))
-    }
+  // Zone for each card (covers the card's rectangle)
+  for (let i = 0; i < cards.length; i++) {
+    const r = cards[i].getBoundingClientRect()
+    const before = i < cards.length - 1 ? cards[i + 1].dataset.key : ''
+    zones.push(makeZone(layer, r.left, r.top, r.width, r.height, before))
   }
 
-  for (let i = 0; i < rows.length - 1; i++) {
-    const tops = rows[i].cards.map(c => c.rect.bottom)
-    const bottoms = rows[i + 1].cards.map(c => c.rect.top)
-    const y = Math.max(...tops)
-    const y2 = Math.min(...bottoms)
-    zones.push(makeZone(layer, gridRect.left, y, gridRect.width, y2 - y, rows[i + 1].cards[0].card.dataset.key))
-  }
+  // Zone after last card
+  const last = cards[cards.length - 1].getBoundingClientRect()
+  zones.push(makeZone(layer, last.right, last.top, gridRect.right - last.right, last.height, ''))
 
   return zones
 }
@@ -274,14 +257,28 @@ function dragMove(ev) {
     d.moved = true
     d.card.setPointerCapture(d.pointerId)
     if (d.card.cancelPress) d.card.cancelPress()
-    d.ghost = document.createElement("div")
-    d.ghost.className = "ghostcard"
-    d.ghost.textContent = d.field ? splitUnit(d.field).name : displayName(d.key)
+    const ghostCls = 'ghostcard ' + (d.field ? 'value-ghost' : 'card-ghost')
+    d.ghost = el('div', ghostCls, d.field ? splitUnit(d.field).name : displayName(d.key))
     document.body.append(d.ghost)
     d.node.classList.add("lifting")
+
+    d.zones = d.field
+      ? valueDropZones(d.card, createDropLayer(d.card.querySelector('.body'), 'value'))
+      : cardDropZones(createDropLayer(document.getElementById('cards'), 'card'))
   }
   d.ghost.style.left = ev.clientX + 12 + "px"
   d.ghost.style.top = ev.clientY + 12 + "px"
+
+  let active = null
+  let best = Infinity
+  for (const z of d.zones || []) {
+    const r = z.getBoundingClientRect()
+    const cx = r.left + r.width / 2
+    const cy = r.top + r.height / 2
+    const dist = Math.hypot(ev.clientX - cx, ev.clientY - cy)
+    if (dist < best) { best = dist; active = z }
+  }
+  for (const z of d.zones || []) z.classList.toggle('active', z === active)
 }
 
 function endDrag(ev) {
@@ -290,15 +287,17 @@ function endDrag(ev) {
   dragging.value = null
   if (d.card.cancelPress) d.card.cancelPress()
   if (d.ghost) d.ghost.remove()
-  d.node.classList.remove("lifting")
-  if (!d.moved) return
-  const nodes = d.field ? [...d.card.querySelectorAll(".val")]
-                        : [...document.querySelectorAll("#cards .card")]
-  const before = dropSlot(nodes, nodes.indexOf(d.node), ev.clientX, ev.clientY)
-  if (before !== d.node) {
-    if (d.field) moveValue(d.key, d.field, before ? before.dataset.f : null)
-    else moveCard(d.key, before ? before.dataset.key : null)
+  d.node.classList.remove('lifting')
+
+  if (d.moved && d.zones) {
+    const active = d.zones.find(z => z.classList.contains('active'))
+    if (active) {
+      const before = active.dataset.before || null
+      if (d.field) moveValue(d.key, d.field, before)
+      else moveCard(d.key, before)
+    }
   }
+  clearDropZones()
 }
 
 let installed = false
