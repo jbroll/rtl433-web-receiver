@@ -186,7 +186,7 @@ above.
   the wrong reason.
 - `REPLAY_PER_LOOP` bounds the frames a replay sends per `web_ui::loop()`, not
   the cursor steps it takes: a subscriber whose filters match nothing walks all
-  56 indices in one pass. Bounded and cheap, but it is the loop's worst case
+  64 indices in one pass. Bounded and cheap, but it is the loop's worst case
   and nothing states it.
 - The keepalive's write-failure path (`web_ui.cpp:519`) is the one place a
   stopped client is not routed through `releaseSlot()`, so its filters and

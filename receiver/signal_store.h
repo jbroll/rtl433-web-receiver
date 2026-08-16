@@ -16,7 +16,7 @@
 #define SIGNAL_SOURCE_MAX   32
 
 struct DeviceSub {
-  uint8_t       slotIdx;      // owning DeviceSlot index, 0xFF when free
+  uint8_t       slotIdx;      // owning DeviceSlot index; only meaningful while used
   char          msgType[16];  // stringified message_type, "" for none
   char          payload[SIGNAL_PAYLOAD_MAX + 1];
   unsigned long lastSeen;     // millis, for SUB_STALE_MS sweep
