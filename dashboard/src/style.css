@@ -52,11 +52,29 @@ section[hidden] { display:none; }
 .card .body { display:grid; align-items:stretch; gap:.2rem .6rem; height:100%; overflow:hidden; }
 .card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
              min-width:0; min-height:0; align-self:stretch; overflow:hidden; }
-.card .fn { font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; opacity:.6;
-            overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.card .fv { font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;
-            text-overflow:ellipsis; }
-.card .fv .u { font-size:.5em; opacity:.65; margin-left:.12em; }
+.card .fn { 
+  font-size:.75rem; 
+  text-transform:uppercase; 
+  letter-spacing:.05em; 
+  display:flex; 
+  justify-content:space-between; 
+  align-items:center; 
+  white-space:nowrap; 
+  width:100%; 
+}
+.card .fn .u { 
+  font-weight:inherit; 
+  color:inherit; 
+  opacity:inherit; 
+  margin-left:.5em; 
+}
+.card .fv { 
+  font-variant-numeric:tabular-nums; 
+  overflow:hidden; 
+  text-align:center; 
+}
+.card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
+             min-width:0; min-height:0; align-self:stretch; overflow:hidden; align-items:center; }
 #edit-cards, #forget-cards, #grid-size { position:fixed; bottom:1rem; z-index:2;
                                          cursor:pointer; }
 #edit-cards { right:1rem; width:2.4rem; height:2.4rem; border-radius:50%; }

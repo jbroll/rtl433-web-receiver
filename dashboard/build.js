@@ -2,12 +2,19 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { gzipSync, constants as zlibConstants } from 'node:zlib'
+import { execFileSync } from 'node:child_process'
 
 import { build } from 'esbuild'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SRC = join(HERE, 'src')
 const HEADER = join(HERE, '..', 'receiver', 'signal_store.h')
+
+function gitHash() {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: HERE, encoding: 'utf8' }).trim()
+  } catch { return 'unknown' }
+}
 
 export async function deviceMax() {
   const src = await readFile(HEADER, 'utf8')
@@ -33,7 +40,10 @@ async function bundle(entry, loader, define) {
 }
 
 export async function buildHtml() {
-  const define = { DEVICE_MAX: String(await deviceMax()) }
+  const define = { 
+    DEVICE_MAX: String(await deviceMax()),
+    GIT_HASH: JSON.stringify(gitHash())
+  }
   const [template, css, js] = await Promise.all([
     readFile(join(SRC, 'index.html'), 'utf8'),
     bundle('style.css', {}, {}),

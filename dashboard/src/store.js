@@ -106,7 +106,13 @@ export function ensureCard(key, merged) {
     }
   }
   if (!c.w || !c.h) {
-    const size = defaultSize(visibleValues(key, merged).length)
+    // Compute visible values directly from c to avoid prototype pollution issues
+    const vis = c.valueOrder.filter(f => 
+      merged[f] !== undefined &&
+      (c.hiddenValues || []).indexOf(f) < 0 &&
+      (c.bottomValues || []).indexOf(f) < 0
+    )
+    const size = defaultSize(vis.length)
     c.w = size.w
     c.h = size.h
   }

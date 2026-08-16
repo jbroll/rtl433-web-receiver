@@ -17,7 +17,7 @@ function Status() {
   const text = live === states.length ? 'live'
              : live === 0 ? 'reconnecting'
              : `${live}/${states.length} live`
-  return <span id="status">{text}</span>
+  return <span id="status">{text} <span id="git-hash" style={{fontSize:'.7rem',opacity:'.5',marginLeft:'.5rem'}}>{GIT_HASH}</span></span>
 }
 
 export function App() {

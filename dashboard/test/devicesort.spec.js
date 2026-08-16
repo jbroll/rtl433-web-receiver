@@ -11,7 +11,7 @@ const ROWS = "#devices tr:not(.vrow)";
 async function open(page, devices) {
   server = await startServer({ devices });
   await page.goto(server.url);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await page.click("#tab-devices");
   await expect(page.locator(ROWS)).toHaveCount(devices.length);
 }
@@ -64,7 +64,7 @@ test("the sort survives a reload", async ({ page }) => {
   const before = await models(page);
 
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await page.click("#tab-devices");
   await expect(page.locator(ROWS)).toHaveCount(3);
   await expect(page.locator('th[data-sort="count"]')).toHaveAttribute("aria-sort", "ascending");

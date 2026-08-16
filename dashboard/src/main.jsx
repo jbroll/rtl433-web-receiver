@@ -7,7 +7,7 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
-import { measureGrid, installGestures, cellSide, valueFont, dragging, resizing, gestureInFlight } from './grid.js'
+import { measureGrid, installGestures, cellSignal, valueFont, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
@@ -138,14 +138,14 @@ function exposeForTests() {
 
   Object.assign(window, {
     devices: deviceProxy,
-    measureGrid, fmtValue, valueFont,
+    measureGrid, fmtValue, valueFont, fitValues,
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
-    cellSide: { get: () => cellSide() },
+    cellSide: { get: () => cellSignal.value },
     dragging: { get: () => dragging.value },
     resizing: { get: () => resizing.value },
     gestureInFlight: { get: () => gestureInFlight() },

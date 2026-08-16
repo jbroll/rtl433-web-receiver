@@ -1,24 +1,38 @@
 import { memo } from 'preact/compat'
 import { useLayoutEffect, useEffect, useRef } from 'preact/hooks'
+import { computed } from '@preact/signals'
 import { devices } from './devices.js'
 import { cardState, cardEntry, visibleValues, bottomFields, setCardHidden } from './store.js'
 import { aliasOf, displayName, postAlias } from './alias.js'
 import { splitUnit, fmtValue, ageText } from './units.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
-         measureGrid, fitValues, valueFont, textWidthEm,
+         measureGrid, fitValues, valueFont, textWidthEm, cellSignal,
          trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize } from './grid.js'
 import { tick } from './tick.js'
+
+const shownKeys = computed(() => {
+  const order = cardState.value.order
+  const hidden = cardState.value.hidden
+  const result = order.filter(k => devices.value.has(k) && !hidden.includes(k))
+  console.log('[shownKeys] computed', { order, hidden, result })
+  return result
+})
 
 export function CardsView() {
   const gridRef = useRef(null)
 
-  // Run fitValues synchronously after DOM updates but before paint
+  // Read cellSignal to trigger re-render on cell size changes (resize)
+  cellSignal.value
+
+  // measureGrid on render (synchronous, before paint)
   useLayoutEffect(() => {
-    if (gridRef.current) {
-      measureGrid()
-      fitValues()
-    }
-  }, [devices.value.size, cardState.value])
+    if (gridRef.current) measureGrid()
+  })
+
+  // fitValues runs after paint, after all layout effects (including trackFit) have completed
+  useEffect(() => {
+    if (gridRef.current) fitValues()
+  })
 
   // Handle window resize
   useEffect(() => {
@@ -32,8 +46,8 @@ export function CardsView() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const keys = cardState.value.order.filter(k => devices.value.has(k))
-  const shown = keys.filter(k => !cardState.value.hidden.includes(k))
+  // Use computed signal for reactive shown keys
+  const shown = shownKeys.value
 
   return (
     <div id="cards" ref={gridRef}>
@@ -57,6 +71,7 @@ function areEqual(props, otherProps) {
 }
 
 const Card = memo(function Card({ rec }) {
+  console.log('[Card] rendering', rec.key)
   const key = rec.key
   const c = cardEntry(key)
   const merged = rec.merged.value
@@ -195,10 +210,12 @@ function Value({ rec, field, font, cardKey }) {
         beginDrag(ev, ev.target.closest('.card'), ev.currentTarget)
       }}
     >
-      <div class="fn">{parts.name}</div>
+      <div class="fn">
+        <span>{parts.name}</span>
+        {parts.unit && <span class="u">{parts.unit}</span>}
+      </div>
       <div class="fv" ref={valRef} style={fvStyle}>
         {num}
-        {parts.unit && <span class="u">{parts.unit}</span>}
       </div>
     </div>
   )

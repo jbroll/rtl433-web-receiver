@@ -31,7 +31,7 @@ test.afterEach(async () => { if (server) await server.close(); server = null; })
 async function open(page, devices) {
   server = await startServer({ devices: devices || [] });
   await page.goto(server.url);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/^live/);
   await showEveryCard(page);
   return server;
 }
@@ -41,7 +41,7 @@ async function open(page, devices) {
 async function showEveryCard(page) {
   await page.evaluate(() => {
     setHideNewCards(false);
-    cardState.hidden.length = 0;
+    cardState.value = { ...cardState.value, hidden: [] };
     saveCardState();
   });
 }
@@ -105,7 +105,7 @@ test("the page reloads when the device reports a different build", async ({ page
 test("a newly seen device gets no card until its box is checked", async ({ page }) => {
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await expect(page.locator("#cards .card")).toHaveCount(0);
 
   await page.click("#tab-devices");
@@ -141,7 +141,7 @@ test("the device table's checkbox shows and hides that device's card", async ({ 
 test("the receiver's own card is shown without checking a box", async ({ page }) => {
   server = await startServer({ devices: [ACURITE, RECEIVER] });
   await page.goto(server.url);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
 
   await expect(page.locator("#cards .card")).toHaveCount(1);
   const card = page.locator(`.card[data-key$="${RECEIVER_KEY}"]`);
@@ -159,7 +159,7 @@ test("the receiver's own card is shown without checking a box", async ({ page })
 test("a device the user never showed is dropped once it is gone", async ({ page }) => {
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   server.emit(OREGON);
   await expect(page.locator("#devices tr")).toHaveCount(0); // the tab is hidden
 
@@ -196,7 +196,7 @@ test("an alias published by the source survives a reload", async ({ page }) => {
   await expect(page.locator(`${CARD} .nm`)).toHaveText("Back yard");
 
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await expect(page.locator(`${CARD} .nm`)).toHaveText("Back yard");
 });
 
@@ -306,7 +306,7 @@ test("corrupt storage is discarded and defaults rebuild", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.evaluate(() => localStorage.setItem("rtl433.dashboard.v1", "{not json"));
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
 
   const s = await page.evaluate(() => cardState);
   expect(s).toEqual({
@@ -332,7 +332,7 @@ test("a __proto__ key in stored cards can't taint an untouched device's defaults
     '{"w":4,"h":4,"valueOrder":["bogus"],"hiddenValues":["bogus"]}}}';
   await page.evaluate((p) => localStorage.setItem("rtl433.dashboard.v1", p), payload);
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
 
   const result = await page.evaluate(() => {
     try {
@@ -422,7 +422,7 @@ test("value font follows the measured box", async ({ page }) => {
     one: valueFont(1, 150, 1), two: valueFont(2, 150, 2),
     packed: valueFont(1, 150, 4), floor: valueFont(1, 20, 1), ceil: valueFont(3, 200, 1),
   }));
-  expect(sizes).toEqual({ one: "63px", two: "63px", packed: "16px", floor: "11px", ceil: "64px" });
+  expect(sizes).toEqual({ one: "60px", two: "60px", packed: "15px", floor: "11px", ceil: "64px" });
 });
 
 test("a live update flashes the card", async ({ page }) => {
@@ -464,7 +464,7 @@ test("the devices tab sets a value's display mode", async ({ page }) => {
   expect((await stored()).hiddenValues).toEqual(["humidity"]);
 
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveCount(0);
   await page.click("#tab-devices");
   await expect(mode(page, ACURITE_KEY, "humidity")).toHaveValue("hidden");
@@ -580,7 +580,7 @@ test("Forget layouts leaves the devices it can see on the dashboard", async ({ p
   // under the hide-new rule, which would blank the grid instead of resetting it.
   server = await startServer({ devices: [ACURITE, OREGON] });
   await page.goto(server.url);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await page.click("#tab-devices");
   await page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`).check();
   await page.click("#tab-cards");

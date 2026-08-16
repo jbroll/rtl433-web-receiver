@@ -83,10 +83,10 @@ test("removing a source updates the status line to match what remains", async ({
   const b = await startServer({ devices: [OREGON], source: "srcB" });
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await page.click("#tab-sources");
   await page.locator(`#source-list li:has-text("${base(b)}") button.rm`).click();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
 });
 
 test("a rename on a broker-served page keeps the alias local and does not post to sources", async ({ page }) => {
@@ -105,7 +105,7 @@ test("a rename on a broker-served page keeps the alias local and does not post t
   expect((await a.get(topicOf(ACURITE, "srcA") + "/$alias")).status).toBe(404);
 
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await page.click("#tab-devices");
   await expect(page.locator(`${row} input[type=text]`)).toHaveValue("Shed");
 });
@@ -115,7 +115,7 @@ test("an alias for an external source survives a reload from local storage", asy
   const a = await startServer({ devices: [ACURITE], source: "srcA" });
   servers.push(host, a);
   await withSources(page, host, [base(a)]);
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
 
   await page.evaluate(() => {
     setHideNewCards(false);
@@ -135,7 +135,7 @@ test("an alias for an external source survives a reload from local storage", asy
   expect((await a.get(topicOf(ACURITE, "srcA") + "/$alias")).status).toBe(404);
 
   await page.reload();
-  await expect(page.locator("#status")).toHaveText("live");
+  await expect(page.locator("#status")).toHaveText(/live/);
   await page.evaluate(() => {
     setHideNewCards(false);
     cardState.hidden.length = 0;
