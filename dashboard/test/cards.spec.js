@@ -41,7 +41,7 @@ async function open(page, devices) {
 async function showEveryCard(page) {
   await page.evaluate(() => {
     setHideNewCards(false);
-    cardState.value = { ...cardState.value, hidden: [] };
+    cardState = { ...cardState, hidden: [] };
     saveCardState();
   });
 }
