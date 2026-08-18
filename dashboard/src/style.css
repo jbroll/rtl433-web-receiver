@@ -160,3 +160,15 @@ section[hidden] { display:none; }
 .cval .big { font-size:clamp(11px,34cqh,64px); font-variant-numeric:tabular-nums;
              line-height:1.05; }
 .cval .ctext { font-size:clamp(9px,16cqh,22px); overflow:hidden; }
+#settings-location { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line); }
+#settings-location .row { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 0;
+                          margin-bottom:.35rem; }
+#settings-location input { font:inherit; font-size:.85rem; padding:.1rem .3rem; background:Canvas;
+                           color:inherit; border:1px solid var(--line); margin-left:.35rem; }
+#settings-location input[type=number] { width:7rem; }
+#settings-location button { font:inherit; font-size:.8rem; padding:.15rem .6rem; background:Canvas;
+                            color:inherit; border:1px solid var(--line); cursor:pointer;
+                            margin-right:.5rem; }
+#settings-place-results { list-style:none; margin:.2rem 0 .5rem; padding:0; max-width:34rem; }
+#settings-place-results button { display:block; width:100%; text-align:left; margin:0 0 .15rem; }
+#settings-location-status { font-size:.8rem; opacity:.7; }

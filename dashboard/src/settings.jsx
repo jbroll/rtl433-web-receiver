@@ -1,4 +1,5 @@
 import { settings, setUnits, setDecimals, setCustomField } from './settings.js'
+import { LocationView } from './location.jsx'
 
 const DECIMALS = [0, 1, 2, 3, 4, 5]
 
@@ -46,6 +47,7 @@ export function SettingsView() {
           ))}
         </div>
       )}
+      <LocationView />
     </details>
   )
 }
