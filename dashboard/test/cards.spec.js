@@ -413,7 +413,7 @@ test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await expect(card.locator(".rs")).toHaveText("-72");
   await expect(card.locator(".val")).toHaveCount(3);
   await expect(card.locator('.val[data-f="battery_ok"]')).toHaveCount(0);
-  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toContainText("71.2");
+  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toContainText("21.8");
   await expect(card.locator(".age")).not.toBeEmpty();
 });
 
@@ -653,7 +653,7 @@ test("a bottom value carries its label, reading and unit", async ({ page }) => {
 
   const strip = page.locator(CARD + " .btm");
   await expect(strip.locator(".bn").last()).toHaveText("temperature");
-  await expect(strip.locator(".bv").last()).toHaveText("71.2°F");
+  await expect(strip.locator(".bv").last()).toHaveText("21.8°C");
   await expect(page.locator(CARD + ' .val[data-f="temperature_F"]')).toHaveCount(0);
 });
 

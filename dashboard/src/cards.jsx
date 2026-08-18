@@ -3,7 +3,8 @@ import { useLayoutEffect, useEffect, useRef } from 'preact/hooks'
 import { devices } from './devices.js'
 import { cardState, cardEntry, visibleValues, bottomFields, setCardHidden } from './store.js'
 import { aliasOf, displayName, postAlias } from './alias.js'
-import { splitUnit, fmtValue, ageText } from './units.js'
+import { ageText, displayValue } from './units.js'
+import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, valueFont, textWidthEm, cellSignal,
          trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize, computeUniformFontSize } from './grid.js'
@@ -15,6 +16,7 @@ export function CardsView() {
   // Read cellSignal and cardState to trigger re-render on changes
   cellSignal.value
   cardState.value
+  settings.value
 
   // measureGrid on render (synchronous, before paint)
   useLayoutEffect(() => {
@@ -181,8 +183,7 @@ function Body({ rec, vis, h, w, cardKey }) {
 }
 
 function Value({ rec, field, font, cardKey }) {
-  const parts = splitUnit(field)
-  const num = fmtValue(rec.merged.value[field])
+  const d = displayValue(field, rec.merged.value[field], settings.value)
   const fvStyle = { fontSize: font }
   const valRef = useRef(null)
 
@@ -194,9 +195,9 @@ function Value({ rec, field, font, cardKey }) {
     if (card) {
       const valParent = valEl.parentNode
       const rowHeight = valParent ? valParent.clientHeight : 0
-      trackFit(valEl, card, textWidthEm(num, parts.unit), rowHeight)
+      trackFit(valEl, card, textWidthEm(d.num, d.unit), rowHeight)
     }
-  }, [num, parts.unit, font])
+  }, [d.num, d.unit, font])
 
   return (
     <div
@@ -209,11 +210,11 @@ function Value({ rec, field, font, cardKey }) {
       }}
     >
       <div class="fn">
-        <span>{parts.name}</span>
-        {parts.unit && <span class="u">{parts.unit}</span>}
+        <span>{d.name}</span>
+        {d.unit && <span class="u">{d.unit}</span>}
       </div>
       <div class="fv" ref={valRef} style={fvStyle}>
-        {num}
+        {d.num}
       </div>
     </div>
   )
@@ -226,11 +227,11 @@ function BottomStrip({ rec }) {
   return (
     <div class="btm">
       {bottom.map(f => {
-        const parts = splitUnit(f)
+        const d = displayValue(f, rec.merged.value[f], settings.value)
         return (
           <span key={f}>
-            <span class="bn">{parts.name}</span>
-            <span class="bv">{fmtValue(rec.merged.value[f])}{parts.unit}</span>
+            <span class="bn">{d.name}</span>
+            <span class="bv">{d.num}{d.unit}</span>
           </span>
         )
       })}
