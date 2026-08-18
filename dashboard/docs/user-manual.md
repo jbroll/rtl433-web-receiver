@@ -130,7 +130,8 @@ shows only its summary line; expanding it reveals the controls.
 becomes `1` and `1.50` becomes `1.5`.
 
 **Units** chooses between Metric, Imperial, and Custom. Metric is the default.
-Imperial converts temperature to °F, rain to inches, and wind speed to mi/h.
+Imperial converts temperature to °F, rain to inches, and wind speed to mi/h;
+pressure stays in hPa, the metric value.
 Custom exposes four selects — Temperature (°C/°F), Rain (mm/in), Wind
 (km/h/mi/h/m/s), and Pressure (hPa/kPa) — that each apply independently.
 

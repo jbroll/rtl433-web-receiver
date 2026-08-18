@@ -99,8 +99,9 @@ result is `{ name, num, unit }`.
 
 `settings.js` owns the `rtl433.settings.v1` signal, whose value is
 `{ units: "metric" | "imperial" | "custom", decimals: 0–5, custom: { temp, rain, wind, pressure } }`.
-The presets are Metric (°C, mm, km/h, hPa) and Imperial (°F, in, mi/h, hPa). Custom
-stores all four fields independently and leaves them untouched when switching presets.
+The presets are Metric (°C, mm, km/h, hPa) and Imperial (°F, in, mi/h, hPa).
+Choosing a preset overwrites all four custom fields; in Custom mode the four
+fields are stored independently and changed one at a time.
 
 `cards.jsx` and `devices-table.jsx` both render readings through `displayValue`.
 `CardsView` reads the settings signal as a dependency, so any settings change
