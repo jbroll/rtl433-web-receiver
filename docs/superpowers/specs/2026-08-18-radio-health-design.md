@@ -44,7 +44,7 @@ observables:
 | State | Condition | Default |
 |---|---|---|
 | `silent` | no decode for `SILENT_MS`: `millis() - lastDecodeAt > SILENT_MS` | 3 min |
-| `pinned` | `averageRssi` at/below `NOISE_FLOOR_DBM` for the whole confirmation window | -120 dBm |
+| `pinned` | `averageRssi` at/below `NOISE_FLOOR_DBM` across the same `SILENT_MS` window as `silent` | -120 dBm |
 | `frozen` | `averageRssi` byte-identical for `FROZEN_MS` | 5 min |
 
 A healthy floor reads -85 to -115 dBm; a parked standby radio reads its ~-126 floor,
