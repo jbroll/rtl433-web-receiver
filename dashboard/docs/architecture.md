@@ -42,6 +42,10 @@ suppressed in edit mode so a grab cannot start a text selection instead. A drop
 on a card's own slot is a no-op in `store.js`, so dragging a card back where it
 was cannot move it.
 
+The grid flows sparsely (`grid-auto-flow: row`). Dense packing would backfill a
+dropped card into an earlier hole left by mixed card sizes, so a drop into an
+empty cell would reorder the DOM without moving the card on screen.
+
 ## Keys
 
 A device is keyed `<base> <topic>` — the source's base URL, a space, and the topic. A

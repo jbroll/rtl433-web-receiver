@@ -28,7 +28,9 @@ tr.vrow + tr:not(.vrow) td { border-top:1px solid var(--line); }
 #log .nw { white-space:nowrap; }
 #log td { white-space:pre-wrap; word-break:break-all; }
 section[hidden] { display:none; }
-#cards { display:grid; grid-auto-flow:dense; grid-auto-rows:var(--cell,150px);
+/* Sparse, not dense: a drop reorder must land a card at the slot its zone
+   marks, and dense packing would backfill the card into an earlier hole. */
+#cards { display:grid; grid-auto-flow:row; grid-auto-rows:var(--cell,150px);
          justify-content:start; align-content:start; padding:1.6rem 1rem 1rem; }
 /* Not overflow:hidden: the label straddles the top border like a legend, and
    clipping the card would cut its text in half. Everything else that could

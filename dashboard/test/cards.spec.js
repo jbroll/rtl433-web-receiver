@@ -892,6 +892,38 @@ test("a drop beside a tall last card's right edge goes to the end, not the row g
   expect(await keys()).toEqual(fullKeys(THERMO_KEY, OREGON_KEY, RECEIVER_KEY, LONG_KEY, ACURITE_KEY));
 });
 
+test("a card dropped into the empty bottom row beside a tall card moves there", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, RECEIVER, LONGNAME]);
+  await setGrid(page, 6, 2);
+  await setSize(page, ACURITE_KEY, 2, 1);
+  await setSize(page, OREGON_KEY, 2, 1);
+  await setSize(page, RECEIVER_KEY, 1, 1);
+  await setSize(page, LONG_KEY, 3, 2);
+  await page.evaluate(k => {
+    cardState.cards[k].hiddenValues = ["radio_C", "noise_dBm", "heap_kB"];
+    saveCardState();
+  }, storeKey(server, RECEIVER_KEY));
+  await edit(page);
+
+  const REC = `.card:not(.ghostcard)[data-key$="${RECEIVER_KEY}"]`;
+  const from = await page.locator(REC + " .lbl").boundingBox();
+  const before = await page.locator(REC).boundingBox();
+  const tall = await page.locator(LONG_CARD).boundingBox();
+  const grid = await page.locator("#cards").boundingBox();
+
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  // The empty bottom-right cell, beyond the tall card's right edge.
+  await page.mouse.move(grid.x + grid.width - 10, tall.y + tall.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  const after = await page.locator(REC).boundingBox();
+  // Dense packing would backfill the card into its old top-row cell and the
+  // reorder would look like nothing happened; sparse flow moves it to the
+  // bottom row the drop targeted.
+  expect(after.y).toBeGreaterThan(before.y + before.height / 2);
+});
+
 test("a live signal does not re-render mid-drag", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
