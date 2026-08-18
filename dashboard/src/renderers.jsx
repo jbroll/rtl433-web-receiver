@@ -20,13 +20,27 @@ registerValue('text', ({ v }) => (
 registerValue('clock', ({ v }) => {
   tick.value
   const now = new Date()
+  const parts = new Intl.DateTimeFormat(undefined, {
+    timeZone: v.zone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: v.format === '12',
+  }).formatToParts(now)
+
+  const time = parts
+    .filter(p => p.type === 'hour' || p.type === 'literal' || p.type === 'minute')
+    .map(p => p.value)
+    .join('')
+
+  const ampm = parts.find(p => p.type === 'dayPeriod')?.value
+
   return (
     <>
-      <div class="cfn">{v.zone}</div>
-      <div class="big">{new Intl.DateTimeFormat(undefined, {
-        timeZone: v.zone, hour: '2-digit', minute: '2-digit', hour12: false }).format(now)}</div>
-      <div class="csub">{new Intl.DateTimeFormat(undefined, {
-        timeZone: v.zone, second: '2-digit' }).format(now)}s</div>
+      <div class="cfn">
+        <span>{v.label}</span>
+        {ampm && <span>{ampm}</span>}
+      </div>
+      <div class="big">{time}</div>
     </>
   )
 })
