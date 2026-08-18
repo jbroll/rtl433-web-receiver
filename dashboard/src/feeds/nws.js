@@ -95,7 +95,9 @@ export function parseObservation(json) {
 
   set('temperature_C', q(p.temperature))
   set('dewpoint_C', q(p.dewpoint))
-  set('humidity', q(p.relativeHumidity))
+  // NWS reports relative humidity to twelve decimals, which is noise.
+  const rh = q(p.relativeHumidity)
+  set('humidity', rh === null ? null : Math.round(rh * 10) / 10)
   set('wind_avg_km_h', q(p.windSpeed))
   set('wind_max_km_h', q(p.windGust))
   set('wind_dir_deg', q(p.windDirection))

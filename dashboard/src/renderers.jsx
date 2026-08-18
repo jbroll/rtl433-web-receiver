@@ -87,8 +87,13 @@ registerValue('moon', ({ v }) => (
   <>
     <div class="dialbox">
       <svg class="dial disc" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-        <circle cx="50" cy="50" r="46" fill="#8883" />
-        <path d={moonPath(v.illumination, v.waxing)} fill="currentColor" />
+        {/* Heavier than the #8883 used elsewhere, so the lit limb reads
+            against it on a light background as well as a dark one. */}
+        <circle cx="50" cy="50" r="46" fill="#8889" />
+        {/* The lit limb is a fixed pale colour, not currentColor: the moon is
+            pale under either theme, and drawing the lit part in the text
+            colour makes it read as the shadow on a light background. */}
+        <path d={moonPath(v.illumination, v.waxing)} fill="#e8e3d6" />
         <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor"
                 stroke-width="1.2" opacity=".6" />
       </svg>

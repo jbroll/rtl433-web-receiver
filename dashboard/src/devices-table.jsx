@@ -29,7 +29,8 @@ function DeviceRow({ r }) {
   const name = obj && obj.model ? obj.model : shortKey(r.key)
   const flash = r.flashUntil.value > tick.value ? 'flash' : ''
   const id = obj && obj.id !== undefined ? obj.id : (obj && obj.channel !== undefined ? 'ch' + obj.channel : '')
-  const age = ageText(Date.now() - r.seenAt.value)
+  // seenAt 0 marks a record with no arrival time, the same as on a card.
+  const age = r.seenAt.value ? ageText(Date.now() - r.seenAt.value) : ''
   const rssi = r.rssi.value === undefined ? '' : r.rssi.value
   const count = r.count.value === undefined ? '' : r.count.value
 

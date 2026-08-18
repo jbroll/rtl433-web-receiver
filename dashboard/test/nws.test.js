@@ -87,7 +87,7 @@ test('observations come out under rtl_433 field names, in their own units', () =
   assert.equal(o.fields.temperature_C, 20)
   assert.equal(o.fields.wind_avg_km_h, 9.36)
   assert.equal(o.fields.wind_dir_deg, 220)
-  assert.ok(Math.abs(o.fields.humidity - 34.83) < 0.01)
+  assert.equal(o.fields.humidity, 34.8, 'twelve decimals of humidity is noise, not data')
   assert.equal(o.text, 'Clear')
 })
 
