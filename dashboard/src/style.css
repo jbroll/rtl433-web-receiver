@@ -173,3 +173,6 @@ section[hidden] { display:none; }
 #settings-place-results button { display:block; width:100%; text-align:left; margin:0 0 .15rem; }
 #settings-location-status { font-size:.8rem; opacity:.7; }
 .cval .csub { font-size:clamp(8px,12cqh,14px); opacity:.6; font-variant-numeric:tabular-nums; }
+#settings-map { max-width:34rem; margin:.4rem 0; border:1px solid var(--line);
+                border-radius:.4rem; overflow:hidden; }
+#settings-map a { color:inherit; }

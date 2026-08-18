@@ -35,6 +35,8 @@ async function bundle(entry, loader, define) {
     define,
     jsx: 'automatic',
     jsxImportSource: 'preact',
+    // pigeon-maps is a React component and declares react as its only peer.
+    alias: { react: 'preact/compat', 'react-dom': 'preact/compat' },
   })
   return out.outputFiles[0].text
 }

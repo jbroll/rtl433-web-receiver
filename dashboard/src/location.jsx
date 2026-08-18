@@ -1,6 +1,21 @@
 import { useState } from 'preact/hooks'
 import { settings, setLocation, clearLocation, hasLocation, localZone } from './settings.js'
 import { geocode, reverseGeocode } from './geocode.js'
+import { Map, Marker } from 'pigeon-maps'
+
+// pigeon-maps defaults to a provider we do not want; OSM's own tiles are the
+// ones the attribution below credits.
+const osm = (x, y, z) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
+
+const ATTRIBUTION = (
+  <span>&copy; <a href="https://www.openstreetmap.org/copyright"
+                  target="_blank" rel="noreferrer">OpenStreetMap</a> contributors</span>
+)
+
+// Where a newly chosen place lands. The whole-country view the map opens on
+// before a location exists is not a zoom worth keeping.
+const PLACE_ZOOM = 11
+const WORLD = { center: [39.83, -98.58], zoom: 3 }
 
 function zones() {
   try { return Intl.supportedValuesOf('timeZone') } catch (e) { return [] }
@@ -40,7 +55,7 @@ export function LocationView() {
   }
 
   function pick(p) {
-    setLocation({ lat: p.lat, lon: p.lon, label: p.label })
+    setLocation({ lat: p.lat, lon: p.lon, label: p.label, zoom: PLACE_ZOOM })
     setResults([])
     setQuery('')
     setStatus('')
@@ -51,7 +66,7 @@ export function LocationView() {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords
-        setLocation({ lat: latitude, lon: longitude, label: '' })
+        setLocation({ lat: latitude, lon: longitude, label: '', zoom: PLACE_ZOOM })
         setStatus('')
         try { setLocation({ label: await reverseGeocode(latitude, longitude) }) } catch (e) {}
       },
@@ -105,6 +120,26 @@ export function LocationView() {
           </select>
         </label>
         {hasLocation() && <button id="settings-location-clear" onClick={clearLocation}>Clear</button>}
+      </div>
+
+      <div id="settings-map">
+        <Map
+          provider={osm}
+          dprs={[1, 2]}
+          height={220}
+          center={loc.lat === null ? WORLD.center : [loc.lat, loc.lon]}
+          zoom={loc.lat === null ? WORLD.zoom : loc.zoom}
+          attribution={ATTRIBUTION}
+          attributionPrefix={false}
+          onClick={({ latLng }) => setLocation({ lat: latLng[0], lon: latLng[1], label: '' })}
+          onBoundsChanged={({ zoom }) => {
+            // Only once there is a place to zoom on: otherwise the opening
+            // whole-country view overwrites the zoom a pick is about to set.
+            if (loc.lat !== null && Math.round(zoom) !== loc.zoom) setLocation({ zoom: Math.round(zoom) })
+          }}
+        >
+          {loc.lat !== null && <Marker width={34} anchor={[loc.lat, loc.lon]} color="currentColor" />}
+        </Map>
       </div>
 
       <div id="settings-location-status">

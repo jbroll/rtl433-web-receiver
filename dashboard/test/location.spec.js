@@ -3,6 +3,12 @@ import { startServer } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 
 const NOMINATIM = "**/nominatim.openstreetmap.org/**";
+const TILES = "**/tile.openstreetmap.org/**";
+
+// A 1x1 transparent png, so no tile request ever leaves the machine.
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64");
 const BOULDER = [
   { lat: "40.0149856", lon: "-105.2705456", display_name: "Boulder, Boulder County, Colorado, United States" },
   { lat: "39.9944", lon: "-105.1731", display_name: "Boulder County, Colorado, United States" },
@@ -13,6 +19,7 @@ let server;
 test.afterEach(async () => { if (server) await server.close(); server = null; });
 
 async function open(page, route = BOULDER) {
+  await page.route(TILES, r => r.fulfill({ status: 200, contentType: "image/png", body: PIXEL }));
   await page.route(NOMINATIM, r =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(route) }));
   server = await startServer({ devices: [ACURITE] });
@@ -124,4 +131,54 @@ test("the geolocate button fills in the browser's coordinates", async ({ page, c
 
   await expect(page.locator("#settings-lat")).toHaveValue("40.015");
   await expect(page.locator("#settings-lon")).toHaveValue("-105.2705");
+});
+
+test("the map is drawn from OpenStreetMap tiles and credits them", async ({ page }) => {
+  const tiles = [];
+  await page.route(TILES, r => {
+    tiles.push(r.request().url());
+    return r.fulfill({ status: 200, contentType: "image/png", body: PIXEL });
+  });
+  await page.route(NOMINATIM, r =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(BOULDER) }));
+  server = await startServer({ devices: [ACURITE] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.locator("#tab-devices").click();
+  await page.locator("#settings summary").click();
+
+  await expect(page.locator("#settings-map")).toBeVisible();
+  await expect.poll(() => tiles.length).toBeGreaterThan(0);
+  expect(tiles[0]).toMatch(/^https:\/\/tile\.openstreetmap\.org\/\d+\/\d+\/\d+\.png$/);
+  await expect(page.locator("#settings-map")).toContainText("OpenStreetMap");
+  await expect(page.locator("#settings-map")).not.toContainText("Pigeon");
+});
+
+test("picking a search result drops a pin on the map", async ({ page }) => {
+  await open(page);
+  expect(await page.locator("#settings-map svg").count()).toBe(0);
+
+  await page.locator("#settings-place").fill("boulder");
+  await page.locator("#settings-place-go").click();
+  await page.locator("#settings-place-results li").first().locator("button").click();
+
+  await expect(page.locator("#settings-lat")).toHaveValue("40.0149856");
+  expect(await page.locator("#settings-map svg").count()).toBeGreaterThan(0);
+});
+
+test("clicking the map sets the coordinates to the point clicked", async ({ page }) => {
+  await open(page);
+  await page.locator("#settings-place").fill("boulder");
+  await page.locator("#settings-place-go").click();
+  await page.locator("#settings-place-results li").first().locator("button").click();
+  await expect(page.locator("#settings-lat")).toHaveValue("40.0149856");
+
+  const box = await page.locator("#settings-map").boundingBox();
+  await page.mouse.click(box.x + box.width / 2 + 60, box.y + box.height / 2 + 30);
+
+  await expect(page.locator("#settings-lat")).not.toHaveValue("40.0149856");
+  const lat = Number(await page.locator("#settings-lat").inputValue());
+  const lon = Number(await page.locator("#settings-lon").inputValue());
+  expect(Math.abs(lat - 40.015)).toBeLessThan(2);
+  expect(Math.abs(lon + 105.2705)).toBeLessThan(2);
 });

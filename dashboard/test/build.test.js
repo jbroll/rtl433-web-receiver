@@ -25,6 +25,11 @@ const REACHABLE = new Set([
   'https://tile.openstreetmap.org',
 ])
 
+// Link targets, not requests. The first is the attribution the OSM tile usage
+// policy asks for. The second is pigeon-maps' own credit, which the map turns
+// off with attributionPrefix={false} but which stays a literal in the bundle.
+const LINKED = new Set(['https://www.openstreetmap.org', 'https://pigeon-maps.js.org'])
+
 // An XML namespace name and the example text in a placeholder attribute.
 // Neither is ever fetched.
 const NOT_A_REQUEST = new Set(['http://www.w3.org', 'http://bridge.local:8080'])
@@ -35,7 +40,8 @@ test('the bundle names no origin beyond the ones the feeds reach', async () => {
     let origin
     try { origin = new URL(match[0]).origin } catch (e) { origin = match[0] }
     if (NOT_A_REQUEST.has(origin)) continue
-    assert.ok(REACHABLE.has(origin), `unexpected origin in the built page: ${origin}`)
+    assert.ok(REACHABLE.has(origin) || LINKED.has(origin),
+      `unexpected origin in the built page: ${origin}`)
   }
 })
 
