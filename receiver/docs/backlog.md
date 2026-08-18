@@ -108,31 +108,29 @@ The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in th
 The page is no longer a lever: it is gzipped, and its size is recorded in
 [`architecture.md`](architecture.md#the-page-the-firmware-serves).
 
-## The partition table uses 4 MB of a 16 MB chip
+## Growing nvs needs the app offset solved first
 
-`platformio.ini` sets `board = esp32s3box` and no `board_build.partitions`, so the build
-inherits Arduino's `default.csv`: `app0` and `app1` at 1.25 MB each, `spiffs` at 1.44 MB,
-4 MB in total. The board and the bootloader header both declare 16 MB, so 12 MB is not
-addressed by any partition. The image is 1,156,725 bytes, 88.3% of `app0` and 7% of the
-chip, which is why the flash figure reads as tight when it is not.
+`partitions.csv` now fills the chip: `app0` and `app1` at 4 MB each, `spiffs` at
+7.875 MB, `coredump` at the end, 16 MB in total. The image sits at 28.4% of `app0`
+rather than 90.9%, and the page is no longer a size question.
 
-A table filling the chip, with NVS given room it will not run out of:
+What the earlier plan here also wanted was a 1 MB `nvs`, with room for the WiFi
+provisioning below. That part is not done, and it is not a free change.
+espressif32@6.1.0 writes otadata at `0xe000` and the application at `0x10000`
+whatever `partitions.csv` says: it only uses the file to generate the table at
+`0x8000`. A table that moves `app0` leaves it blank, and the board boot-loops with
+`rst:0x3 (RTC_SW_SYS_RST)` straight after the second-stage bootloader's `entry`
+line. Erasing flash does not help, because the app was never written where the
+table points.
 
-| Partition | Type | Subtype | Offset | Size |
-|---|---|---|---|---|
-| `nvs` | data | nvs | `0x9000` | `0x100000` (1 MB) |
-| `otadata` | data | ota | `0x109000` | `0x2000` |
-| `app0` | app | ota_0 | `0x110000` | `0x400000` (4 MB) |
-| `app1` | app | ota_1 | `0x510000` | `0x400000` (4 MB) |
-| `spiffs` | data | spiffs | `0x910000` | `0x6E0000` (6.875 MB) |
-| `coredump` | data | coredump | `0xFF0000` | `0x10000` |
+So `nvs`, `otadata` and `app0` keep their conventional offsets, and everything
+after `app0` grew instead. Moving `nvs` needs whatever knob makes the platform
+write the app somewhere else, verified against the upload log's `Wrote ... at 0x`
+lines before flashing.
 
-App partitions need 64 KB alignment, which is what leaves the 20 KB gap after `otadata`.
-The image would sit at 27.6% of `app0`, and `MY_DEVICES` stops being a size question.
-
-`nvs` moves and grows, so the alias table is erased on the first boot after reflashing.
-`esptool read_flash 0x9000 0x5000 nvs.bin` before the change captures it; restoring is a
-`POST` per alias, or the SSE replay read back through `GET /events`.
+`monitor.py --baud 115200` is how the boot loop was read. The application talks at
+921600 and prints nothing when it never gets that far, so only the ROM bootloader's
+own output shows the fault.
 
 ## WiFi credentials are compiled into the image
 

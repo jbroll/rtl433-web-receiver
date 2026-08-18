@@ -61,15 +61,33 @@ every other response uses, so a slow reader is dropped rather than stalling `loo
 There is no uncompressed fallback: every browser that can run the page sends
 `Accept-Encoding: gzip`.
 
-The two PROGMEM literals it replaced were 36,819 bytes against a build at 90.4% of flash.
-Measured as a linked-size difference with `pio run -e esp32s3-generic` across the commit
-that made the change:
+The two PROGMEM literals it replaced were 36,819 bytes. Measured as a linked-size
+difference with `pio run -e esp32s3-generic` across the commit that made the change:
+1,184,653 bytes before, 1,156,725 after, a difference of 27,928.
 
-| | Flash |
-|---|---|
-| Before | 1,184,653 bytes, 90.4% |
-| After | 1,156,725 bytes, 88.3% |
-| Difference | 27,928 bytes |
+Those percentages, and the ones this file used to quote, were of Arduino's `default.csv`
+`app0` at 1.25 MB. `partitions.csv` now gives `app0` 4 MB of the 16 MB chip, so the page
+costs a share of that instead: 42,352 bytes of an image at 28.4%.
+
+## The partition table
+
+`board_build.partitions = partitions.csv` in `platformio.ini`. `board = esp32s3box`
+declares 16 MB and the chip reports 16 MB, but Arduino's `default.csv` addresses only the
+first 4 MB, which is why the app read as nearly full while using 7% of the flash.
+
+| Partition | Type | Offset | Size |
+|---|---|---|---|
+| `nvs` | data | `0x9000` | 20 KB |
+| `otadata` | data | `0xe000` | 8 KB |
+| `app0` | app | `0x10000` | 4 MB |
+| `app1` | app | `0x410000` | 4 MB |
+| `spiffs` | data | `0x810000` | 7.875 MB |
+| `coredump` | data | `0xff0000` | 64 KB |
+
+`nvs`, `otadata` and `app0` keep the offsets they have in every Espressif layout, and
+they have to: espressif32@6.1.0 uses this file only to generate the table at `0x8000`
+and writes the application at a hardcoded `0x10000` regardless. A table that moves
+`app0` leaves it blank and the board boot-loops. See the backlog.
 
 ## Data flow
 

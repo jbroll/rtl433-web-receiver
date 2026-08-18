@@ -112,8 +112,7 @@
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.
-- Flash headroom is now thin. The embedded page went from 22,872 to 42,352
-  bytes, taking the `esp32s3-generic` app partition from 89.4% to 90.9% of the
-  default 1.3MB, with about 119KB left. The map picker is 10.4KB of that
-  increase. A custom partition table, or dropping the map, is the lever if the
-  firmware needs room.
+- Page size is no longer a flash constraint. The embedded page went from 22,872
+  to 42,352 bytes, which took the app partition to 90.9% of Arduino's default
+  1.25MB; `receiver/partitions.csv` now gives `app0` 4MB of the 16MB chip and
+  the image sits at 28.4%.
