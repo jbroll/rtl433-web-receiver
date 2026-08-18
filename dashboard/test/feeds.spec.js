@@ -125,10 +125,7 @@ test("hiding one value on a feed card leaves the rest", async ({ page }) => {
   const before = await page.locator(`${CLOCK} .val`).count();
 
   await page.evaluate(() => {
-    const s = cardState;
-    s.cards["local feed/Clock"].hiddenValues = ["dst"];
-    cardState = { ...s };
-    saveCardState();
+    setValueMode("local feed/Clock", "dst", "hidden");
   });
 
   await expect(page.locator(`${CLOCK} .val`)).toHaveCount(before - 1);
