@@ -435,6 +435,24 @@ test("value font follows the measured box", async ({ page }) => {
   expect(sizes).toEqual({ one: "60px", two: "60px", packed: "15px", floor: "11px", ceil: "64px" });
 });
 
+test("resizing while scrolled fits to the same font as a fresh load", async ({ page }) => {
+  await open(page, [ACURITE]);
+  const font = () => page.locator(CARD + " .fv").first().evaluate(n => getComputedStyle(n).fontSize);
+  await page.evaluate(() => {
+    document.body.style.minHeight = "4000px";
+    window.scrollTo(0, 250);
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const resized = await font();
+
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText(/live/);
+  await showEveryCard(page);
+  const reloaded = await font();
+
+  expect(resized).toBe(reloaded);
+});
+
 test("a live update flashes the card", async ({ page }) => {
   await open(page, [ACURITE]);
   server.emit(ACURITE);

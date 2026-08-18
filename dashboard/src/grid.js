@@ -16,7 +16,9 @@ export function measureGrid() {
   const g = gridSize()
   const cs = getComputedStyle(grid)
   const width = grid.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-  const height = window.innerHeight - grid.getBoundingClientRect().top
+  // rect.top is viewport-relative, so scroll position would shift the fit.
+  const top = grid.getBoundingClientRect().top + window.scrollY
+  const height = window.innerHeight - top
                  - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
   cell = Math.max(20, Math.min(width / g.cols, height / g.rows))
   cellSignal.value = cell
