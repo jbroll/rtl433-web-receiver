@@ -7,6 +7,7 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
+import { loadSettings } from './settings.js'
 import { measureGrid, installGestures, cellSignal, valueFont, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
@@ -160,6 +161,7 @@ store.loadCardState()
 loadAliases()
 loadSort()
 loadSources()
+loadSettings()
 installGestures()
 
 const stored = storageState()

@@ -145,3 +145,8 @@ section[hidden] { display:none; }
 .ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.85; margin:0;
              border:1px solid var(--line); border-radius:.7rem; background:Canvas;
              box-shadow:0 4px 12px #0003; }
+
+#settings { padding:.6rem 1rem; border-bottom:1px solid var(--line); }
+#settings summary { cursor:pointer; font-weight:600; }
+#settings label { margin-right:1rem; white-space:nowrap; }
+#settings select { font:inherit; background:Canvas; color:inherit; border:1px solid var(--line); }

@@ -4,6 +4,7 @@ import { sourceState } from './sources.js'
 import { SourcesView } from './sources.jsx'
 import { LogView } from './log.jsx'
 import { DevicesView } from './devices-table.jsx'
+import { SettingsView } from './settings.jsx'
 import { CardsView } from './cards.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
 
@@ -40,6 +41,7 @@ export function App() {
         <Status />
       </header>
       <section id="view-devices" hidden={tab.value !== 'devices'}>
+        <SettingsView />
         <DevicesView />
       </section>
       <LogView />
