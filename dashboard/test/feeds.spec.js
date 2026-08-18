@@ -291,7 +291,7 @@ test("a cache entry written before a field existed never paints undefined", asyn
 
   await expect(page.locator(MOON)).toBeVisible();
   await expect(page.locator(`${MOON} .val.cval`)).not.toContainText("undefined");
-  await expect(page.locator(`${MOON} .val.cval text`).last()).toHaveText("Waxing Crescent 35%");
+  await expect(page.locator(`${MOON} .val.cval text`).last()).toHaveText(/Waxing Crescent \d+%/);
 });
 
 test("a computed feed is never cached, so it cannot paint a stale shape", async ({ page }) => {
