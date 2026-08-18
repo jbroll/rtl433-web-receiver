@@ -89,3 +89,37 @@ test('a grid axis outside 1-24 is refused and the stored value kept', () => {
   store.setGrid('cols', 99)
   assert.equal(store.grid().cols, 8)
 })
+
+const FEED = 'local feed/Sun'
+const SUN = { sunrise: '05:42', sunset: '20:11' }
+
+test('autoShow leaves a new card visible even when new cards hide', () => {
+  store.ensureCard(FEED, SUN, { autoShow: true })
+  assert.equal(store.cardHidden(FEED), false)
+})
+
+test('autoShow does not undo a later user hide', () => {
+  store.ensureCard(FEED, SUN, { autoShow: true })
+  store.setCardHidden(FEED, true)
+  store.ensureCard(FEED, SUN, { autoShow: true })
+  assert.equal(store.cardHidden(FEED), true)
+})
+
+test('a hidden feed keeps its layout across a save', () => {
+  store.ensureCard(FEED, SUN, { autoShow: true })
+  store.setCardSize(FEED, 3, 2)
+  store.setCardHidden(FEED, true)
+  store.saveCardState()
+
+  assert.ok(store.cardEntry(FEED), 'feed layout was pruned away')
+  assert.equal(store.cardEntry(FEED).w, 3)
+  assert.equal(store.cardEntry(FEED).h, 2)
+})
+
+test('a hidden radio device with no record is still pruned', () => {
+  store.ensureCard(K, READ)
+  store.setCardHidden(K, true)
+  store.saveCardState()
+
+  assert.equal(store.cardEntry(K), undefined)
+})

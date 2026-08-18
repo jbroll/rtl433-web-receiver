@@ -240,6 +240,10 @@ function BottomStrip({ rec }) {
 }
 
 function Age({ rec }) {
+  // seenAt 0 marks a record with no arrival time: a feed computed from the
+  // system clock is never stale, so an age would be noise.
+  if (!rec.seenAt.value) return null
+
   return (
     <div class="age">
       {ageText(Date.now() - rec.seenAt.value)}

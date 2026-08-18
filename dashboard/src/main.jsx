@@ -139,6 +139,7 @@ function exposeForTests() {
 
   Object.assign(window, {
     devices: deviceProxy,
+    upsert,
     measureGrid, fmtValue, valueFont, fitValues,
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,

@@ -1,12 +1,16 @@
 import { signal } from '@preact/signals'
 import { sources } from './sources.js'
+import { isFeed } from './alias.js'
 
 export const devices = signal(new Map())
 
 function trim() {
   const cap = DEVICE_MAX * sources.value.length
-  if (devices.value.size <= cap) return
-  const stale = [...devices.value.values()].sort((a, b) => b.seenAt.value - a.seenAt.value).slice(cap)
+  // Feed records are app-generated and bounded, and they are exempt from the
+  // cap: it scales with configured sources, so it is zero until one is added.
+  const radio = [...devices.value.values()].filter(d => !isFeed(d.key))
+  if (radio.length <= cap) return
+  const stale = radio.sort((a, b) => b.seenAt.value - a.seenAt.value).slice(cap)
   for (const d of stale) devices.value.delete(d.key)
   devices.value = devices.value
 }
@@ -41,7 +45,7 @@ export function upsert(rec) {
 export function clearSource(base) {
   const next = new Map(devices.value)
   for (const key of next.keys()) {
-    if (key.startsWith(`${base} `)) next.delete(key)
+    if (!isFeed(key) && key.startsWith(`${base} `)) next.delete(key)
   }
   devices.value = next
 }

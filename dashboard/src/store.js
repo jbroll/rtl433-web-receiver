@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 import { devices } from './devices.js'
-import { aliases, isSelf } from './alias.js'
+import { aliases, isSelf, isFeed } from './alias.js'
 import { STATUS_FIELDS } from './units.js'
 
 const CARDS_KEY = 'rtl433.dashboard.v1'
@@ -68,8 +68,10 @@ export function loadCardState() {
 
 function pruneCardState() {
   const s = cardState.value
+  // A feed with no location set has no device record yet; dropping it here
+  // would discard its saved size and value layout before it ever runs.
   const keep = new Set(s.order.filter(
-    k => devices.value.has(k) || !cardHidden(k) || aliases.value.has(k)))
+    k => devices.value.has(k) || isFeed(k) || !cardHidden(k) || aliases.value.has(k)))
   s.order = s.order.filter(k => keep.has(k))
   s.hidden = s.hidden.filter(k => keep.has(k))
   for (const k of Object.keys(s.cards)) if (!keep.has(k)) delete s.cards[k]
@@ -83,7 +85,7 @@ export function saveCardState() {
   bump()
 }
 
-export function ensureCard(key, merged) {
+export function ensureCard(key, merged, opts) {
   const s = cardState.value
   let c = s.cards[key]
   const fields = Object.keys(merged || {})
@@ -94,7 +96,10 @@ export function ensureCard(key, merged) {
       bottomValues: fields.filter(f => STATUS_FIELDS.has(f)),
     }
     s.cards[key] = c
-    if (hideNewCards && !isSelf(key) && s.hidden.indexOf(key) < 0) {
+    // autoShow only applies to a card being created. Applying it on every
+    // call would undo a later user hide every time the card refreshed.
+    const autoShow = opts && opts.autoShow
+    if (hideNewCards && !autoShow && !isSelf(key) && s.hidden.indexOf(key) < 0) {
       s.hidden.push(key)
     }
   } else {

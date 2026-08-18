@@ -16,6 +16,12 @@ export function shortKey(key) { return topicOf(key).split('/').slice(1).join('/'
 
 export function isSelf(key) { return topicOf(key).split('/')[1] === 'Receiver' }
 
+// Feeds are app-generated cards, not radio devices. normalizeBase only ever
+// yields an http(s) URL, so this base cannot collide with a real source.
+export const FEED_BASE = 'local'
+
+export function isFeed(key) { return sourceOf(key) === FEED_BASE }
+
 export function aliasOf(key) { return aliases.value.get(key) || '' }
 
 export function displayName(key) { return aliasOf(key) || shortKey(key) }
