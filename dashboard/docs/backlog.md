@@ -75,7 +75,8 @@
 - `test/cards.spec.js`'s `[data-key$="…"]` selectors are unanchored tail matches,
   unambiguous only while a spec file runs a single source. A second source added to that
   file would make a suffix match two rows, and the failure would look like a page bug
-  rather than a test that needs `:not(.vrow)`-style narrowing.
+  rather than a test that needs `:not(.vrow)`-style narrowing. The drag ghost now clones
+  the card, key included, so the card selectors already carry `:not(.ghostcard)`.
 - `dashboard/README.md` carries the install and build commands and the test commands.
   The bridge splits the same material into `docs/install.md` and `docs/development.md`.
   The dashboard should match.

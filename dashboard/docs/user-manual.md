@@ -5,9 +5,15 @@ indicator in the header reads `connecting`, `live`, or `reconnecting`.
 
 ## Drag-and-drop in edit mode
 
-In edit mode, press and drag a card's label to reorder cards. Press and drag a
-value inside a card to reorder values within that card. While dragging, a ghost
-shows what is being moved and the active drop zone highlights where it will land.
+In edit mode, press and drag a card's label to reorder cards, and a value
+inside a card to reorder values within that card. A ghost of the card or value
+follows the cursor, and the active drop zone highlights where it will land:
+before the first card, between cards, in the gap between rows, or after the
+last card. Dropping a card onto the slot it already sits in leaves it where it
+is.
+
+Edit mode blocks text selection, so a drag can't turn into a browser text
+selection; the rename box still accepts its own text.
 
 ## Devices
 

@@ -66,7 +66,6 @@ function areEqual(props, otherProps) {
 }
 
 const Card = memo(function Card({ rec }) {
-  console.log('[Card] rendering', rec.key)
   const key = rec.key
   const c = cardEntry(key)
   const merged = rec.merged.value
@@ -88,6 +87,7 @@ const Card = memo(function Card({ rec }) {
         if (ev.target.closest('button') || ev.target.closest('input')) return
         beginDrag(ev, ev.currentTarget, ev.target.closest('.val'))
       }}
+      onDragStart={(ev) => { if (editing.value) ev.preventDefault() }}
     >
       <Label rec={rec} />
       <Body rec={rec} vis={vis} h={h} w={w} cardKey={key} />

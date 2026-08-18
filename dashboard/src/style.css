@@ -88,6 +88,8 @@ section[hidden] { display:none; }
 #grid-size input { font-size:.75rem; width:3.2rem; padding:.3rem .35rem;
                    border-radius:1.2rem; text-align:center; }
 #view-cards.editing .card { cursor:grab; touch-action:none; }
+#view-cards.editing { user-select:none; -webkit-user-select:none; }
+#view-cards.editing input { user-select:text; -webkit-user-select:text; }
 .lifting { opacity:.35; }
 .card .cx { position:absolute; top:.25rem; left:.3rem; z-index:1; font-size:.7rem;
             line-height:1; padding:.15rem .3rem; border-radius:.3rem; cursor:pointer;
@@ -138,8 +140,6 @@ section[hidden] { display:none; }
   border-radius:.2rem;
 }
 
-.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.85;
+.ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.85; margin:0;
              border:1px solid var(--line); border-radius:.7rem; background:Canvas;
-             padding:.4rem .7rem; font-size:.85rem; box-shadow:0 4px 12px #0003; }
-.ghostcard.card-ghost { min-width:6rem; text-align:center; font-weight:600; }
-.ghostcard.value-ghost { font-size:.75rem; opacity:.9; }
+             box-shadow:0 4px 12px #0003; }

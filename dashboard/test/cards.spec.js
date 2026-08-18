@@ -9,9 +9,10 @@ const FREEZER_KEY = topicOf(FREEZER);
 const RECEIVER_KEY = topicOf(RECEIVER);
 // $= matches an unanchored tail, so this only picks one card as long as a
 // spec runs a single source; a two-source test would need the full key.
-const CARD = `.card[data-key$="${ACURITE_KEY}"]`;
+// :not(.ghostcard) skips the drag ghost, which clones the card's data-key.
+const CARD = `.card:not(.ghostcard)[data-key$="${ACURITE_KEY}"]`;
 const LONG_KEY = topicOf(LONGNAME);
-const LONG_CARD = `.card[data-key$="${LONG_KEY}"]`;
+const LONG_CARD = `.card:not(.ghostcard)[data-key$="${LONG_KEY}"]`;
 const shortKeyOf = payload => topicOf(payload).split("/").slice(1).join("/");
 
 // The dashboard keys a device by its source's base URL and its topic, so a
@@ -684,7 +685,12 @@ test("dragging a card reorders the grid and persists", async ({ page }) => {
   const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
   expect(await keys()).toEqual(fullKeys(ACURITE_KEY, OREGON_KEY, THERMO_KEY));
 
-  await dragTo(page, CARD + " .lbl", `.card[data-key$="${THERMO_KEY}"]`);
+  const from = await page.locator(CARD + " .lbl").boundingBox();
+  const b = await page.locator(`.card[data-key$="${THERMO_KEY}"]`).boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width + 30, b.y + b.height / 2, { steps: 12 });
+  await page.mouse.up();
   expect(await keys()).toEqual(fullKeys(OREGON_KEY, THERMO_KEY, ACURITE_KEY));
 
   await page.reload();
@@ -720,6 +726,8 @@ test("card drag shows only card-level drop zones", async ({ page }) => {
   expect(zones.value).toBe(0);
   await expect(page.locator(".ghostcard.card-ghost")).toHaveCount(1);
   await expect(page.locator(".ghostcard.value-ghost")).toHaveCount(0);
+  await expect(page.locator(".ghostcard.card-ghost .lbl")).toHaveCount(1);
+  await expect(page.locator(".ghostcard.card-ghost .fv").first()).toHaveCount(1);
 
   await page.mouse.up();
   await expect(page.locator(".drop-layer")).toHaveCount(0);
@@ -739,6 +747,7 @@ test("value drag shows only value-level drop zones in the source card", async ({
   expect(zones.value).toBe(1);
   await expect(page.locator(".ghostcard.value-ghost")).toHaveCount(1);
   await expect(page.locator(".ghostcard.card-ghost")).toHaveCount(0);
+  await expect(page.locator(".ghostcard.value-ghost .fv")).toHaveCount(1);
 
   await page.mouse.up();
   await expect(page.locator(".drop-layer")).toHaveCount(0);
@@ -773,6 +782,31 @@ test("cards are inert outside edit mode", async ({ page }) => {
   expect(keys).toEqual(fullKeys(ACURITE_KEY, OREGON_KEY));
 });
 
+test("edit mode blocks text selection", async ({ page }) => {
+  await open(page, [ACURITE]);
+  const sel = () => page.evaluate(() => ({
+    view: getComputedStyle(document.getElementById("view-cards")).userSelect,
+    card: getComputedStyle(document.querySelector("#view-cards .card")).userSelect,
+  }));
+  expect((await sel()).view).toBe("auto");
+  await edit(page);
+  expect((await sel()).view).toBe("none");
+  expect((await sel()).card).toBe("none");
+});
+
+test("native drag is suppressed only in edit mode", async ({ page }) => {
+  await open(page, [ACURITE]);
+  const blocked = () => page.evaluate(() => {
+    const card = document.querySelector("#view-cards .card");
+    const ev = new DragEvent("dragstart", { bubbles: true, cancelable: true });
+    card.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  expect(await blocked()).toBe(false);
+  await edit(page);
+  expect(await blocked()).toBe(true);
+});
+
 test("a press released off the card ends the drag and rendering resumes", async ({ page }) => {
   await open(page, [ACURITE]);
   await edit(page);
@@ -788,7 +822,7 @@ test("a press released off the card ends the drag and rendering resumes", async 
   await expect(page.locator(`.card[data-key$="${OREGON_KEY}"]`)).toHaveCount(1);
 });
 
-test("a card dropped past a midpoint takes that card's slot", async ({ page }) => {
+test("a card dropped in the slot between two cards lands between them", async ({ page }) => {
   await open(page, [ACURITE, OREGON, THERMO]);
   await edit(page);
   const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
@@ -816,6 +850,46 @@ test("a card dropped past the last card lands at the end", async ({ page }) => {
   await page.mouse.up();
 
   expect(await keys()).toEqual(fullKeys(OREGON_KEY, THERMO_KEY, ACURITE_KEY));
+});
+
+test("a card dropped in the slot before itself stays put", async ({ page }) => {
+  await open(page, [ACURITE, OREGON, THERMO]);
+  await edit(page);
+  const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+
+  const oregon = await page.locator(`.card[data-key$="${OREGON_KEY}"]`).boundingBox();
+  const from = await page.locator(`.card[data-key$="${OREGON_KEY}"] .lbl`).boundingBox();
+  const acurite = await page.locator(CARD).boundingBox();
+  const slotX = (acurite.x + acurite.width + oregon.x) / 2;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(slotX, oregon.y + oregon.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  expect(await keys()).toEqual(fullKeys(ACURITE_KEY, OREGON_KEY, THERMO_KEY));
+});
+
+test("a drop beside a tall last card's right edge goes to the end, not the row gap", async ({ page }) => {
+  await open(page, [ACURITE, THERMO, OREGON, RECEIVER, LONGNAME]);
+  await edit(page);
+  await page.evaluate(() => {
+    const cards = [...document.querySelectorAll("#cards .card")];
+    setCardSize(cards[0].dataset.key, 2, 2);
+    setCardSize(cards[1].dataset.key, 2, 1);
+    setCardSize(cards[2].dataset.key, 2, 1);
+    setCardSize(cards[3].dataset.key, 2, 2);
+    setCardSize(cards[4].dataset.key, 3, 3);
+  });
+  const keys = () => page.locator("#cards .card").evaluateAll(n => n.map(c => c.dataset.key));
+
+  const big = await page.locator(`.card[data-key$="${LONG_KEY}"]`).boundingBox();
+  const from = await page.locator(CARD + " .lbl").boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(big.x + big.width + 20, big.y + 30, { steps: 12 });
+  await page.mouse.up();
+
+  expect(await keys()).toEqual(fullKeys(THERMO_KEY, OREGON_KEY, RECEIVER_KEY, LONG_KEY, ACURITE_KEY));
 });
 
 test("a live signal does not re-render mid-drag", async ({ page }) => {

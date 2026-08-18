@@ -180,7 +180,7 @@ export function moveCard(key, beforeKey) {
   const s = cardState.value
   const order = s.order
   const from = order.indexOf(key)
-  if (from < 0) return
+  if (from < 0 || beforeKey === key) return
   order.splice(from, 1)
   const to = beforeKey === null ? order.length : order.indexOf(beforeKey)
   order.splice(to < 0 ? order.length : to, 0, key)
@@ -192,7 +192,7 @@ export function moveValue(key, field, beforeField) {
   if (!c) return
   const order = c.valueOrder
   const from = order.indexOf(field)
-  if (from < 0) return
+  if (from < 0 || beforeField === field) return
   order.splice(from, 1)
   const to = beforeField === null ? order.length : order.indexOf(beforeField)
   order.splice(to < 0 ? order.length : to, 0, field)

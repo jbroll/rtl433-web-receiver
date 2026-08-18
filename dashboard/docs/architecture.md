@@ -22,6 +22,26 @@ Plain ES modules, no framework, bundled by `esbuild` into one `<script>`.
 `render.js` exists because `store.js` has to ask for a redraw and `main.js` has to import
 `store.js`. A callback holder breaks the cycle without an event bus.
 
+## Drag zones
+
+`grid.js` builds the drop zones once, when a drag starts, as fixed rectangles
+over the card or value layout. Card zones come from the grid grouped into
+visual rows: a strip before the first card, one after the last, one between
+horizontally adjacent cards in a row, and a full-width gap strip between rows.
+Rows that interleave when a tall card spans two rows leave no gap, so the strip
+is skipped. Value zones are the same idea inside a card's value grid.
+
+The active zone is the nearest zone *rectangle*, measured to the closest point
+on its edge rather than its center. A drop inside a large zone, such as the
+after-the-last-card slot beside a tall card, must not be stolen by a narrow
+gap strip whose center happens to be nearer.
+
+The ghost is a clone of the card or value being moved, sized to the original,
+with the close and resize handles stripped; the browser's native drag is
+suppressed in edit mode so a grab cannot start a text selection instead. A drop
+on a card's own slot is a no-op in `store.js`, so dragging a card back where it
+was cannot move it.
+
 ## Keys
 
 A device is keyed `<base> <topic>` — the source's base URL, a space, and the topic. A
