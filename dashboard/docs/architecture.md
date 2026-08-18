@@ -201,6 +201,12 @@ worst case. A feed can name values a composite already covers in
 it creates the card. They stay in `valueOrder` and stay reachable from the
 devices table.
 
+The clock renderer emits two variants from the same registration: `local_time_12`
+draws the time with `hour12: true` and splits the AM/PM marker into the header
+beside the zone abbreviation, while `local_time_24` draws the same time with
+`hour12: false` and no marker. Both omit the seconds sub-line and keep the
+`.cval` container-query sizing.
+
 ## Third-party requests
 
 The page still loads with no external request. Once the user sets a location it
