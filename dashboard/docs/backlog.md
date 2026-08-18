@@ -97,8 +97,10 @@
 - Sun events degrade above about 60° latitude, where the sun grazes the horizon
   and a truncated series loses precision. The tests relax to five minutes there.
 - "Use my location" cannot work on the page the receiver serves, because plain
-  http on a LAN address is not a secure context. There is no test for that
-  branch: the harness serves on 127.0.0.1, which counts as secure.
+  http on a LAN address is not a secure context. The automated suite cannot
+  cover that branch, since the harness serves on 127.0.0.1, which counts as
+  secure. Checked by hand against a flashed module: the button is absent and
+  the rest of the location controls work.
 - The DST flag is inferred by comparing offsets across the year and is wrong for
   a zone that changed its rules mid-year.
 - `test/build.test.js` no longer forbids external requests outright; it holds an
