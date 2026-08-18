@@ -121,12 +121,21 @@ receiver's own card and its telemetry fields.
 - 32 aliases
 - 4 concurrent SSE clients, each subscribing up to 4 filters; a fifth client
   evicts the longest-attached one, whose browser reconnects on its own
+- the radio monitors its own health once a minute; a stuck or parked radio is
+  recovered by re-running the radio init, or by rebooting if the init fails.
+  `radio_ok`, `recovery_count`, and `last_recovery_s` on the receiver's card
+  carry the state
 
 ## Testing without a radio
 
 Uncomment `'-DFAKE_SIGNALS=true'` in `platformio.ini`. The sketch injects a
 synthetic decode every 3 seconds and runs `signal_store::selfTest()` at startup,
 printing a PASS/FAIL line per check over serial.
+
+Set `'-DFAKE_RADIO_FAIL_MS=900000'` (15 minutes) to exercise the recovery
+path: the synthetic decode stops and the radio health state moves to `frozen`,
+triggering a soft re-init after the window closes, then a reboot if the
+re-init is not confirmed by a new decode.
 
 `topic.cpp` has no Arduino dependency and is host-tested: `bash test/host/run.sh`
 compiles and runs it on the host.

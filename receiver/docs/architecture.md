@@ -41,6 +41,26 @@ unparseable JSON on the wire. Truncating and then fixing up the JSON is not
 attempted; dropping the message and counting it in `droppedCount()` is
 simpler.
 
+**`radio_health.h` / `radio_health.cpp`** — an Arduino-free decision module,
+host-tested by `test/host/run.sh` like `topic`. It watches the radio through
+two windows: `lastDecodeAt` (time since last decode) and `averageRssi` (mean
+RSSI of the receiver task). Three states — `silent` (no decodes in the
+window), `pinned` (decodes present but RSSI below threshold), `frozen` (no
+decodes and RSSI above threshold) — each with its own recovery action on a
+ladder: `frozen` escalates to `esp_restart()`, `pinned` runs a soft
+re-init (`initReceiver()`), `silent` does nothing. The soft re-init
+increments `recovery_count` in NVS and records the current uptime as
+`last_recovery_s`; any decode confirmed after a soft re-init resets the
+module's state. Backoff doubles on each failed attempt up to `MAX_SOFT_RECOVERY`.
+The window lengths and thresholds are build flags.
+
+**`health_store.h` / `health_store.cpp`** — persists the radio health state
+to `Preferences` namespace `"health"`. Writes are bounded: once at boot
+(`boot_count`, `last_reset_reason`), once on first SNTP sync (`uptime_s`
+baseline), and once per recovery event (`recovery_count`,
+`last_recovery_s`). `radio_ok` is 1 when healthy and 0 while a soft
+re-init has not yet produced a confirmed decode.
+
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. Only `/` and
 `/events` are registered routes; every topic is an arbitrary path, so `GET`
 and `POST` of a topic are both dispatched from `WebServer::onNotFound`, which
@@ -173,6 +193,14 @@ device that starts with its card shown, since it cannot be a false decode.
 | `radio_C` | SX1231 die. RadioLib returns the register negated and uncalibrated; `RADIO_TEMP_OFFSET` (91) corrects it, and the part is only good to ±5 °C, so read it as a trend |
 | `noise_dBm` | `rtl_433_ESP::averageRssi`, the receiver task's mean RSSI. Absent until it has averaged its first batch |
 | `heap_kB` | `ESP.getFreeHeap()` |
+| `uptime_s` | `millis() / 1000` |
+| `boot_count` | NVS counter, incremented each boot |
+| `last_reset_reason` | `esp_reset_reason()` captured in `setup()` |
+| `recovery_count` | NVS counter, incremented per soft re-init |
+| `last_recovery_s` | Uptime at last soft re-init; 0 until the first |
+| `radio_ok` | 1 when healthy; 0 while a soft re-init has yet to produce a confirmed decode |
+| `coredump_pending` | `esp_core_dump_image_check()` at boot; 1 if a dump is present in flash |
+| `rssi_thresh` | `rtl_433_ESP::rssiThreshold` |
 
 The card's corner reading is the WiFi RSSI rather than a decode's. The
 receiver takes one of the 24 device slots, and it is the only device keyed on
@@ -190,6 +218,25 @@ previous value, and the field is absent until the first one succeeds.
 The record does not enter the raw log or the decode count: `signal_store::record`
 takes `isDecode=false` for it, and the page recognises its topic's model
 segment, `Receiver`, and skips the Log tab entry it would otherwise add.
+
+## Radio health and recovery
+
+`radio_health` runs once per telemetry cycle in `loop()`, fed with the current
+`lastDecodeAt` and `averageRssi`. It classifies the radio state as `silent`,
+`pinned`, or `frozen` and returns an action. `pinned` triggers a soft
+re-init: `initReceiver()` re-creates the receiver task and restarts the radio.
+`frozen` escalates to `esp_restart()`. A decode arriving after a soft
+re-init marks the recovery confirmed and resets the health state.
+
+The two SPI users — the receiver task reading RSSI and `loop()` reading the
+temperature register — are serialised by the ESP32 SPI driver's per-bus mutex:
+RadioLib's `ArduinoHal` wraps every register transaction in
+`beginTransaction()/endTransaction()`, which the driver guards. There is no
+race between them.
+
+The temperature read also verifies the OpMode register and recovers immediately
+on failure: if the register read returns an error, the health state goes to
+`frozen` and triggers a reboot on the next cycle.
 
 ## The build id
 

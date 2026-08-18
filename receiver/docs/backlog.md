@@ -40,19 +40,6 @@ alias, and lay out. Nothing else uses it. Three directions, none started:
   A `GET` of a topic from an HA REST sensor works today with no firmware
   change at all, and is the cheapest first step.
 
-## Radio SPI is shared between two tasks with no lock
-
-`rtl_433_ReceiverTask` runs on core 0 and reads RSSI over SPI continuously
-(`rtl_433_ESP.cpp:934`); `radioTemperature()` in `WebReceiver.ino` reads the
-temperature registers from the loop task on core 1. RadioLib's `Module` has no
-mutex. `disableReceiver()` only clears a flag and detaches the interrupt, with
-no acknowledgement that the task has left its body, so the `delay(5)` that
-follows is a heuristic, not a barrier. The measurement is bounded and
-`receiveDirect()`'s return is checked, so a lost transaction costs one sample
-rather than a hung loop, but the race is still there. The fix is to keep all
-radio SPI on one task: a request flag the receiver task picks up at the top of
-its own iteration, publishing the reading back.
-
 ## The library dependency is pinned to a branch, not a commit
 
 `platformio.ini:13` points at `jbroll/rtl_433_ESP#sx1231-support`. PlatformIO
