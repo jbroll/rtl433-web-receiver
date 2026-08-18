@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'preact/hooks'
+import { tab } from './app.jsx'
 import { devices } from './devices.js'
 import { cardFields, cardHidden, setCardHidden, valueMode, setValueMode } from './store.js'
 import { aliasOf, postAlias, shortKey } from './alias.js'
@@ -114,74 +114,23 @@ function SortHeader({ col, children }) {
   )
 }
 
-export function DevicesView() {
-  const skipRenderRef = useRef(false)
-
-  // Track when a select or text input inside tbody has focus
-  // and skip tbody replacement to preserve user interaction
-  useEffect(() => {
-    const handleFocusIn = (e) => {
-      const tbody = document.getElementById('devices')
-      if (tbody && tbody.contains(e.target)) {
-        if (e.target.tagName === 'SELECT' || e.target.type === 'text') {
-          skipRenderRef.current = true
-        }
-      }
-    }
-
-    const handleFocusOut = (e) => {
-      const tbody = document.getElementById('devices')
-      if (tbody && !tbody.contains(e.relatedTarget)) {
-        skipRenderRef.current = false
-      }
-    }
-
-    document.addEventListener('focusin', handleFocusIn)
-    document.addEventListener('focusout', handleFocusOut)
-
-    return () => {
-      document.removeEventListener('focusin', handleFocusIn)
-      document.removeEventListener('focusout', handleFocusOut)
-    }
-  }, [])
-
-  // If the devices tab is hidden, don't update the tbody (preserves legacy behavior)
-  const viewHidden = document.getElementById('view-devices')?.hidden
-  if (viewHidden) {
-    return (
-      <table>
-        <thead>
-          <tr>
-            <SortHeader col="name">Model</SortHeader>
-            <SortHeader col="id">ID</SortHeader>
-            <th>Reading</th>
-            <SortHeader col="rssi">RSSI</SortHeader>
-            <SortHeader col="count">Msgs</SortHeader>
-            <SortHeader col="age">Age</SortHeader>
-            <SortHeader col="alias">Alias</SortHeader>
-            <th>Card</th>
-          </tr>
-        </thead>
-        <tbody id="devices">{/* preserve existing content when hidden */}</tbody>
-      </table>
-    )
-  }
-
-  // Compute sorted devices
-  const sortedDevices = sortDevices(devices.value.values())
-
-  // Build rows
+function Rows() {
   const rows = []
-  for (const r of sortedDevices) {
-    rows.push(<DeviceRow r={r} />)
+  for (const r of sortDevices(devices.value.values())) {
+    rows.push(<DeviceRow key={r.key} r={r} />)
     for (const f of cardFields(r.key, r.merged.value)) {
-      rows.push(<ValueRow rowKey={r.key} field={f} value={r.merged.value[f]} />)
+      rows.push(<ValueRow key={`${r.key} ${f}`} rowKey={r.key} field={f} value={r.merged.value[f]} />)
     }
   }
+  return rows
+}
 
-  const tbody = skipRenderRef.current
-    ? <tbody id="devices">{/* preserve existing content */}</tbody>
-    : <tbody id="devices">{rows}</tbody>
+export function DevicesView() {
+  // Keys let Preact reuse each row's DOM, so a select keeps focus and its
+  // open list across the re-render its own change triggers. Rendering an
+  // empty tbody to "preserve" the rows instead removed every one of them.
+  // Skipped entirely while another tab is up, which is most of the time.
+  const rows = tab.value === 'devices' ? <Rows /> : null
 
   return (
     <table>
@@ -197,7 +146,7 @@ export function DevicesView() {
           <th>Card</th>
         </tr>
       </thead>
-      {tbody}
+      <tbody id="devices">{rows}</tbody>
     </table>
   )
 }

@@ -106,6 +106,9 @@
 - `test/build.test.js` no longer forbids external requests outright; it holds an
   allowlist of three origins instead. A new origin has to be added there
   deliberately, but the check is weaker than it was.
+- The devices table re-renders every row on every packet. It used to skip that
+  while another tab was up by reading the section's `hidden` attribute during
+  render, which is the previous render's value; it now reads the `tab` signal.
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.
