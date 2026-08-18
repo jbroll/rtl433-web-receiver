@@ -26,6 +26,10 @@ export async function deviceMax() {
 async function bundle(entry, loader, define) {
   const out = await build({
     entryPoints: [join(SRC, entry)],
+    // PlatformIO runs this from receiver/, where there is no node_modules.
+    // esbuild resolves alias targets against the working directory, so anchor
+    // it here rather than wherever the caller happened to be.
+    absWorkingDir: HERE,
     bundle: true,
     write: false,
     minify: true,
