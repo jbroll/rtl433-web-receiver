@@ -89,6 +89,10 @@ they have to: espressif32@6.1.0 uses this file only to generate the table at `0x
 and writes the application at a hardcoded `0x10000` regardless. A table that moves
 `app0` leaves it blank and the board boot-loops. See the backlog.
 
+20 KB of `nvs` is about three times what the firmware can put there. Radio calibration
+under `phy/cal_data` is the largest entry at ~1,950 bytes; the WiFi credentials in
+`nvs.net80211` are a few hundred; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB.
+
 ## Data flow
 
 The decoder runs on `rtl_433_DecoderTask`, not the loop task, so
