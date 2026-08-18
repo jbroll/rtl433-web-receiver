@@ -117,6 +117,28 @@ fields are stored independently and changed one at a time.
 triggers a re-fit: font size is recomputed against the new display values and the
 card re-renders with the updated numbers and units.
 
+## Value fit
+
+`fitValues()` in `grid.js` sets the type size of every `.fv`. It measures the
+number on a canvas at 100px once, in `textWidthEm()`, and stores the result as a
+width in ems against the node; the width the box allows is then `box ÷ em` at
+any later size, with no re-measure. The unit is not in that width because it
+renders in the `.fn` header, not beside the number.
+
+Two bounds apply. The width bound is the smallest one the card's own readings
+need, so every reading on a card shares one size and a long reading on another
+card changes nothing. The height bound is what the value box leaves under the
+field name, divided by the line height. The smaller wins, with a floor of 11px.
+
+`fitValues()` is the only writer of `.fv` font size. Setting an initial size in
+the JSX as well would let a re-render put the unfitted size back, which is what
+made a card snap to small type after a grid resize.
+
+A value box on a hidden tab measures zero, so `fitValues()` skips a node it
+cannot measure rather than fitting it to the floor. `CardsView` watches the grid
+with a `ResizeObserver`, which fires when the tab comes back and the boxes get
+their size, and re-fits then.
+
 ## Feed cards
 
 Weather, sun, moon and clock need everything a card already does: ordering,
@@ -157,10 +179,10 @@ existing behaviour and its existing tests.
 
 A rich cell keeps `.val` and `data-f`, because `valueDropZones()` selects on
 both, so drag reordering costs `grid.js` no changes. It never emits `.fv` and
-never calls `trackFit()`, and that is what keeps it out of the page-wide uniform
-font fit: `fitValues()` only sees nodes `trackFit()` registered. The exclusion is
+never calls `trackFit()`, and that is what keeps it out of the font fit:
+`fitValues()` only sees nodes `trackFit()` registered. The exclusion is
 structural rather than a flag because the failure is silent — the same text
-rendered as a scalar takes every card on the page from 47px to 11px.
+rendered as a scalar takes its whole card from 47px to 11px.
 `test/fontfit.spec.js` pins it.
 
 Type inside a rich cell scales by container query against the cell itself. An

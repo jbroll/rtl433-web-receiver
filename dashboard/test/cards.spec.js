@@ -426,13 +426,23 @@ test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await expect(card.locator(".age")).not.toBeEmpty();
 });
 
-test("value font follows the measured box", async ({ page }) => {
-  await open(page, [ACURITE]);
-  const sizes = await page.evaluate(() => ({
-    one: valueFont(1, 150, 1), two: valueFont(2, 150, 2),
-    packed: valueFont(1, 150, 4), floor: valueFont(1, 20, 1), ceil: valueFont(3, 200, 1),
-  }));
-  expect(sizes).toEqual({ one: "60px", two: "60px", packed: "15px", floor: "11px", ceil: "64px" });
+test("a card's widest reading fills its box", async ({ page }) => {
+  await open(page, [ACURITE, LONGNAME]);
+  await page.click("#tab-cards");
+  const fills = await page.evaluate(() =>
+    [...document.querySelectorAll("#cards .card")].map(card => {
+      let best = 0;
+      for (const fv of card.querySelectorAll(".fv")) {
+        const val = fv.parentNode;
+        const fn = val.querySelector(".fn");
+        const wide = fv.scrollWidth / val.clientWidth;
+        const tall = fv.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight);
+        best = Math.max(best, wide, tall);
+      }
+      return { key: card.dataset.key, best };
+    }));
+  expect(fills.length).toBeGreaterThan(1);
+  for (const f of fills) expect(f.best, f.key).toBeGreaterThan(0.9);
 });
 
 test("resizing while scrolled fits to the same font as a fresh load", async ({ page }) => {
@@ -1282,19 +1292,14 @@ test("a card of short readings keeps larger type than one with a long reading", 
   expect(await size(LONG_CARD)).toBeLessThan(await size(CARD));
 });
 
-test("the width fit only shrinks, never grows past the height fit", async ({ page }) => {
+test("the width fit only shrinks, never grows past the height its box leaves", async ({ page }) => {
   await open(page, [ACURITE]);
-  const fits = await page.evaluate(() => {
-    const rows = [];
-    for (const fv of document.querySelectorAll("#cards .fv")) {
-      const card = fv.closest(".card");
-      const h = cardState.cards[card.dataset.key].h;
-      const rows_ = Math.max(h, Math.ceil(card.querySelectorAll(".val").length / 2));
-      rows.push({ got: parseFloat(fv.style.fontSize),
-                  ceiling: parseFloat(valueFont(h, cellSide, rows_)) });
-    }
-    return rows;
-  });
+  const fits = await page.evaluate(() =>
+    [...document.querySelectorAll("#cards .fv")].map(fv => {
+      const val = fv.parentNode;
+      return { got: fv.getBoundingClientRect().height,
+               ceiling: val.clientHeight - val.querySelector(".fn").offsetHeight };
+    }));
   expect(fits.length).toBeGreaterThan(0);
   for (const f of fits) expect(f.got).toBeLessThanOrEqual(f.ceiling);
 });

@@ -86,9 +86,11 @@ A card spans whole cells. On first detection it is sized to hold its visible
 readings one per cell, in the most compact rectangle: one reading gives 1×1,
 three or four give 2×2, seven through nine give 3×3. Dragging the corner
 handle in edit mode resizes it, snapped to whole cells, from 1×1 up to the
-grid's own dimensions. Type size follows the measured cell, so a bigger card
-reads bigger, and shrinks further where a reading is too wide to fit at that
-size. Every reading on a card takes the same size, the one its widest needs.
+grid's own dimensions. Type size follows the box each reading sits in: a
+reading grows to the height its box leaves under the field name, and shrinks
+below that where it is too wide to fit. Every reading on a card takes the same
+size, the one its widest needs, and a card is measured on its own readings, so
+a long reading on one card does not shrink the type on another.
 Cards that do not fit in the set number of rows render below the fold.
 
 Layout is per browser, in localStorage under `rtl433.dashboard.v1`: the grid size,

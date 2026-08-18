@@ -6,8 +6,8 @@ import { aliasOf, displayName, postAlias } from './alias.js'
 import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
-         measureGrid, fitValues, valueFont, textWidthEm, cellSignal,
-         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize, computeUniformFontSize } from './grid.js'
+         measureGrid, fitValues, textWidthEm, cellSignal,
+         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize } from './grid.js'
 import { tick } from './tick.js'
 import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
 
@@ -31,16 +31,21 @@ export function CardsView() {
     if (gridRef.current) fitValues()
   })
 
-  // Handle window resize
+  // The grid measures zero on a hidden tab, so re-fit when it gets its size
+  // back as well as on a window resize.
   useEffect(() => {
-    const handleResize = () => {
-      if (gridRef.current) {
-        measureGrid()
-        fitValues()
-      }
+    const refit = () => {
+      if (!gridRef.current) return
+      measureGrid()
+      fitValues()
     }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    window.addEventListener('resize', refit)
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(refit)
+    if (ro && gridRef.current) ro.observe(gridRef.current)
+    return () => {
+      window.removeEventListener('resize', refit)
+      if (ro) ro.disconnect()
+    }
   }, [])
 
   // Compute shown keys directly from signals for reactivity
@@ -166,7 +171,6 @@ function RenameInput({ rec }) {
 
 function Body({ rec, vis, h, w, cardKey }) {
   const valueRows = Math.max(h, Math.ceil(vis.length / w))
-  const font = valueFont()
 
   return (
     <div
@@ -179,7 +183,7 @@ function Body({ rec, vis, h, w, cardKey }) {
       {vis.map(f => (
         isRich(rec.merged.value[f])
           ? <RichValue key={f} rec={rec} field={f} cardKey={cardKey} />
-          : <Value key={f} rec={rec} field={f} font={font} cardKey={cardKey} />
+          : <Value key={f} rec={rec} field={f} cardKey={cardKey} />
       ))}
     </div>
   )
@@ -204,22 +208,19 @@ function RichValue({ rec, field }) {
   )
 }
 
-function Value({ rec, field, font, cardKey }) {
+function Value({ rec, field, cardKey }) {
   const d = displayValue(field, rec.merged.value[field], settings.value)
-  const fvStyle = { fontSize: font }
   const valRef = useRef(null)
 
-  // Call trackFit after the element is mounted or when its font/size changes
+  // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
   useLayoutEffect(() => {
     const valEl = valRef.current
     if (!valEl) return
     const card = valEl.closest('.card')
     if (card) {
-      const valParent = valEl.parentNode
-      const rowHeight = valParent ? valParent.clientHeight : 0
-      trackFit(valEl, card, textWidthEm(d.num, d.unit), rowHeight)
+      trackFit(valEl, card, textWidthEm(d.num))
     }
-  }, [d.num, d.unit, font])
+  }, [d.num, d.unit])
 
   return (
     <div
@@ -235,7 +236,7 @@ function Value({ rec, field, font, cardKey }) {
         <span>{d.name}</span>
         {d.unit && <span class="u">{d.unit}</span>}
       </div>
-      <div class="fv" ref={valRef} style={fvStyle}>
+      <div class="fv" ref={valRef}>
         {d.num}
       </div>
     </div>

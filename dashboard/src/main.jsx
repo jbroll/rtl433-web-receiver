@@ -9,7 +9,7 @@ import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
 import { loadSettings, settings, setLocation } from './settings.js'
-import { measureGrid, installGestures, cellSignal, valueFont, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
+import { measureGrid, installGestures, cellSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
@@ -147,7 +147,7 @@ function exposeForTests() {
   Object.assign(window, {
     devices: deviceProxy,
     upsert,
-    measureGrid, fmtValue, valueFont, fitValues,
+    measureGrid, fmtValue, fitValues,
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,

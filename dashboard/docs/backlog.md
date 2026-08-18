@@ -32,12 +32,12 @@
   finger did. The drag and resize entry points already guard against each other; these
   four do not guard against either. `setValueMode` and `setCardHidden` are now reachable
   from the device table as well as from a card.
-- The font-size factor of 0.42 and the 11–64px clamp were tuned against a handful of
-  synthetic devices.
 - `fitValues()` measures on a canvas at the font family `getComputedStyle(document.body)`
   reports, ignoring letter-spacing and font-feature settings, so a style change to `.fv`
-  could bring the ellipsis back. It errs about 4px high per value at 64px. A card whose
-  widest reading cannot fit even at 11px still ellipsizes.
+  could bring the ellipsis back. A card whose widest reading cannot fit even at 11px
+  still ellipsizes.
+- `LINE_HEIGHT` in `grid.js` repeats the `line-height` on `.card .val` in CSS. Changing
+  one without the other leaves the height fit off by that ratio.
 - `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid has no `gap`.
   Re-adding one would overflow the grid by `(cols-1) × gap`. Nothing in the file says so,
   and no test guards it.

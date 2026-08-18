@@ -25,71 +25,60 @@ export function measureGrid() {
   grid.style.setProperty("--cell", cell + "px")
   grid.style.gridTemplateColumns = "repeat(" + g.cols + ",var(--cell))"
   grid.style.gridTemplateRows = "repeat(" + g.rows + ",var(--cell))"
-  computeUniformFontSize()
 }
 
 const FONT_MIN = 11
+const FONT_MAX = 200
 export { FONT_MIN }
 
-function fontPxBase(cellPx) {
-  const px = Math.round(0.42 * cellPx)
-  return Math.max(FONT_MIN, px) + "px"
-}
-
-let uniformFontSize = ""
-
-export function computeUniformFontSize() {
-  uniformFontSize = fontPxBase(cellSignal.value)
-}
-
-export function valueFont() {
-  return uniformFontSize
-}
-
 let textProbe = null, probeFont = ""
-export function textWidthEm(num, unit) {
+// The unit renders in the .fn header, not beside the number, so only the
+// number's width bounds the type size.
+export function textWidthEm(num) {
   if (!textProbe) {
     textProbe = document.createElement("canvas").getContext("2d")
     probeFont = getComputedStyle(document.body).fontFamily
   }
   textProbe.font = "100px " + probeFont
-  let w = textProbe.measureText(num).width
-  if (unit) {
-    textProbe.font = "50px " + probeFont
-    w += textProbe.measureText(unit).width + 5
-  }
-  return w / 100
+  return textProbe.measureText(num).width / 100
 }
 
 let fitting = new Map()
 
-export function trackFit(node, card, em, rowHeight) {
-  fitting.set(node, { node: node, card: card, em: em, rowHeight: rowHeight })
+export function trackFit(node, card, em) {
+  fitting.set(node, { node: node, card: card, em: em })
 }
 
 export function resetFit() {
   fitting = new Map()
 }
 
+// Mirrors line-height on .card .val: the drawn line is taller than its font.
+const LINE_HEIGHT = 1.05
+
 export function fitValues() {
-  let globalCap = Infinity
+  const caps = new Map()
+  const boxes = []
   for (const f of fitting.values()) {
     const parent = f.node.parentNode
-    if (!parent || !parent.isConnected) continue
+    if (!f.node.isConnected || !parent) continue
     const box = parent.clientWidth
-    if (!box) continue
+    const rowH = parent.clientHeight
+    // A hidden tab measures zero. Fitting to that would drop every value to the
+    // floor, and nothing re-measures when the tab comes back.
+    if (box <= 0 || rowH <= 0) continue
     const cap = Math.floor(box / f.em)
-    if (cap < globalCap) globalCap = cap
+    const prev = caps.get(f.card)
+    if (prev === undefined || cap < prev) caps.set(f.card, cap)
+    boxes.push({ f: f, parent: parent, rowH: rowH })
   }
-  if (!isFinite(globalCap)) globalCap = 200
-  for (const f of fitting.values()) {
-    if (!f.node.isConnected) continue
-    const parent = f.node.parentNode
-    const rowH = parent ? parent.clientHeight : f.rowHeight
-    const fnH = 18
-    const availH = Math.max(FONT_MIN, rowH - fnH)
-    const newSize = Math.max(FONT_MIN, Math.min(globalCap, availH, 200))
-    f.node.style.fontSize = newSize + "px"
+  // A card takes the size its own widest reading needs. Capping across the page
+  // instead would let one long reading anywhere shrink every card.
+  for (const b of boxes) {
+    const fn = b.parent.querySelector(".fn")
+    const availH = Math.floor((b.rowH - (fn ? fn.offsetHeight : 0)) / LINE_HEIGHT)
+    const size = Math.min(caps.get(b.f.card), availH, FONT_MAX)
+    b.f.node.style.fontSize = Math.max(FONT_MIN, size) + "px"
   }
 }
 
