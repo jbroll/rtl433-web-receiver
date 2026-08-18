@@ -21,11 +21,12 @@ export function CardsView() {
     if (gridRef.current) measureGrid()
   })
 
-  // fitValues runs after measureGrid updates cellSignal and uniformFontSize, after paint
+  // fitValues runs after every render, after paint, so values tracked after
+  // the last cell change (device arrival, text width change) still get fitted
   useEffect(() => {
     cellSignal.value
     if (gridRef.current) fitValues()
-  }, [cellSignal.value])
+  })
 
   // Handle window resize
   useEffect(() => {

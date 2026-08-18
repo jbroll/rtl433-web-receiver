@@ -59,33 +59,36 @@ export function textWidthEm(num, unit) {
   return w / 100
 }
 
-let fitting = []
+let fitting = new Map()
 
 export function trackFit(node, card, em, rowHeight) {
-  fitting.push({ node: node, card: card, em: em, rowHeight: rowHeight })
+  fitting.set(node, { node: node, card: card, em: em, rowHeight: rowHeight })
 }
 
 export function resetFit() {
-  fitting = []
+  fitting = new Map()
 }
 
 export function fitValues() {
-  const boxes = fitting.map(f => f.node.parentNode.clientWidth)
   let globalCap = Infinity
-  fitting.forEach((f, i) => {
-    if (!boxes[i]) return
-    const cap = Math.floor(boxes[i] / f.em)
+  for (const f of fitting.values()) {
+    const parent = f.node.parentNode
+    if (!parent || !parent.isConnected) continue
+    const box = parent.clientWidth
+    if (!box) continue
+    const cap = Math.floor(box / f.em)
     if (cap < globalCap) globalCap = cap
-  })
+  }
   if (!isFinite(globalCap)) globalCap = 200
-  for (const f of fitting) {
-    const rowH = f.rowHeight || f.node.parentNode.clientHeight
+  for (const f of fitting.values()) {
+    if (!f.node.isConnected) continue
+    const parent = f.node.parentNode
+    const rowH = parent ? parent.clientHeight : f.rowHeight
     const fnH = 18
     const availH = Math.max(FONT_MIN, rowH - fnH)
     const newSize = Math.max(FONT_MIN, Math.min(globalCap, availH, 200))
     f.node.style.fontSize = newSize + "px"
   }
-  fitting = []
 }
 
 export const editing = signal(false)
