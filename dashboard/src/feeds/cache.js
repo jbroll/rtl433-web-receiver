@@ -19,7 +19,8 @@ export function loadFeedCache() {
     const e = s[id]
     if (!e || typeof e !== 'object') continue
     if (!Number.isFinite(e.at) || !e.fields || typeof e.fields !== 'object') continue
-    entries[id] = { at: e.at, fields: e.fields, meta: e.meta || null,
+    entries[id] = { at: e.at, ranAt: Number.isFinite(e.ranAt) ? e.ranAt : e.at,
+                    fields: e.fields, meta: e.meta || null,
                     place: typeof e.place === 'string' ? e.place : '' }
   }
 }

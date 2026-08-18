@@ -94,3 +94,48 @@ test("hiding one value on a feed card leaves the rest", async ({ page }) => {
   await expect(page.locator(`${CLOCK} .val`)).toHaveCount(before - 1);
   await expect(page.locator(`${CLOCK} .val[data-f="dst"]`)).toHaveCount(0);
 });
+
+const SUN = '.card:not(.ghostcard)[data-key="local feed/Sun"]';
+const MOON = '.card:not(.ghostcard)[data-key="local feed/Moon"]';
+
+test("the sun and moon cards appear once a location is set", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(SUN)).toHaveCount(0);
+  await expect(page.locator(MOON)).toHaveCount(0);
+
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(SUN)).toBeVisible();
+  await expect(page.locator(MOON)).toBeVisible();
+});
+
+test("the sun dial and moon disc draw inside their own cell", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(SUN)).toBeVisible();
+
+  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] svg`)).toHaveCount(1);
+  await expect(page.locator(`${MOON} .val.cval[data-f="moon"] svg`)).toHaveCount(1);
+  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] .csub`)).toHaveText(/\d\d:\d\d \/ \d\d:\d\d/);
+  await expect(page.locator(`${SUN} .val[data-f="day_length"] .fv`)).toHaveText(/^\d{1,2}h \d{1,2}m$/);
+});
+
+test("neither dial joins the page-wide font fit", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(SUN)).toBeVisible();
+
+  await expect(page.locator(`${SUN} .val.cval .fv`)).toHaveCount(0);
+  await expect(page.locator(`${MOON} .val.cval .fv`)).toHaveCount(0);
+});
+
+test("a polar location still draws both cards", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 89.9, 0, "UTC");
+  await expect(page.locator(SUN)).toBeVisible();
+  await expect(page.locator(MOON)).toBeVisible();
+
+  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] svg`)).toHaveCount(1);
+  await expect(page.locator(`${MOON} .val.cval[data-f="moon"] svg`)).toHaveCount(1);
+  await expect(page.locator(`${SUN} .val[data-f="sunrise"] .fv`)).toHaveText("—");
+  await expect(page.locator(`${SUN} .val[data-f="day_length"] .fv`)).toHaveText(/^(24h 0m|0h 0m)$/);
+});

@@ -141,6 +141,54 @@ source unit composes with any display unit. The stored readings in `devices`
 are never modified; a Celsius reading stays Celsius in the device object and
 receives an °F conversion only when rendered.
 
+## Location
+
+The Settings section carries a location, which the information feed cards need
+and nothing else uses. The page makes no third-party request until one is set.
+
+Type a place name and press Enter or Search to look it up through
+OpenStreetMap's Nominatim, then pick from the results. There is no search as you
+type, because Nominatim's usage policy rules it out. You can also type a latitude
+and longitude directly, or drag the pin on the map. "Use my location" appears
+only on an origin the browser counts as secure, so it is absent on the page the
+receiver serves over plain http on your LAN and present on localhost.
+
+The time zone defaults to this device's. Choosing another moves the clock, the
+sunrise and sunset times, and the forecast day names with it.
+
+## Feed cards
+
+Once a location is set, four cards appear alongside the sensor cards. They are
+ordinary cards: drag them, resize them, rename them, and show, hide or move
+individual values from the Devices tab exactly as with a radio device.
+
+**Weather** shows current conditions and seven forecast days, each day its own
+value so you can keep the three you care about and hide the rest. Readings from
+the nearest reporting station — temperature, humidity, wind, pressure — arrive
+as ordinary readings, so the Units setting converts them like any sensor. It
+refreshes every 15 minutes.
+
+Weather comes from the National Weather Service, which covers the United States
+only. Elsewhere the card says so and stops asking; the other three cards work
+anywhere.
+
+**Sun** shows sunrise, sunset, solar noon, the three twilights, and day length.
+**Moon** shows the phase, how much of the disc is lit, and moonrise and moonset.
+Both are computed here from your latitude, longitude and the date, so they need
+no network at all. In polar summer or winter, times that do not occur read as a
+dash.
+
+**Clock** shows the time and date in the chosen zone, its UTC offset, and
+whether daylight saving is in effect. The offset is exact. The DST flag is
+worked out by comparing the current offset against the smallest that zone uses
+across the year, which is right for the ordinary cases and wrong for a zone that
+changed its rules mid-year.
+
+A feed card shows no age, because the values are computed fresh. Weather does
+show one: it is how old the fetched data is. If a fetch fails the card keeps its
+last good values and adds an error line you can hide like any other value.
+Results are cached, so reopening the page paints immediately without refetching.
+
 ## Sources
 
 With no sources configured the dashboard reads the origin it was served from. The

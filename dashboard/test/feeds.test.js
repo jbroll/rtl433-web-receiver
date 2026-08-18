@@ -248,3 +248,32 @@ test('the meta a feed returns comes back only at the same place', async () => {
   await settle()
   assert.deepEqual(seenMeta[2], null, 'meta from another place was reused')
 })
+
+test('data older than the interval does not make the feed look overdue', async () => {
+  atBoulder()
+  // A station that reports hourly stamps data well older than a 15 minute
+  // refresh. That must not schedule a fetch on every pass.
+  const hourOld = Date.now() - 3600000
+  registerFeed(fakeFeed({ interval: 900000, stamped: true, run: async () => { ran++; return { fields: { value: 1 }, at: hourOld } } }))
+
+  pump(Date.now())
+  await settle()
+  assert.equal(ran, 1)
+  assert.equal(devices.value.get(KEY).seenAt.value, hourOld, 'the card lost the data time')
+
+  pump(Date.now())
+  await settle()
+  assert.equal(ran, 1, 'refetched because the data was older than the interval')
+})
+
+test('a reload with stale-stamped data in cache still does not refetch', async () => {
+  atBoulder()
+  const hourOld = Date.now() - 3600000
+  cacheSet('test', { at: hourOld, ranAt: Date.now(), fields: { value: 1 }, meta: null, place: '40.015,-105.2705' })
+  registerFeed(fakeFeed({ interval: 900000, stamped: true }))
+
+  primeFeeds()
+  pump(Date.now())
+  await settle()
+  assert.equal(ran, 0)
+})

@@ -23,7 +23,7 @@ export function feedKey(feed) { return makeKey(FEED_BASE, `feed/${feed.topic}`) 
 // point outside the area a provider covers. Retrying it would never succeed.
 export class Unsupported extends Error {}
 
-const IDLE = { status: 'idle', at: 0, err: '', nextAt: 0, fails: 0 }
+const IDLE = { status: 'idle', at: 0, ranAt: 0, err: '', nextAt: 0, fails: 0 }
 
 // Merged over the defaults rather than returned as stored: a partial entry
 // would otherwise feed an undefined straight into the backoff index.
@@ -70,10 +70,14 @@ async function runFeed(feed, ctx) {
   try {
     const cached = cacheGet(feed.id)
     const out = await feed.run({ ...ctx, meta: cached && cached.place === ctx.place ? cached.meta : null })
+    // Two different times. `at` is when the data is from, which the card shows
+    // as its age; `ranAt` is when we asked, which is what paces the next ask.
+    // A station reporting hourly would otherwise look overdue on every pass.
     const at = out.at || Date.now()
+    const ranAt = Date.now()
     publish(feed, out.fields, at)
-    cacheSet(feed.id, { at, fields: out.fields, meta: out.meta || null, place: ctx.place })
-    setState(feed.id, { status: 'ok', at, err: '', fails: 0, nextAt: Date.now() + feed.interval })
+    cacheSet(feed.id, { at, ranAt, fields: out.fields, meta: out.meta || null, place: ctx.place })
+    setState(feed.id, { status: 'ok', at, ranAt, err: '', fails: 0, nextAt: ranAt + feed.interval })
   } catch (e) {
     const message = (e && e.message) || 'failed'
     if (e instanceof Unsupported) {
@@ -127,8 +131,16 @@ export function primeFeeds() {
     const e = cacheGet(feed.id)
     if (!e || e.place !== place) continue
     publish(feed, e.fields, e.at)
-    setState(feed.id, { status: 'ok', at: e.at, nextAt: e.at + feed.interval })
+    setState(feed.id, { status: 'ok', at: e.at, ranAt: e.ranAt, nextAt: e.ranAt + feed.interval })
   }
+}
+
+// Brings every feed's next run forward to now. Only the tests use it: the
+// alternative is waiting out a backoff ladder measured in hours.
+export function expireFeeds() {
+  const next = new Map()
+  for (const [id, s] of feedState.value) next.set(id, { ...s, nextAt: 0 })
+  feedState.value = next
 }
 
 export function resetFeeds() {

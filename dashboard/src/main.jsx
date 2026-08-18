@@ -14,8 +14,11 @@ import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
 import './renderers.jsx'
-import { registerFeed, primeFeeds, pump } from './feeds/feed.js'
+import { registerFeed, primeFeeds, pump, expireFeeds } from './feeds/feed.js'
 import clock from './feeds/clock.js'
+import sun from './feeds/sun.js'
+import moon from './feeds/moon.js'
+import weather from './feeds/nws.js'
 
 let build = null
 
@@ -148,7 +151,7 @@ function exposeForTests() {
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
-    setLocation,
+    setLocation, expireFeeds,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
@@ -170,7 +173,7 @@ loadSources()
 loadSettings()
 installGestures()
 
-registerFeed(clock)
+for (const feed of [weather, sun, moon, clock]) registerFeed(feed)
 primeFeeds()
 // tick is the app's only timer, so the feed scheduler rides it rather than
 // starting one of its own. Reading settings restarts the feeds on a move.

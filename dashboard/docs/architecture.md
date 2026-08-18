@@ -2,25 +2,34 @@
 
 ## Modules
 
-Plain ES modules, no framework, bundled by `esbuild` into one `<script>`.
+Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 
 | Module | Holds |
 |---|---|
-| `render.js` | the render callback `main.js` installs, so no module has to import `main.js` back |
-| `units.js` | `el()`, the meta and status field sets, `splitUnit()`, `fmtValue()`, `displayValue()`, `ageText()`, and reading extraction |
-| `alias.js` | keys, the alias map, name resolution, and the alias POST |
+| `main.jsx` | wiring: boot order, the SSE sources, the feed scheduler, the test hooks |
+| `app.jsx` | the tab shell and the cards toolbar |
+| `units.js` | the meta and status field sets, `splitUnit()`, `fmtValue()`, `displayValue()`, `ageText()`, reading extraction |
+| `alias.js` | keys, the alias map, name resolution, the alias POST, `isFeed()` |
 | `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
-| `store.js` | layout and settings in `localStorage`, and `forgetLayouts()` |
-| `sources.js` | the source list, its storage, and the settings panel |
+| `store.js` | card layout in `localStorage`, and `forgetLayouts()` |
+| `settings.js` | units, decimals, and the location, in `localStorage` |
+| `sources.js` | the source list and its storage |
 | `stream.js` | one source's SSE connection and its reconnect |
 | `grid.js` | cell arithmetic, the resize and drag gestures, and value fitting |
-| `card.js` | one card's DOM, its value modes, and rename |
-| `devicesort.js` | the device table's sort column, its direction, and its storage |
-| `table.js` | the device table and the log |
-| `main.js` | wiring: the render tick, the tabs, the grid inputs, edit mode |
+| `cards.jsx` | the card grid, one card, and its values |
+| `render-values.js` | the renderer registry for values that draw their own cell |
+| `renderers.jsx` | those renderers |
+| `devices-table.jsx` | the device table and the settings section above it |
+| `devicesort.js` | the table's sort column, its direction, and its storage |
+| `log.jsx` | the log tab |
+| `location.jsx` | the location controls inside settings |
+| `geocode.js` | Nominatim search |
+| `astro.js` | solar and lunar arithmetic, no I/O |
+| `feeds/` | the feed scheduler, its cache, and one module per feed |
 
-`render.js` exists because `store.js` has to ask for a redraw and `main.js` has to import
-`store.js`. A callback holder breaks the cycle without an event bus.
+`build.js` pins `absWorkingDir` to the dashboard directory. PlatformIO runs it
+from `receiver/`, where there is no `node_modules`, and esbuild resolves alias
+targets against the working directory.
 
 ## Drag zones
 
@@ -107,6 +116,95 @@ fields are stored independently and changed one at a time.
 `CardsView` reads the settings signal as a dependency, so any settings change
 triggers a re-fit: font size is recomputed against the new display values and the
 card re-renders with the updated numbers and units.
+
+## Feed cards
+
+Weather, sun, moon and clock need everything a card already does: ordering,
+drag, resize, per-value hide and bottom placement, rename. All of that keys off
+the device map, so a feed publishes through `upsert()` as a synthetic record
+rather than growing a parallel system.
+
+Feed keys use a reserved base, `local`, giving `local feed/Weather` and its
+three siblings. `normalizeBase()` only ever yields an `http(s)` URL, so the base
+cannot collide with a real source, and `shortKey()` already slices the topic
+down to the bare name for display and rename.
+
+Four places assumed every record came off a radio, and `isFeed()` guards each:
+
+- `trim()` caps the map at `DEVICE_MAX` times the number of configured sources,
+  which is zero until one is added. It counts and evicts radio records only.
+- `clearSource()` matched anything sharing a base prefix.
+- `pruneCardState()` kept only keys with a live device record, which would
+  discard a feed's saved size and value layout before it ever ran.
+- `ensureCard()` hides every new card. Feeds pass `autoShow`, applied only on
+  creation so a later user hide is never undone.
+
+A record with `seenAt` of 0 shows no age. The sun, moon and clock come off the
+system clock and are never stale; weather stamps the time its data came from, so
+its age corner reads as genuine staleness.
+
+## Value renderers
+
+A merged field's value is normally a scalar. A feed may instead supply an object
+tagged with `$r`, naming a component in the `render-values.js` registry that
+draws the whole cell — a forecast day is a sky glyph, a high, a low and a chance
+of rain, not one number.
+
+`units.js` is not involved. The three places that turn a value into text — the
+card body, the bottom strip, the devices table — test for a rich value first, so
+a non-scalar never reaches `displayValue()` and the scalar path keeps its
+existing behaviour and its existing tests.
+
+A rich cell keeps `.val` and `data-f`, because `valueDropZones()` selects on
+both, so drag reordering costs `grid.js` no changes. It never emits `.fv` and
+never calls `trackFit()`, and that is what keeps it out of the page-wide uniform
+font fit: `fitValues()` only sees nodes `trackFit()` registered. The exclusion is
+structural rather than a flag because the failure is silent — the same text
+rendered as a scalar takes every card on the page from 47px to 11px.
+`test/fontfit.spec.js` pins it.
+
+Type inside a rich cell scales by container query against the cell itself. An
+engine without container queries drops the `clamp()` and falls back to inherited
+body type, which is legible.
+
+## Third-party requests
+
+The page still loads with no external request. Once the user sets a location it
+reaches three origins at runtime and no others, which `test/build.test.js`
+enforces as an allowlist:
+
+| Origin | For | When |
+|---|---|---|
+| `api.weather.gov` | forecast and current conditions | every 15 minutes |
+| `nominatim.openstreetmap.org` | place search | on submit only |
+| `tile.openstreetmap.org` | the map picker | while settings are open |
+
+There is no proxy: the browser calls them directly, and all three answer
+`Access-Control-Allow-Origin: *`.
+
+NWS documents a required identifying `User-Agent`, which a browser refuses to
+send — it is a forbidden header name and `fetch` drops it. Nothing else is sent
+either, because a non-safelisted header would force a preflight the API does not
+answer. If NWS ever enforces this, a browser-only design has no fix short of a
+proxy.
+
+Nominatim caps callers at one request a second and rules out autocomplete, so
+searching happens on submit, one request at a time, with every answered query
+cached. Browsers send `Referer` automatically, which is the identification the
+policy asks for.
+
+A failed run keeps the last good values on the card and adds the error as a
+plain string, so it renders through the scalar path and can be hidden like any
+other value. Retries climb 30m, 1h, 2h, 4h and stop at 6h, jittered so several
+feeds failing on one outage do not come back in lockstep. A point outside the
+United States makes NWS return 404, which is terminal: that feed stops rather
+than climbing the ladder against a permanent answer. The locally computed feeds
+work anywhere.
+
+Results cache to `localStorage` under `rtl433.feeds.v1`, so a reload paints the
+last good data before anything runs and an entry younger than its interval
+defers the next fetch. Moving the location discards the cache, along with the
+grid mapping and station id a feed had stored about the old point.
 
 ## Sources
 

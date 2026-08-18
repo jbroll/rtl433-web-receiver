@@ -32,8 +32,14 @@ both suites in one commit — nothing currently enforces that they agree.
 ## The dashboard's two lives
 
 `dashboard/build.js` emits one self-contained `index.html`: markup, styles, and script
-inlined, no external requests. That file is what a browser loads from a static server and
-what the firmware serves. There is one artifact, so there is one thing to test.
+inlined, nothing fetched to load the page. That file is what a browser loads from a static
+server and what the firmware serves. There is one artifact, so there is one thing to test.
+
+Loading it costs no external request. Running it can: once the user sets a location, the
+information feed cards reach `api.weather.gov`, `nominatim.openstreetmap.org` and
+`tile.openstreetmap.org` directly from the browser, with no proxy. `dashboard/test/build.test.js`
+holds that as an allowlist, so a fourth origin fails the build. On a LAN with no route out,
+those cards show an error and the locally computed ones keep working.
 
 The firmware embeds it through a PlatformIO pre-build hook that runs the same build and
 writes a gzipped PROGMEM byte array to a generated header on the include path. `node` is
@@ -66,6 +72,9 @@ and `cap sync`. Build output, local SDK configuration, and the synced web assets
 
 A dashboard served from one origin and reading a bridge on another is a cross-origin
 request, so both the bridge and the receiver answer every request with
-`Access-Control-Allow-Origin: *`. Neither has authentication, so this exposes nothing a
+`Access-Control-Allow-Origin: *`. The dashboard is also on the other side of that
+arrangement for its information feeds: weather.gov, Nominatim and the OSM tile server each
+answer `Access-Control-Allow-Origin: *`, which is what lets the page call them without a
+proxy. Neither has authentication, so this exposes nothing a
 direct request did not already expose. It does mean a page on any site the user visits
 can read a reachable bridge; see the bridge's backlog.

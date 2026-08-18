@@ -80,3 +80,35 @@
 - `dashboard/README.md` carries the install and build commands and the test commands.
   The bridge splits the same material into `docs/install.md` and `docs/development.md`.
   The dashboard should match.
+
+## Information feeds
+
+- NWS documents a required identifying `User-Agent`. A browser cannot send one:
+  it is a forbidden header name and `fetch` drops it. This works today and is
+  outside our control tomorrow. The only fix is a proxy, which the
+  browser-direct design rules out.
+- Weather is United States only. `feeds/nws.js` sits behind the generic feed
+  interface, so a worldwide provider such as Open-Meteo would be a new file
+  rather than a refactor.
+- The observation station the weather card reads can be a long way from the
+  point. Nothing shows which station, or how far.
+- Moonrise and moonset are found by sampling altitude every ten minutes and
+  interpolating, so they are good to a couple of minutes, not seconds.
+- Sun events degrade above about 60° latitude, where the sun grazes the horizon
+  and a truncated series loses precision. The tests relax to five minutes there.
+- "Use my location" cannot work on the page the receiver serves, because plain
+  http on a LAN address is not a secure context. There is no test for that
+  branch: the harness serves on 127.0.0.1, which counts as secure.
+- The DST flag is inferred by comparing offsets across the year and is wrong for
+  a zone that changed its rules mid-year.
+- `test/build.test.js` no longer forbids external requests outright; it holds an
+  allowlist of three origins instead. A new origin has to be added there
+  deliberately, but the check is weaker than it was.
+- Container queries size the type inside a rich value cell. The minimum WebView
+  the Capacitor shell ships with is unconfirmed; older engines fall back to
+  inherited body type rather than breaking.
+- Flash headroom is now thin. The embedded page went from 22,872 to 42,352
+  bytes, taking the `esp32s3-generic` app partition from 89.4% to 90.9% of the
+  default 1.3MB, with about 119KB left. The map picker is 10.4KB of that
+  increase. A custom partition table, or dropping the map, is the lever if the
+  firmware needs room.
