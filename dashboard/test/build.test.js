@@ -14,7 +14,29 @@ test('the build inlines everything into one document', async () => {
   // A placeholder attribute value is example text, not a request; only a
   // reference site (script src, stylesheet href, fetch target) matters here.
   assert.doesNotMatch(html, /\s(?:src|href)\s*=\s*["']https?:\/\//i)
-  assert.doesNotMatch(html, /\bfetch\(\s*["']https?:\/\//)
+})
+
+// The page still loads with no external request, which the reference-site
+// assertions above pin. Once the user sets a location it may reach these
+// origins at runtime, and this is the list of them.
+const REACHABLE = new Set([
+  'https://api.weather.gov',
+  'https://nominatim.openstreetmap.org',
+  'https://tile.openstreetmap.org',
+])
+
+// An XML namespace name and the example text in a placeholder attribute.
+// Neither is ever fetched.
+const NOT_A_REQUEST = new Set(['http://www.w3.org', 'http://bridge.local:8080'])
+
+test('the bundle names no origin beyond the ones the feeds reach', async () => {
+  const html = await buildHtml()
+  for (const match of html.matchAll(/https?:\/\/[^"'\s)\\]+/g)) {
+    let origin
+    try { origin = new URL(match[0]).origin } catch (e) { origin = match[0] }
+    if (NOT_A_REQUEST.has(origin)) continue
+    assert.ok(REACHABLE.has(origin), `unexpected origin in the built page: ${origin}`)
+  }
 })
 
 test('the device cap comes from the firmware header', async () => {
