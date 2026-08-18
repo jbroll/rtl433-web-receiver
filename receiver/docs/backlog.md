@@ -104,39 +104,8 @@ both help.
 ## The compiled decoders are 15% of the image
 
 The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in the fork's
-`rtl_433_devices.h` is what narrows them, and it would also cut the false decodes above.
-The page is no longer a lever: it is gzipped, and its size is recorded in
-[`architecture.md`](architecture.md#the-page-the-firmware-serves).
-
-## Moving app0 bricks the board
-
-`partitions.csv` fills the chip: `app0` and `app1` at 4 MB each, `spiffs` at
-7.875 MB, `coredump` at the end. The image sits at 28.4% of `app0` rather than
-90.9% of Arduino's 1.25 MB, and the size of the page the firmware serves stops
-being a question.
-
-`nvs`, `otadata` and `app0` keep the offsets they have in every Espressif layout,
-and they have to. espressif32@6.1.0 uses `partitions.csv` only to generate the
-table at `0x8000`; it writes otadata and the application at a hardcoded `0xe000`
-and `0x10000` whatever the file says. A table that moves `app0` leaves it blank
-and the board boot-loops with `rst:0x3 (RTC_SW_SYS_RST)` straight after the
-second-stage bootloader's `entry` line. Erasing flash does not help, because the
-app was never written where the table points. Check the upload log's
-`Wrote ... at 0x` lines against the CSV before trusting a new table.
-
-`monitor.py --baud 115200` is how that was read. The application talks at 921600
-and prints nothing when it never gets that far, so only the ROM bootloader's own
-output shows the fault.
-
-An earlier plan here wanted a 1 MB `nvs` to leave room for WiFi provisioning.
-That is not wanted: 20 KB is roughly three times what the firmware can put there.
-Measured from the partition before it was erased, two of its five pages had never
-been written, and the live data was about 4 KB. The largest consumer is not WiFi
-but `phy/cal_data`, a fixed ~1,950 bytes of radio calibration. The credentials in
-`nvs.net80211` — `sta.ssid`, `sta.pswd`, `sta.apinfo` — are the same keys runtime
-provisioning would write, so it adds nothing measurable. The alias map cannot
-exceed `ALIAS_BLOB_MAX`, 2 KB. Worst case is about 6 KB against the ~16 KB usable
-once a page is reserved for compaction.
+`rtl_433_devices.h` is what narrows them. Space is not the reason to: `app0` is 4 MB and
+the image uses 28% of it. Cutting the false decodes above is.
 
 ## WiFi credentials are compiled into the image
 

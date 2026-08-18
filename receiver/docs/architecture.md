@@ -87,7 +87,11 @@ first 4 MB, which is why the app read as nearly full while using 7% of the flash
 `nvs`, `otadata` and `app0` keep the offsets they have in every Espressif layout, and
 they have to: espressif32@6.1.0 uses this file only to generate the table at `0x8000`
 and writes the application at a hardcoded `0x10000` regardless. A table that moves
-`app0` leaves it blank and the board boot-loops. See the backlog.
+`app0` leaves it blank and the board boot-loops, and erasing flash does not help
+because the app was never written where the table points. Check the upload log's
+`Wrote ... at 0x` lines against the CSV before trusting a new table, and read the boot
+with `monitor.py --baud 115200`: the application talks at 921600 and prints nothing when
+it never gets that far, so only the ROM bootloader's output shows the fault.
 
 20 KB of `nvs` is about three times what the firmware can put there. Radio calibration
 under `phy/cal_data` is the largest entry at ~1,950 bytes; the WiFi credentials in
