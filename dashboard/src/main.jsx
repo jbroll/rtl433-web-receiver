@@ -12,6 +12,7 @@ import { measureGrid, installGestures, cellSignal, valueFont, fitValues, draggin
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
+import './renderers.jsx'
 
 let build = null
 

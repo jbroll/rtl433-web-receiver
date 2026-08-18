@@ -150,3 +150,13 @@ section[hidden] { display:none; }
 #settings summary { cursor:pointer; font-weight:600; }
 #settings label { margin-right:1rem; white-space:nowrap; }
 #settings select { font:inherit; background:Canvas; color:inherit; border:1px solid var(--line); }
+/* A rich value draws its own cell. container-type:size makes the cell the
+   sizing reference, so type scales with the card instead of joining the
+   page-wide font fit that .fv values share. */
+.card .val.cval { container-type:size; align-items:stretch; justify-content:flex-start;
+                  padding:.1rem 0; }
+.cval .cfn { font-size:clamp(8px,13cqh,12px); text-transform:uppercase; letter-spacing:.05em;
+             opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cval .big { font-size:clamp(11px,34cqh,64px); font-variant-numeric:tabular-nums;
+             line-height:1.05; }
+.cval .ctext { font-size:clamp(9px,16cqh,22px); overflow:hidden; }

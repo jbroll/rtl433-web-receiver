@@ -9,6 +9,7 @@ import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, valueFont, textWidthEm, cellSignal,
          trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize, computeUniformFontSize } from './grid.js'
 import { tick } from './tick.js'
+import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
 
 export function CardsView() {
   const gridRef = useRef(null)
@@ -176,8 +177,29 @@ function Body({ rec, vis, h, w, cardKey }) {
       }}
     >
       {vis.map(f => (
-        <Value key={f} rec={rec} field={f} font={font} cardKey={cardKey} />
+        isRich(rec.merged.value[f])
+          ? <RichValue key={f} rec={rec} field={f} cardKey={cardKey} />
+          : <Value key={f} rec={rec} field={f} font={font} cardKey={cardKey} />
       ))}
+    </div>
+  )
+}
+
+function RichValue({ rec, field }) {
+  const raw = rec.merged.value[field]
+  const R = rendererFor(raw)
+
+  return (
+    <div
+      class="val cval"
+      data-f={field}
+      onPointerDown={(ev) => {
+        if (!editing.value) return
+        ev.stopPropagation()
+        beginDrag(ev, ev.target.closest('.card'), ev.currentTarget)
+      }}
+    >
+      {R ? <R v={raw} rec={rec} field={field} /> : null}
     </div>
   )
 }
@@ -227,7 +249,18 @@ function BottomStrip({ rec }) {
   return (
     <div class="btm">
       {bottom.map(f => {
-        const d = displayValue(f, rec.merged.value[f], settings.value)
+        const raw = rec.merged.value[f]
+        if (isRich(raw)) {
+          const brief = briefOf(raw)
+          if (!brief) return null
+          return (
+            <span key={f}>
+              <span class="bn">{labelOf(raw, f)}</span>
+              <span class="bv">{brief}</span>
+            </span>
+          )
+        }
+        const d = displayValue(f, raw, settings.value)
         return (
           <span key={f}>
             <span class="bn">{d.name}</span>

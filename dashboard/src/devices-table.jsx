@@ -6,11 +6,21 @@ import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { sortDevices, sortBy, current, sortable } from './devicesort.js'
 import { tick } from './tick.js'
+import { isRich, briefOf } from './render-values.js'
 
 function reading(rec) {
   const s = settings.value
-  return Object.keys(rec.merged.value)
-    .map(k => { const d = displayValue(k, rec.merged.value[k], s); return d.name + ": " + d.num + d.unit })
+  const merged = rec.merged.value
+  return Object.keys(merged)
+    .map(k => {
+      const raw = merged[k]
+      // A rich value has no scalar form; its one-line brief stands in, and a
+      // value without one is left out rather than stringified into the cell.
+      if (isRich(raw)) { const b = briefOf(raw); return b ? k + ": " + b : '' }
+      const d = displayValue(k, raw, s)
+      return d.name + ": " + d.num + d.unit
+    })
+    .filter(Boolean)
     .join("  ")
 }
 
