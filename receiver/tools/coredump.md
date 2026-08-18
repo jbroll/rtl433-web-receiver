@@ -1,0 +1,36 @@
+# Coredump fetch and decode
+
+When the ESP32-S3 crashes it writes a core dump to flash before resetting. The
+coredump partition is 64 KiB at address `0x3f0000`.
+
+On the USB console the boot log prints `Found core dump N bytes in flash` if a
+coredump is present. The `coredump_pending` telemetry field is set to `true`
+while a dump is waiting to be collected.
+
+## Fetch and decode
+
+Connect the serial port and run:
+
+    ./tools/fetch_coredump.sh /dev/ttyACM0
+
+The script reads 64 KiB from `0x3f0000` into `core.bin` and decodes it against
+`receiver/.pio/build/esp32s3-generic/firmware.elf`.
+
+The tools used are:
+
+- esptool (`tool-esptoolpy`) to read flash
+- esp-coredump (`esp_coredump` Python package in PlatformIO's penv) to decode
+
+On this machine the tools live at:
+
+- `$HOME/.platformio/packages/tool-esptoolpy/esptool.py`
+- `$HOME/.platformio/penv/bin/esp-coredump`
+- `$HOME/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-gdb`
+
+## Interactive debugging
+
+To open an interactive GDB session with the core dump:
+
+    xtensa-esp32s3-elf-gdb -ex "corefile core.bin" firmware.elf
+
+Replace the GDB and ELF paths above as needed for your platform.
