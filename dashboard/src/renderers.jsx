@@ -15,8 +15,7 @@ registerValue('text', ({ v }) => (
   </>
 ))
 
-// Seconds come off the shared tick rather than a timer of this component's
-// own, so the whole page still runs on one interval.
+// The shared tick keeps the displayed minute current without a separate timer.
 registerValue('clock', ({ v }) => {
   tick.value
   const now = new Date()
