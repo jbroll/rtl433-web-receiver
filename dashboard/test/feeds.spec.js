@@ -39,24 +39,64 @@ test("the clock reads in the chosen zone and shows its offset", async ({ page })
   await setPlace(page, 40.015, -105.2705, "America/Denver");
   await expect(page.locator(CLOCK)).toBeVisible();
 
-  const shown = await page.locator(`${CLOCK} .val.cval .big`).textContent();
-  const expected = await page.evaluate(() => new Intl.DateTimeFormat(undefined, {
-    timeZone: "America/Denver", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()));
+  const shown = await page.locator(`${CLOCK} .val[data-f="local_time_12"] .big`).textContent();
+  const expected = await page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat(undefined, {
+      timeZone: "America/Denver", hour: "2-digit", minute: "2-digit", hour12: true }).formatToParts(new Date());
+    return parts.filter(p => p.type === "hour" || p.type === "literal" || p.type === "minute").map(p => p.value).join("");
+  });
   expect(shown).toBe(expected);
 
   await expect(page.locator(`${CLOCK} .val[data-f="utc_offset"] .fv`)).toHaveText(/^[-+]0[67]:00$/);
   await expect(page.locator(`${CLOCK} .val[data-f="time_zone"] .fv`)).toHaveText("America/Denver");
 });
 
+test("the 12-hour clock shows a three-letter zone abbreviation and AM/PM", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(CLOCK)).toBeVisible();
+
+  await expect(page.locator(`${CLOCK} .val[data-f="local_time_12"]`)).toBeVisible();
+  await expect(page.locator(`${CLOCK} .val[data-f="local_time_24"]`)).toHaveCount(0);
+
+  const cfn = await page.locator(`${CLOCK} .val[data-f="local_time_12"] .cfn`).textContent();
+  expect(cfn).toMatch(/^[A-Z]{3}\s*(AM|PM)$/);
+
+  const big = await page.locator(`${CLOCK} .val[data-f="local_time_12"] .big`).textContent();
+  expect(big).toMatch(/^\d{1,2}:\d{2}\s*$/);
+  expect(big).not.toMatch(/[AP]M/);
+});
+
+test("the 24-hour clock shows no AM/PM and uses two-digit hour", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(CLOCK)).toBeVisible();
+
+  await page.evaluate(() => {
+    setValueMode("local feed/Clock", "local_time_24", "shown");
+    saveCardState();
+  });
+
+  await expect(page.locator(`${CLOCK} .val[data-f="local_time_24"]`)).toBeVisible();
+
+  const cfn = await page.locator(`${CLOCK} .val[data-f="local_time_24"] .cfn`).textContent();
+  expect(cfn).toMatch(/^[A-Z]{3}$/);
+  expect(cfn).not.toMatch(/[AP]M/);
+
+  const big = await page.locator(`${CLOCK} .val[data-f="local_time_24"] .big`).textContent();
+  expect(big).toMatch(/^\d{2}:\d{2}$/);
+  expect(big).not.toMatch(/[AP]M/);
+});
+
 test("changing the zone moves the clock", async ({ page }) => {
   await open(page);
   await setPlace(page, 40.015, -105.2705, "America/Denver");
   await expect(page.locator(CLOCK)).toBeVisible();
-  const denver = await page.locator(`${CLOCK} .val.cval .big`).textContent();
+  const denver = await page.locator(`${CLOCK} .val[data-f="local_time_12"] .big`).textContent();
 
   await setPlace(page, 35.68, 139.69, "Asia/Tokyo");
   await expect(page.locator(`${CLOCK} .val[data-f="time_zone"] .fv`)).toHaveText("Asia/Tokyo");
-  expect(await page.locator(`${CLOCK} .val.cval .big`).textContent()).not.toBe(denver);
+  expect(await page.locator(`${CLOCK} .val[data-f="local_time_12"] .big`).textContent()).not.toBe(denver);
 });
 
 test("the clock survives a reload without waiting on anything", async ({ page }) => {
