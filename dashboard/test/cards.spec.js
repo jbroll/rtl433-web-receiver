@@ -426,23 +426,19 @@ test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await expect(card.locator(".age")).not.toBeEmpty();
 });
 
-test("a card's widest reading fills its box", async ({ page }) => {
+test("the page's tightest reading fills its box", async ({ page }) => {
   await open(page, [ACURITE, LONGNAME]);
   await page.click("#tab-cards");
   const fills = await page.evaluate(() =>
-    [...document.querySelectorAll("#cards .card")].map(card => {
-      let best = 0;
-      for (const fv of card.querySelectorAll(".fv")) {
-        const val = fv.parentNode;
-        const fn = val.querySelector(".fn");
-        const wide = fv.scrollWidth / val.clientWidth;
-        const tall = fv.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight);
-        best = Math.max(best, wide, tall);
-      }
-      return { key: card.dataset.key, best };
+    [...document.querySelectorAll("#cards .fv")].map(fv => {
+      const val = fv.parentNode;
+      const fn = val.querySelector(".fn");
+      return Math.max(fv.scrollWidth / val.clientWidth,
+                      fv.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight));
     }));
   expect(fills.length).toBeGreaterThan(1);
-  for (const f of fills) expect(f.best, f.key).toBeGreaterThan(0.9);
+  expect(Math.max(...fills)).toBeGreaterThan(0.9);
+  expect(Math.max(...fills)).toBeLessThanOrEqual(1);
 });
 
 test("resizing while scrolled fits to the same font as a fresh load", async ({ page }) => {
@@ -1276,20 +1272,21 @@ test("every value in a card shares the size its widest reading needs", async ({ 
   expect(sizes.length).toBeGreaterThan(3);
   expect([...new Set(sizes)]).toHaveLength(1);
 
-  // "1013.3hPa" is the widest reading, so it is the one the shared size fits.
+  // "1013.3" is the widest reading, so it is the one the shared size fits.
   const cut = await page.locator(LONG_CARD + ' .val[data-f="pressure_hPa"] .fv')
     .evaluate(n => n.scrollWidth - n.clientWidth);
   expect(cut).toBeLessThanOrEqual(0);
 });
 
-test("a card of short readings keeps larger type than one with a long reading", async ({ page }) => {
+test("every card on the page shares one type size", async ({ page }) => {
   await open(page, [ACURITE, LONGNAME]);
   await page.click("#tab-cards");
   await setSize(page, ACURITE_KEY, 2, 2);
   await setSize(page, LONG_KEY, 2, 2);
-  const size = sel => page.locator(sel + " .fv").first().evaluate(n => parseFloat(n.style.fontSize));
 
-  expect(await size(LONG_CARD)).toBeLessThan(await size(CARD));
+  const sizes = await page.locator("#cards .fv").evaluateAll(n => n.map(f => f.style.fontSize));
+  expect(sizes.length).toBeGreaterThan(3);
+  expect([...new Set(sizes)]).toHaveLength(1);
 });
 
 test("the width fit only shrinks, never grows past the height its box leaves", async ({ page }) => {

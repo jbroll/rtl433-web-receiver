@@ -214,12 +214,7 @@ function Value({ rec, field, cardKey }) {
 
   // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
   useLayoutEffect(() => {
-    const valEl = valRef.current
-    if (!valEl) return
-    const card = valEl.closest('.card')
-    if (card) {
-      trackFit(valEl, card, textWidthEm(d.num))
-    }
+    if (valRef.current) trackFit(valRef.current, textWidthEm(d.num))
   }, [d.num, d.unit])
 
   return (

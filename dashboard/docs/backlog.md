@@ -34,8 +34,10 @@
   from the device table as well as from a card.
 - `fitValues()` measures on a canvas at the font family `getComputedStyle(document.body)`
   reports, ignoring letter-spacing and font-feature settings, so a style change to `.fv`
-  could bring the ellipsis back. A card whose widest reading cannot fit even at 11px
-  still ellipsizes.
+  could bring the ellipsis back. A reading that cannot fit even at 11px still
+  ellipsizes.
+- One size for the page means one crowded card sets it for every other. Nothing caps
+  how far a single card can pull the rest down short of the 11px floor.
 - `LINE_HEIGHT` in `grid.js` repeats the `line-height` on `.card .val` in CSS. Changing
   one without the other leaves the height fit off by that ratio.
 - `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid has no `gap`.

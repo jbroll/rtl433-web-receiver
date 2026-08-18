@@ -125,10 +125,12 @@ width in ems against the node; the width the box allows is then `box ÷ em` at
 any later size, with no re-measure. The unit is not in that width because it
 renders in the `.fn` header, not beside the number.
 
-Two bounds apply. The width bound is the smallest one the card's own readings
-need, so every reading on a card shares one size and a long reading on another
-card changes nothing. The height bound is what the value box leaves under the
-field name, divided by the line height. The smaller wins, with a floor of 11px.
+Every reading on the page takes one size. Each value bounds it twice: by width,
+at `box ÷ em`, and by height, at what its box leaves under the field name
+divided by the line height. The smallest bound any value produces is the size
+they all get, with a floor of 11px. A card of two readings therefore reads at
+the same size as a card of five beside it, rather than each card sizing to its
+own boxes.
 
 `fitValues()` is the only writer of `.fv` font size. Setting an initial size in
 the JSX as well would let a re-render put the unfitted size back, which is what

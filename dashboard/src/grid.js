@@ -45,8 +45,8 @@ export function textWidthEm(num) {
 
 let fitting = new Map()
 
-export function trackFit(node, card, em) {
-  fitting.set(node, { node: node, card: card, em: em })
+export function trackFit(node, em) {
+  fitting.set(node, { node: node, em: em })
 }
 
 export function resetFit() {
@@ -57,7 +57,7 @@ export function resetFit() {
 const LINE_HEIGHT = 1.05
 
 export function fitValues() {
-  const caps = new Map()
+  let global = FONT_MAX
   const boxes = []
   for (const f of fitting.values()) {
     const parent = f.node.parentNode
@@ -67,19 +67,15 @@ export function fitValues() {
     // A hidden tab measures zero. Fitting to that would drop every value to the
     // floor, and nothing re-measures when the tab comes back.
     if (box <= 0 || rowH <= 0) continue
-    const cap = Math.floor(box / f.em)
-    const prev = caps.get(f.card)
-    if (prev === undefined || cap < prev) caps.set(f.card, cap)
-    boxes.push({ f: f, parent: parent, rowH: rowH })
+    const fn = parent.querySelector(".fn")
+    const availH = Math.floor((rowH - (fn ? fn.offsetHeight : 0)) / LINE_HEIGHT)
+    const fits = Math.min(Math.floor(box / f.em), availH)
+    if (fits < global) global = fits
+    boxes.push(f.node)
   }
-  // A card takes the size its own widest reading needs. Capping across the page
-  // instead would let one long reading anywhere shrink every card.
-  for (const b of boxes) {
-    const fn = b.parent.querySelector(".fn")
-    const availH = Math.floor((b.rowH - (fn ? fn.offsetHeight : 0)) / LINE_HEIGHT)
-    const size = Math.min(caps.get(b.f.card), availH, FONT_MAX)
-    b.f.node.style.fontSize = Math.max(FONT_MIN, size) + "px"
-  }
+  // One size for the whole page: the largest the tightest value box allows.
+  const size = Math.max(FONT_MIN, global) + "px"
+  for (const node of boxes) node.style.fontSize = size
 }
 
 export const editing = signal(false)
