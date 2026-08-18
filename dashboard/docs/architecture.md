@@ -7,7 +7,7 @@ Plain ES modules, no framework, bundled by `esbuild` into one `<script>`.
 | Module | Holds |
 |---|---|
 | `render.js` | the render callback `main.js` installs, so no module has to import `main.js` back |
-| `units.js` | `el()`, the meta and status field sets, `splitUnit()`, `fmtValue()`, `ageText()`, and reading extraction |
+| `units.js` | `el()`, the meta and status field sets, `splitUnit()`, `fmtValue()`, `displayValue()`, `ageText()`, and reading extraction |
 | `alias.js` | keys, the alias map, name resolution, and the alias POST |
 | `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
 | `store.js` | layout and settings in `localStorage`, and `forgetLayouts()` |
@@ -78,6 +78,35 @@ When the dashboard is served by a receiver, a rename still posts to the source's
 topic so the receiver can persist it. When the dashboard is served by a separate broker or
 static server, the source is external and has no persistent alias store for that client,
 so the rename stays local and survives reloads from `localStorage`.
+
+## Display pipeline
+
+`units.js` owns three functions that shape every reading as it reaches the UI.
+
+`splitUnit(field)` strips the trailing unit suffix from the field name and returns
+`{ name, unit }`. The suffix comes from rtl_433's naming convention, so no table of
+sensor types is needed.
+
+`fmtValue(v, decimals)` rounds the number to the given precision and strips trailing
+zeros — `1.00` → `"1"`, `1.50` → `"1.5"`.
+
+`displayValue(field, raw, settings)` calls `splitUnit`, then checks whether the field
+belongs to a converting group (temperature, rain, wind, pressure). If it does, it
+converts the raw value through the canonical unit for that group — °C for temperature,
+mm for rain, km/h for wind, hPa for pressure — and then to the target unit the
+settings specify. Fields outside any converting group pass through unchanged. The
+result is `{ name, num, unit }`.
+
+`settings.js` owns the `rtl433.settings.v1` signal, whose value is
+`{ units: "metric" | "imperial" | "custom", decimals: 0–5, custom: { temp, rain, wind, pressure } }`.
+The presets are Metric (°C, mm, km/h, hPa) and Imperial (°F, in, mi/h, hPa).
+Choosing a preset overwrites all four custom fields; in Custom mode the four
+fields are stored independently and changed one at a time.
+
+`cards.jsx` and `devices-table.jsx` both render readings through `displayValue`.
+`CardsView` reads the settings signal as a dependency, so any settings change
+triggers a re-fit: font size is recomputed against the new display values and the
+card re-renders with the updated numbers and units.
 
 ## Sources
 

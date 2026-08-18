@@ -57,6 +57,15 @@ test("the served page lists devices and streams live signals", async ({ page }) 
   await expect(page.locator("#devices tr:not(.vrow)")).toHaveCount(2);
 });
 
+test("the devices table shows readings converted and formatted", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-devices");
+  const reading = page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"] td`).nth(2);
+  await expect(reading).toContainText("temperature: 21.8°C");
+  await expect(reading).toContainText("wind avg: 7.4km/h");
+  await expect(reading).toContainText("humidity: 38%");
+});
+
 test("a message with no time still renders, ages from arrival, and reaches the log", async ({ page }) => {
   await open(page, [ACURITE]);
   server.emit(OREGON, { time: null });
@@ -413,7 +422,7 @@ test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await expect(card.locator(".rs")).toHaveText("-72");
   await expect(card.locator(".val")).toHaveCount(3);
   await expect(card.locator('.val[data-f="battery_ok"]')).toHaveCount(0);
-  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toContainText("71.2");
+  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toContainText("21.8");
   await expect(card.locator(".age")).not.toBeEmpty();
 });
 
@@ -653,7 +662,7 @@ test("a bottom value carries its label, reading and unit", async ({ page }) => {
 
   const strip = page.locator(CARD + " .btm");
   await expect(strip.locator(".bn").last()).toHaveText("temperature");
-  await expect(strip.locator(".bv").last()).toHaveText("71.2°F");
+  await expect(strip.locator(".bv").last()).toHaveText("21.8°C");
   await expect(page.locator(CARD + ' .val[data-f="temperature_F"]')).toHaveCount(0);
 });
 
@@ -1031,12 +1040,12 @@ test("displayed values are rounded and trimmed, without touching stored data", a
   expect(stored).toBeCloseTo(71.23456789, 6);
 });
 
-test("fmtValue rounds by magnitude and leaves non-numbers untouched", async ({ page }) => {
+test("fmtValue rounds to fixed decimals and trims trailing zeros", async ({ page }) => {
   await open(page, [ACURITE]);
   const out = await page.evaluate(() => [
-    fmtValue(71.234), fmtValue(4.6), fmtValue(0.0300), fmtValue(1013.25),
-    fmtValue(38), fmtValue("CHECKSUM"), fmtValue(true),
-    fmtValue(-12.345), fmtValue(-4.5678), fmtValue(-0.004), fmtValue(-1013.25),
+    fmtValue(71.234, 1), fmtValue(4.6, 2), fmtValue(0.0300, 3), fmtValue(1013.25, 1),
+    fmtValue(38, 0), fmtValue("CHECKSUM", 2), fmtValue(true, 2),
+    fmtValue(-12.345, 1), fmtValue(-4.5678, 2), fmtValue(-0.004, 1), fmtValue(-1013.25, 1),
   ]);
   expect(out).toEqual(["71.2", "4.6", "0.03", "1013.3", "38", "CHECKSUM", "true",
                       "-12.3", "-4.57", "0", "-1013.3"]);

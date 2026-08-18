@@ -2,12 +2,16 @@ import { useRef, useEffect } from 'preact/hooks'
 import { devices } from './devices.js'
 import { cardFields, cardHidden, setCardHidden, valueMode, setValueMode } from './store.js'
 import { aliasOf, postAlias, shortKey } from './alias.js'
-import { ageText } from './units.js'
+import { ageText, displayValue } from './units.js'
+import { settings } from './settings.js'
 import { sortDevices, sortBy, current, sortable } from './devicesort.js'
 import { tick } from './tick.js'
 
 function reading(rec) {
-  return Object.keys(rec.merged.value).map(k => k + ": " + rec.merged.value[k]).join("  ")
+  const s = settings.value
+  return Object.keys(rec.merged.value)
+    .map(k => { const d = displayValue(k, rec.merged.value[k], s); return d.name + ": " + d.num + d.unit })
+    .join("  ")
 }
 
 function DeviceRow({ r }) {

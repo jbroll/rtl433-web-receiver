@@ -120,6 +120,27 @@ device name in the label ellipsizes rather than overflowing the card; readings
 round to one or two decimal places for display, without changing the stored
 values.
 
+## Settings
+
+The Devices tab opens with the Settings section collapsed. A collapsed Settings
+shows only its summary line; expanding it reveals the controls.
+
+**Decimals** selects how many decimal places a card displays, from 0 to 5.
+`fmtValue` rounds to that precision and strips trailing zeros, so `1.00`
+becomes `1` and `1.50` becomes `1.5`.
+
+**Units** chooses between Metric, Imperial, and Custom. Metric is the default.
+Imperial converts temperature to °F, rain to inches, and wind speed to mi/h;
+pressure stays in hPa, the metric value.
+Custom exposes four selects — Temperature (°C/°F), Rain (mm/in), Wind
+(km/h/mi/h/m/s), and Pressure (hPa/kPa) — that each apply independently.
+
+Conversion runs at display time only. Temperature, rain, wind, and pressure
+are each converted through a canonical unit (°C, mm, km/h, hPa), so any
+source unit composes with any display unit. The stored readings in `devices`
+are never modified; a Celsius reading stays Celsius in the device object and
+receives an °F conversion only when rendered.
+
 ## Sources
 
 With no sources configured the dashboard reads the origin it was served from. The
