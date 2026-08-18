@@ -57,6 +57,15 @@ test("the served page lists devices and streams live signals", async ({ page }) 
   await expect(page.locator("#devices tr:not(.vrow)")).toHaveCount(2);
 });
 
+test("the devices table shows readings converted and formatted", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.click("#tab-devices");
+  const reading = page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"] td`).nth(2);
+  await expect(reading).toContainText("temperature: 21.8°C");
+  await expect(reading).toContainText("wind avg: 7.4km/h");
+  await expect(reading).toContainText("humidity: 38%");
+});
+
 test("a message with no time still renders, ages from arrival, and reaches the log", async ({ page }) => {
   await open(page, [ACURITE]);
   server.emit(OREGON, { time: null });
