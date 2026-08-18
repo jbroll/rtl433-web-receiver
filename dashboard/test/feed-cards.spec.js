@@ -65,3 +65,9 @@ test("a feed card keeps its size across a reload", async ({ page }) => {
   const span = await page.locator(SUN_CARD).evaluate(el => el.style.gridColumn + " / " + el.style.gridRow);
   expect(span).toBe("span 3 / span 2");
 });
+
+test("the tabs read Cards, Devices, Sources, Log", async ({ page }) => {
+  server = await startPage();
+  await page.goto(server.url);
+  await expect(page.locator("nav button")).toHaveText(["Cards", "Devices", "Sources", "Log"]);
+});

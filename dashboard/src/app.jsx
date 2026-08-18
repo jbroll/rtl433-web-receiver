@@ -10,7 +10,7 @@ import { setGrid, forgetLayouts, grid } from './store.js'
 
 export const tab = signal('cards')
 
-const TABS = ['devices', 'log', 'cards', 'sources']
+const TABS = ['cards', 'devices', 'sources', 'log']
 
 function Status() {
   const states = [...sourceState.value.values()]
@@ -40,14 +40,6 @@ export function App() {
         </nav>
         <Status />
       </header>
-      <section id="view-devices" hidden={tab.value !== 'devices'}>
-        <SettingsView />
-        <DevicesView />
-      </section>
-      <LogView />
-      <section id="view-sources" hidden={tab.value !== 'sources'}>
-        <SourcesView />
-      </section>
       <section id="view-cards" class={editing.value ? 'editing' : ''} hidden={tab.value !== 'cards'}>
         <button
           id="edit-cards"
@@ -92,6 +84,14 @@ export function App() {
         </span>
         <CardsView />
       </section>
+      <section id="view-devices" hidden={tab.value !== 'devices'}>
+        <SettingsView />
+        <DevicesView />
+      </section>
+      <section id="view-sources" hidden={tab.value !== 'sources'}>
+        <SourcesView />
+      </section>
+      <LogView />
     </>
   )
 }
