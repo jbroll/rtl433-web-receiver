@@ -151,7 +151,7 @@ function exposeForTests() {
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
-    setLocation, expireFeeds,
+    setLocation, expireFeeds, setValueMode: store.setValueMode,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },

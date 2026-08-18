@@ -51,7 +51,7 @@ function publish(feed, fields, at) {
     // fetched something stamps the time its data came from.
     seenAt: feed.stamped ? at : 0,
   })
-  ensureCard(key, fields, { autoShow: true })
+  ensureCard(key, fields, { autoShow: true, hiddenValues: feed.defaultHidden })
   saveCardState()
 }
 

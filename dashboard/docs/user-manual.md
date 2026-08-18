@@ -172,11 +172,21 @@ Weather comes from the National Weather Service, which covers the United States
 only. Elsewhere the card says so and stops asking; the other three cards work
 anywhere.
 
-**Sun** shows sunrise, sunset, solar noon, the three twilights, and day length.
-**Moon** shows the phase, how much of the disc is lit, and moonrise and moonset.
-Both are computed here from your latitude, longitude and the date, so they need
-no network at all. In polar summer or winter, times that do not occur read as a
-dash.
+**Sun** opens on a dial: the day drawn as an arc with the twilight bands under
+the horizon, a marker at where the sun is now, and sunrise and sunset written
+below it. Solar noon, the three twilights and day length sit beside it as
+ordinary values.
+
+**Moon** opens the same way: the disc drawn with its terminator, moonrise and
+moonset beside it, and the phase and how much is lit underneath.
+
+Because each dial already carries its rise and set times, those two values start
+hidden on the card. They are still listed on the Devices tab, so set either back
+to shown if you would rather read them as numbers.
+
+Both cards are computed here from your latitude, longitude and the date, so they
+need no network at all. In polar summer or winter the dial says "up all day" or
+"down all day", and a time that does not occur reads as a dash.
 
 **Clock** shows the time and date in the chosen zone, its UTC offset, and
 whether daylight saving is in effect. The offset is exact. The DST flag is

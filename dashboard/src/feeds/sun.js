@@ -16,6 +16,9 @@ export default {
   interval: 15 * 60000,
   stamped: false,
 
+  // The dial already draws these. They stay available from the devices table.
+  defaultHidden: ['sunrise', 'sunset'],
+
   run(ctx) {
     const e = sunEvents(new Date(), ctx.lat, ctx.lon)
     const z = ctx.zone
@@ -28,6 +31,9 @@ export default {
         sun: {
           $r: 'sun',
           brief,
+          riseText: e.alwaysUp || e.alwaysDown ? '' : hhmm(e.sunrise, z),
+          setText: e.alwaysUp || e.alwaysDown ? '' : hhmm(e.sunset, z),
+          lengthText: lengthText(e.dayLength),
           sunrise: ms(e.sunrise),
           sunset: ms(e.sunset),
           solarNoon: ms(e.solarNoon),

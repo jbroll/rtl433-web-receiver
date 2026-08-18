@@ -90,9 +90,13 @@ export function ensureCard(key, merged, opts) {
   let c = s.cards[key]
   const fields = Object.keys(merged || {})
   if (!c) {
+    // A feed may nominate values that exist but are not what the card is for,
+    // such as the times a composite value already draws. They stay one click
+    // away in the devices table.
+    const startHidden = (opts && opts.hiddenValues) || []
     c = {
       valueOrder: fields.slice(),
-      hiddenValues: [],
+      hiddenValues: fields.filter(f => startHidden.indexOf(f) >= 0),
       bottomValues: fields.filter(f => STATUS_FIELDS.has(f)),
     }
     s.cards[key] = c

@@ -7,6 +7,9 @@ export default {
   interval: 15 * 60000,
   stamped: false,
 
+  // The disc already draws these. They stay available from the devices table.
+  defaultHidden: ['moonrise', 'moonset', 'phase', 'illumination'],
+
   run(ctx) {
     const now = new Date()
     const p = moonPhase(now)
@@ -19,6 +22,9 @@ export default {
         moon: {
           $r: 'moon',
           brief: `${p.name} ${pct}%`,
+          riseText: hhmm(t.rise, z),
+          setText: hhmm(t.set, z),
+          pct,
           illumination: p.illumination,
           phase: p.phase,
           waxing: p.waxing,

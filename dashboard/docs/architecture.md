@@ -167,6 +167,16 @@ Type inside a rich cell scales by container query against the cell itself. An
 engine without container queries drops the `clamp()` and falls back to inherited
 body type, which is legible.
 
+The sun and moon renderers are composites: they draw their rise and set times
+inside the SVG rather than beside it, so the whole thing scales as one unit and
+one cell tells the whole story. Type sizes there are chosen so the longest
+string each slot can hold still fits the viewBox, because an SVG clips overflow
+rather than scaling it away; `test/feeds.spec.js` measures that against the
+worst case. A feed can name values a composite already covers in
+`defaultHidden`, and `ensureCard()` seeds them into the card's hidden set when
+it creates the card. They stay in `valueOrder` and stay reachable from the
+devices table.
+
 ## Third-party requests
 
 The page still loads with no external request. Once the user sets a location it

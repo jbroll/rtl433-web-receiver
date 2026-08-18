@@ -123,3 +123,20 @@ test('a hidden radio device with no record is still pruned', () => {
 
   assert.equal(store.cardEntry(K), undefined)
 })
+
+test('a feed can start some values hidden, without dropping them', () => {
+  store.ensureCard(FEED, { ...SUN, extra: 1 }, { autoShow: true, hiddenValues: ['sunset', 'nothing'] })
+  const c = store.cardEntry(FEED)
+
+  assert.deepEqual(c.hiddenValues, ['sunset'], 'a name that is not a field must not be stored')
+  assert.deepEqual(store.visibleValues(FEED, { ...SUN, extra: 1 }), ['sunrise', 'extra'])
+  assert.ok(c.valueOrder.includes('sunset'), 'a hidden value must stay reachable')
+})
+
+test('a value hidden by default can be shown, and stays shown', () => {
+  store.ensureCard(FEED, SUN, { autoShow: true, hiddenValues: ['sunset'] })
+  store.setValueMode(FEED, 'sunset', 'shown')
+  store.ensureCard(FEED, SUN, { autoShow: true, hiddenValues: ['sunset'] })
+
+  assert.deepEqual(store.cardEntry(FEED).hiddenValues, [])
+})

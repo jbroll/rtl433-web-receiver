@@ -98,6 +98,22 @@ test("hiding one value on a feed card leaves the rest", async ({ page }) => {
 const SUN = '.card:not(.ghostcard)[data-key="local feed/Sun"]';
 const MOON = '.card:not(.ghostcard)[data-key="local feed/Moon"]';
 
+// The dials draw their times inside the SVG, so a string wider than the
+// viewBox is clipped by the cell rather than scaled down. These pin the
+// longest string each slot can hold.
+async function textFits(page, key) {
+  return page.evaluate(k => {
+    const cell = document.querySelector(`.card[data-key="${k}"] .val.cval`);
+    const c = cell.getBoundingClientRect();
+    return [...cell.querySelectorAll("text")]
+      .filter(t => t.textContent.trim())
+      .map(t => {
+        const b = t.getBoundingClientRect();
+        return { txt: t.textContent.trim(), fits: b.left >= c.left - 0.5 && b.right <= c.right + 0.5 };
+      });
+  }, key);
+}
+
 test("the sun and moon cards appear once a location is set", async ({ page }) => {
   await open(page);
   await expect(page.locator(SUN)).toHaveCount(0);
@@ -115,7 +131,8 @@ test("the sun dial and moon disc draw inside their own cell", async ({ page }) =
 
   await expect(page.locator(`${SUN} .val.cval[data-f="sun"] svg`)).toHaveCount(1);
   await expect(page.locator(`${MOON} .val.cval[data-f="moon"] svg`)).toHaveCount(1);
-  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] .csub`)).toHaveText(/\d\d:\d\d \/ \d\d:\d\d/);
+  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] text`).first())
+    .toHaveText(/^\u2191 \d\d:\d\d$/);
   await expect(page.locator(`${SUN} .val[data-f="day_length"] .fv`)).toHaveText(/^\d{1,2}h \d{1,2}m$/);
 });
 
@@ -136,6 +153,79 @@ test("a polar location still draws both cards", async ({ page }) => {
 
   await expect(page.locator(`${SUN} .val.cval[data-f="sun"] svg`)).toHaveCount(1);
   await expect(page.locator(`${MOON} .val.cval[data-f="moon"] svg`)).toHaveCount(1);
+
+  // With no rise or set to name, the dial says which way round the day is
+  // rather than drawing two dashes.
+  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] text`).first())
+    .toHaveText(/^(up|down) all day$/);
+  for (const t of await textFits(page, "local feed/Sun")) {
+    expect(t.fits, `"${t.txt}" overflows the cell`).toBe(true);
+  }
+
+  // Unhide one and it reads as a value like any other.
+  await page.evaluate(() => {
+    setValueMode("local feed/Sun", "sunrise", "shown");
+    saveCardState();
+  });
   await expect(page.locator(`${SUN} .val[data-f="sunrise"] .fv`)).toHaveText("—");
-  await expect(page.locator(`${SUN} .val[data-f="day_length"] .fv`)).toHaveText(/^(24h 0m|0h 0m)$/);
+});
+
+
+test("the sun dial draws its rise and set times inside the cell", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(SUN)).toBeVisible();
+
+  const texts = await textFits(page, "local feed/Sun");
+  expect(texts.map(t => t.txt)).toEqual(
+    expect.arrayContaining([expect.stringMatching(/^\u2191 \d\d:\d\d$/),
+                            expect.stringMatching(/^\u2193 \d\d:\d\d$/)]));
+  for (const t of texts) expect(t.fits, `"${t.txt}" overflows the cell`).toBe(true);
+});
+
+test("the moon disc draws its rise, set and phase inside the cell", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(MOON)).toBeVisible();
+
+  const texts = await textFits(page, "local feed/Moon");
+  expect(texts).toHaveLength(3);
+  for (const t of texts) expect(t.fits, `"${t.txt}" overflows the cell`).toBe(true);
+});
+
+test("the longest phase and time strings still fit", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(MOON)).toBeVisible();
+
+  await page.evaluate(() => {
+    const key = "local feed/Moon";
+    const merged = {
+      moon: { $r: "moon", brief: "x", illumination: 1, phase: 0.5, waxing: true,
+              name: "Waning Crescent", pct: 100, riseText: "22:22", setText: "23:59" },
+    };
+    upsert({ key, merged, seenAt: 0, flashUntil: 0, rssi: undefined, count: 0, obj: null, raw: "" });
+  });
+  await expect(page.locator(`${MOON} .val.cval text`).last()).toHaveText("Waning Crescent 100%");
+
+  for (const t of await textFits(page, "local feed/Moon")) {
+    expect(t.fits, `"${t.txt}" overflows the cell`).toBe(true);
+  }
+});
+
+test("a composite card opens showing the dial, not the times it already draws", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(SUN)).toBeVisible();
+
+  await expect(page.locator(`${SUN} .val[data-f="sun"]`)).toHaveCount(1);
+  await expect(page.locator(`${SUN} .val[data-f="sunrise"]`)).toHaveCount(0);
+  await expect(page.locator(`${SUN} .val[data-f="sunset"]`)).toHaveCount(0);
+  await expect(page.locator(`${MOON} .val[data-f="moon"]`)).toHaveCount(1);
+  await expect(page.locator(`${MOON} .val[data-f="moonrise"]`)).toHaveCount(0);
+
+  // Hidden, not dropped: still listed and still reachable from the table.
+  const hidden = await page.evaluate(() => cardState.cards["local feed/Sun"].hiddenValues);
+  expect(hidden).toEqual(expect.arrayContaining(["sunrise", "sunset"]));
+  expect(await page.evaluate(() => cardState.cards["local feed/Sun"].valueOrder)).toContain("sunrise");
 });
