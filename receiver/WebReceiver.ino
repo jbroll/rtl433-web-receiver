@@ -15,8 +15,12 @@
 #include <rtl_433_ESP.h>
 
 #include "alias_store.h"
+#include "health_store.h"
+#include "radio_health.h"
 #include "signal_store.h"
 #include "web_ui.h"
+#include "esp_core_dump.h"  // esp_core_dump_image_check()
+#include "esp_system.h"     // esp_reset_reason()
 
 #if !defined(WIFI_SSID) || !defined(WIFI_PASSWORD)
 #  error ".env is missing or incomplete - copy .env.example to .env and fill it in"
@@ -32,6 +36,10 @@
 
 #ifndef DEVICE_STALE_HOURS
 #define DEVICE_STALE_HOURS 72
+#endif
+
+#ifndef FAKE_RADIO_FAIL_MS
+#define FAKE_RADIO_FAIL_MS 0 // FAKE_SIGNALS: pretend the radio is deaf after this long
 #endif
 
 #define JSON_MSG_BUFFER   512
@@ -89,6 +97,10 @@ static uint32_t      rtl433QueueDropped  = 0;
 // Written from the decoder task, read from loop(); a stale read only delays a
 // telemetry sample by a minute.
 static volatile unsigned long lastDecodeAt = 0;
+static radio_health::HealthState healthState;
+static bool                      bootCoredumpPending = false;
+static int                       tempFailures = 0;
+static bool                      bootUtcStamped = false;
 
 bool wifiReady() {
   return WiFi.status() == WL_CONNECTED;
@@ -233,11 +245,51 @@ static int radioTemperature() {
     Log.warning(F("receiveDirect after temperature read failed: %d, retrying" CR), state);
     state = radio.receiveDirect();
   }
+  // receiveDirect's return alone is not the whole proof: the OpMode register
+  // read confirms the part is actually in RX, not parked in standby.
+  if (state != RADIOLIB_ERR_NONE || !radioBackInRx(mod)) {
+    Log.error(F("radio not back in RX after temperature read" CR));
+    if (++tempFailures >= 2) {
+      Log.error(F("radio health: two temperature failures, rebooting" CR));
+      esp_restart();
+    }
+    reinitRadio();
+    recordRecoveryEvent();
+    return INT16_MIN;
+  }
+  tempFailures = 0;
   rf.enableReceiver();
-  return state == RADIOLIB_ERR_NONE ? t : INT16_MIN;
+  return t;
 #else
   return INT16_MIN;
 #endif
+}
+
+// Re-runs the radio config path. Safe from loop(): initReceiver()'s task
+// creation is guarded, so no second receiver task spawns, and the SPI bus
+// mutex serializes the re-init against RSSI sampling.
+static void reinitRadio() {
+  rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
+  rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
+  rf.enableReceiver();
+}
+
+// Confirms the SX1231 is actually in RX. receiveDirect()'s return alone is not
+// the whole proof: the OpMode register is read back, bits 4:2 being the mode
+// setMode() wrote.
+static bool radioBackInRx(Module* mod) {
+  return mod->SPIgetRegValue(RADIOLIB_RF69_REG_OP_MODE, 4, 2) ==
+         (RADIOLIB_RF69_RX >> 2);
+}
+
+// One recovery event: stamps the state and NVS, then logs. Called for both the
+// monitor's soft re-init and the temperature-path recovery.
+static void recordRecoveryEvent() {
+  radio_health::noteRecovery(healthState, millis());
+  time_t utc = time(nullptr);
+  health_store::noteRecovery(utc >= 1700000000 ? utc : 0);
+  Log.warning(F("radio health: recovery_count=%lu" CR),
+              (unsigned long)health_store::recoveryCount());
 }
 
 // snprintf returns what it would have written, so an unclamped running offset
@@ -268,11 +320,25 @@ static void recordReceiver() {
     lastRadioC = radioC;
   }
 
+  // 0 only while the last soft re-init has not yet been confirmed by a decode.
+  bool radioOk = healthState.lastRecoveryAt == 0 ||
+                 lastDecodeAt > healthState.lastRecoveryAt;
+
   char buf[JSON_MSG_BUFFER];
   size_t n = 0;
   n = appendf(buf, sizeof(buf), n,
               "{\"model\":\"Receiver\",\"build\":\"" BUILD_ID "\","
+              "\"uptime_s\":%lu,\"boot_count\":%lu,\"last_reset_reason\":%d,"
+              "\"recovery_count\":%lu,\"last_recovery_s\":%lu,"
+              "\"radio_ok\":%d,\"coredump_pending\":%d,"
               "\"temperature_C\":%.1f,\"heap_kB\":%lu",
+              (unsigned long)(millis() / 1000),
+              (unsigned long)health_store::bootCount(),
+              (int)health_store::resetReason(),
+              (unsigned long)health_store::recoveryCount(),
+              (unsigned long)(healthState.lastRecoveryAt / 1000),
+              radioOk ? 1 : 0,
+              bootCoredumpPending ? 1 : 0,
               temperatureRead(), (unsigned long)(ESP.getFreeHeap() / 1024));
   if (radioC != INT16_MIN) {
     n = appendf(buf, sizeof(buf), n, ",\"radio_C\":%d", radioC);
@@ -280,7 +346,9 @@ static void recordReceiver() {
   // Zero until the receiver task has averaged its first batch of samples. The
   // page merges fields across messages, so leaving it out beats reporting 0.
   if (rtl_433_ESP::averageRssi != 0) {
-    n = appendf(buf, sizeof(buf), n, ",\"noise_dBm\":%d", rtl_433_ESP::averageRssi);
+    n = appendf(buf, sizeof(buf), n,
+                ",\"noise_dBm\":%d,\"rssi_thresh\":%d",
+                rtl_433_ESP::averageRssi, rtl_433_ESP::rssiThreshold);
   }
   appendf(buf, sizeof(buf), n, "}");
 
@@ -297,6 +365,7 @@ static bool fakeSignalTick() {
     return false;
   }
   last = millis();
+  lastDecodeAt = last;
   char buf[JSON_MSG_BUFFER];
   snprintf(buf, sizeof(buf),
            "{\"model\":\"Fake-TH\",\"id\":%d,\"channel\":%d,\"temperature_C\":%d.%d,"
@@ -311,6 +380,34 @@ static bool fakeSignalTick() {
 }
 #endif
 
+// The radio health monitor, run once per telemetry cycle. Recovery and reboot
+// happen here; a soft re-init is logged and carried out immediately.
+static void monitorRadioHealth() {
+#ifdef FAKE_SIGNALS
+  // Recovery-exercise mode: after FAKE_RADIO_FAIL_MS pretend the radio is deaf
+  // (no decodes, floor pinned) so the soft re-init path runs and logs. It
+  // requires a board to exercise the ladder.
+  unsigned long decodeAt = lastDecodeAt;
+  int           floor    = rtl_433_ESP::averageRssi;
+  if (FAKE_RADIO_FAIL_MS > 0 && millis() > (unsigned long)FAKE_RADIO_FAIL_MS) {
+    decodeAt = 0;
+    floor    = NOISE_FLOOR_DBM - 1;
+  }
+  radio_health::HealthAction action = radio_health::evaluate(
+      healthState, millis(), floor, decodeAt);
+#else
+  radio_health::HealthAction action = radio_health::evaluate(
+      healthState, millis(), rtl_433_ESP::averageRssi, lastDecodeAt);
+#endif
+  if (action == radio_health::HealthAction::softReinit) {
+    reinitRadio();
+    recordRecoveryEvent();
+  } else if (action == radio_health::HealthAction::reboot) {
+    Log.error(F("radio health: reboot" CR));
+    esp_restart();
+  }
+}
+
 void setup() {
   Serial0.begin(921600);
   delay(1000);
@@ -320,6 +417,13 @@ void setup() {
   Log.begin(LOG_LEVEL, &Serial0);
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
+  health_store::begin();
+  bootCoredumpPending = esp_core_dump_image_check() == ESP_OK;
+  health_store::noteBoot((uint8_t)esp_reset_reason());
+  Log.notice(F("boot: build=%s reset=%d boot_count=%lu heap=%lu coredump=%d" CR),
+             BUILD_ID, (int)health_store::resetReason(),
+             (unsigned long)health_store::bootCount(),
+             (unsigned long)ESP.getFreeHeap(), bootCoredumpPending ? 1 : 0);
   connectWiFi();
   signal_store::setSource(mdnsHostname());
   alias_store::begin();
@@ -349,7 +453,17 @@ void loop() {
   static unsigned long lastTelemetry = 0;
   if (millis() - lastTelemetry >= RECEIVER_TELEMETRY_MS) {
     lastTelemetry = millis();
+    monitorRadioHealth();
     recordReceiver();
+  }
+
+  // The clock comes up via SNTP after WiFi connects; stamp this boot's UTC once.
+  if (!bootUtcStamped) {
+    time_t utc = time(nullptr);
+    if (utc >= 1700000000) {
+      health_store::noteFirstSync(utc);
+      bootUtcStamped = true;
+    }
   }
 
   static unsigned long lastSweep = 0;
