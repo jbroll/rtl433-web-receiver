@@ -116,6 +116,7 @@ export function parseObservation(json) {
 export default {
   id: 'weather',
   topic: 'Weather',
+  cached: true,
   interval: 15 * 60000,
   stamped: true,
 

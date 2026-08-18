@@ -24,7 +24,6 @@ export default {
           brief: `${p.name} ${pct}%`,
           riseText: hhmm(t.rise, z),
           setText: hhmm(t.set, z),
-          pct,
           illumination: p.illumination,
           phase: p.phase,
           waxing: p.waxing,

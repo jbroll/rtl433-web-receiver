@@ -1,7 +1,9 @@
 // Last good feed results, so a reload paints immediately and an entry younger
 // than its feed's interval defers the next run instead of re-fetching.
 
-const CACHE_KEY = 'rtl433.feeds.v1'
+// Bumped when a cached field's shape changes: an entry written by older code
+// is painted before anything reruns, so a stale shape reaches the renderers.
+const CACHE_KEY = 'rtl433.feeds.v2'
 
 let broken = false
 let entries = Object.create(null)

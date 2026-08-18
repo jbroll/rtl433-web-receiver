@@ -229,3 +229,46 @@ test("a composite card opens showing the dial, not the times it already draws", 
   expect(hidden).toEqual(expect.arrayContaining(["sunrise", "sunset"]));
   expect(await page.evaluate(() => cardState.cards["local feed/Sun"].valueOrder)).toContain("sunrise");
 });
+
+// A cached entry outlives the code that wrote it. When a rich value gains a
+// field, the entry on disk still lacks it, and it is painted before anything
+// reruns -- which put "undefined" on the moon card on a real device.
+test("a cache entry written before a field existed never paints undefined", async ({ page }) => {
+  server = await startServer({ devices: [ACURITE] });
+  await page.goto(server.url);
+  await page.evaluate(() => {
+    localStorage.setItem("rtl433.settings.v1", JSON.stringify({
+      units: "metric", decimals: 1, custom: {},
+      location: { lat: 40.015, lon: -105.2705, label: "", zone: "America/Denver", zoom: 11 } }));
+    // The shape moon.js emitted before the dial became a composite.
+    const stale = { at: Date.now(), ranAt: Date.now(), place: "40.015,-105.2705", meta: null,
+      fields: { moon: { $r: "moon", brief: "Waxing Crescent 35%", illumination: 0.35,
+                        phase: 0.2, waxing: true, name: "Waxing Crescent" } } };
+    for (const key of ["rtl433.feeds.v1", "rtl433.feeds.v2"]) {
+      localStorage.setItem(key, JSON.stringify({ moon: stale }));
+    }
+  });
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.evaluate(() => { setHideNewCards(false); cardState = { ...cardState, hidden: [] }; saveCardState(); });
+
+  await expect(page.locator(MOON)).toBeVisible();
+  await expect(page.locator(`${MOON} .val.cval`)).not.toContainText("undefined");
+  await expect(page.locator(`${MOON} .val.cval text`).last()).toHaveText("Waxing Crescent 35%");
+});
+
+test("a computed feed is never cached, so it cannot paint a stale shape", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(MOON)).toBeVisible();
+  await expect(page.locator(SUN)).toBeVisible();
+  await expect(page.locator(CLOCK)).toBeVisible();
+
+  const cached = await page.evaluate(() => {
+    const raw = localStorage.getItem("rtl433.feeds.v2");
+    return raw ? Object.keys(JSON.parse(raw)) : [];
+  });
+  expect(cached).not.toContain("moon");
+  expect(cached).not.toContain("sun");
+  expect(cached).not.toContain("clock");
+});

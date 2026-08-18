@@ -211,10 +211,19 @@ United States makes NWS return 404, which is terminal: that feed stops rather
 than climbing the ladder against a permanent answer. The locally computed feeds
 work anywhere.
 
-Results cache to `localStorage` under `rtl433.feeds.v1`, so a reload paints the
-last good data before anything runs and an entry younger than its interval
-defers the next fetch. Moving the location discards the cache, along with the
-grid mapping and station id a feed had stored about the old point.
+A feed that fetches declares `cached: true`, and its results go to
+`localStorage` under `rtl433.feeds.v2`, so a reload paints the last good data
+before anything runs and an entry younger than its interval defers the next
+fetch. Moving the location discards the cache, along with the grid mapping and
+station id a feed had stored about the old point.
+
+The sun, moon and clock feeds are not cached. They recompute from the system
+clock for nothing, so a cache buys no time and only creates a hazard: an entry
+outlives the code that wrote it, and it is painted before anything reruns. When
+the sun and moon dials became composites and their rich values gained
+`riseText`, the entries already on disk lacked it and the moon card drew
+"undefined". The key carries a version for the same reason, and a renderer
+reads around a missing field rather than printing it.
 
 ## Sources
 

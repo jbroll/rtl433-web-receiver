@@ -99,6 +99,10 @@ function moonPath(k, waxing, cx, cy, r) {
 
 const MCX = 22, MCY = 24, MR = 19
 
+// A cached value outlives the code that wrote it, so a field added later can
+// be missing here. Reading around it beats printing "undefined" on the card.
+const timeOf = t => (typeof t === 'string' && t ? t : '\u2014')
+
 registerValue('moon', ({ v }) => (
   <div class="dialbox">
     <svg class="dial disc" viewBox="0 0 100 58" preserveAspectRatio="xMidYMid meet">
@@ -111,10 +115,10 @@ registerValue('moon', ({ v }) => (
       <path d={moonPath(v.illumination, v.waxing, MCX, MCY, MR)} fill="#e8e3d6" />
       <circle cx={MCX} cy={MCY} r={MR} fill="none" stroke="currentColor"
               stroke-width="1.2" opacity=".6" />
-      <text x="48" y="20" font-size="11" fill="currentColor">{`\u2191 ${v.riseText}`}</text>
-      <text x="48" y="36" font-size="11" fill="currentColor">{`\u2193 ${v.setText}`}</text>
+      <text x="48" y="20" font-size="11" fill="currentColor">{`\u2191 ${timeOf(v.riseText)}`}</text>
+      <text x="48" y="36" font-size="11" fill="currentColor">{`\u2193 ${timeOf(v.setText)}`}</text>
       <text x="50" y="54" font-size="8" fill="currentColor" opacity=".7" text-anchor="middle">
-        {`${v.name} ${v.pct}%`}
+        {`${v.name || ''} ${Math.round((v.illumination || 0) * 100)}%`.trim()}
       </text>
     </svg>
   </div>
@@ -140,7 +144,7 @@ registerValue('forecastDay', ({ v }) => {
           <span class="lo">{temp(v.lo, v.unit, s)}</span>
         </span>
       </div>
-      <div class="csub">{v.pop > 0 ? `${v.pop}% rain` : v.text}</div>
+      <div class="csub">{v.pop > 0 ? `${v.pop}% rain` : v.text || ''}</div>
     </>
   )
 })
@@ -154,7 +158,7 @@ registerValue('now', ({ v }) => {
         <span class="glyph">{glyphOf(v.sky, v.night)}</span>
         <span class="big">{temp(v.temp, v.unit, s)}</span>
       </div>
-      <div class="csub">{v.text}</div>
+      <div class="csub">{v.text || ''}</div>
     </>
   )
 })

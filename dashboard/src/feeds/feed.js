@@ -68,7 +68,7 @@ async function runFeed(feed, ctx) {
   if (running.has(feed.id)) return
   running.add(feed.id)
   try {
-    const cached = cacheGet(feed.id)
+    const cached = feed.cached ? cacheGet(feed.id) : null
     const out = await feed.run({ ...ctx, meta: cached && cached.place === ctx.place ? cached.meta : null })
     // Two different times. `at` is when the data is from, which the card shows
     // as its age; `ranAt` is when we asked, which is what paces the next ask.
@@ -76,7 +76,7 @@ async function runFeed(feed, ctx) {
     const at = out.at || Date.now()
     const ranAt = Date.now()
     publish(feed, out.fields, at)
-    cacheSet(feed.id, { at, ranAt, fields: out.fields, meta: out.meta || null, place: ctx.place })
+    if (feed.cached) cacheSet(feed.id, { at, ranAt, fields: out.fields, meta: out.meta || null, place: ctx.place })
     setState(feed.id, { status: 'ok', at, ranAt, err: '', fails: 0, nextAt: ranAt + feed.interval })
   } catch (e) {
     const message = (e && e.message) || 'failed'
@@ -128,6 +128,7 @@ export function primeFeeds() {
   place = placeOf()
   const now = Date.now()
   for (const feed of FEEDS) {
+    if (!feed.cached) continue
     const e = cacheGet(feed.id)
     if (!e || e.place !== place) continue
     publish(feed, e.fields, e.at)

@@ -176,7 +176,7 @@ test('an unsupported location stops the feed instead of retrying', async () => {
 test('a cached result paints on load without refetching', async () => {
   atBoulder()
   cacheSet('test', { at: Date.now(), fields: { value: 42 }, meta: null, place: '40.015,-105.2705' })
-  registerFeed(fakeFeed())
+  registerFeed(fakeFeed({ cached: true }))
 
   primeFeeds()
   assert.deepEqual(devices.value.get(KEY).merged.value, { value: 42 })
@@ -190,7 +190,7 @@ test('a cached result older than the interval is repainted then refreshed', asyn
   atBoulder()
   const stale = Date.now() - 10 * 60000
   cacheSet('test', { at: stale, fields: { value: 42 }, meta: null, place: '40.015,-105.2705' })
-  registerFeed(fakeFeed({ interval: 60000 }))
+  registerFeed(fakeFeed({ interval: 60000, cached: true }))
 
   primeFeeds()
   assert.deepEqual(devices.value.get(KEY).merged.value, { value: 42 })
@@ -204,7 +204,7 @@ test('a cached result older than the interval is repainted then refreshed', asyn
 test('a cache entry from another place is ignored on load', async () => {
   atBoulder()
   cacheSet('test', { at: Date.now(), fields: { value: 42 }, meta: null, place: '51.5,-0.1' })
-  registerFeed(fakeFeed())
+  registerFeed(fakeFeed({ cached: true }))
 
   primeFeeds()
   assert.equal(devices.value.has(KEY), false)
@@ -216,7 +216,7 @@ test('a cache entry from another place is ignored on load', async () => {
 
 test('moving the location discards the cache and reruns', async () => {
   atBoulder()
-  registerFeed(fakeFeed())
+  registerFeed(fakeFeed({ cached: true }))
   pump(Date.now())
   await settle()
   assert.equal(ran, 1)
@@ -233,6 +233,7 @@ test('the meta a feed returns comes back only at the same place', async () => {
   atBoulder()
   const seenMeta = []
   registerFeed(fakeFeed({
+    cached: true,
     run: async (ctx) => { seenMeta.push(ctx.meta); return { fields: { value: 1 }, meta: { grid: 'BOU' } } },
   }))
   pump(Date.now())
@@ -270,10 +271,36 @@ test('a reload with stale-stamped data in cache still does not refetch', async (
   atBoulder()
   const hourOld = Date.now() - 3600000
   cacheSet('test', { at: hourOld, ranAt: Date.now(), fields: { value: 1 }, meta: null, place: '40.015,-105.2705' })
-  registerFeed(fakeFeed({ interval: 900000, stamped: true }))
+  registerFeed(fakeFeed({ interval: 900000, stamped: true, cached: true }))
 
   primeFeeds()
   pump(Date.now())
   await settle()
   assert.equal(ran, 0)
+})
+
+// A cached entry outlives the code that wrote it, so a feed that recomputes for
+// free should not have one at all. This is what put "undefined" on the moon
+// card after a field was added to its rich value.
+test('a feed that does not ask to be cached never writes one', async () => {
+  atBoulder()
+  registerFeed(fakeFeed())
+  pump(Date.now())
+  await settle()
+
+  assert.equal(ran, 1)
+  assert.equal(cacheGet('test'), null)
+})
+
+test('an uncached feed is not painted from a cache entry left behind', async () => {
+  atBoulder()
+  cacheSet('test', { at: Date.now(), ranAt: Date.now(), fields: { value: 42 }, meta: null, place: '40.015,-105.2705' })
+  registerFeed(fakeFeed())
+
+  primeFeeds()
+  assert.equal(devices.value.has(KEY), false, 'a stale entry was painted')
+
+  pump(Date.now())
+  await settle()
+  assert.deepEqual(devices.value.get(KEY).merged.value, { value: 1 })
 })
