@@ -1031,12 +1031,12 @@ test("displayed values are rounded and trimmed, without touching stored data", a
   expect(stored).toBeCloseTo(71.23456789, 6);
 });
 
-test("fmtValue rounds by magnitude and leaves non-numbers untouched", async ({ page }) => {
+test("fmtValue rounds to fixed decimals and trims trailing zeros", async ({ page }) => {
   await open(page, [ACURITE]);
   const out = await page.evaluate(() => [
-    fmtValue(71.234), fmtValue(4.6), fmtValue(0.0300), fmtValue(1013.25),
-    fmtValue(38), fmtValue("CHECKSUM"), fmtValue(true),
-    fmtValue(-12.345), fmtValue(-4.5678), fmtValue(-0.004), fmtValue(-1013.25),
+    fmtValue(71.234, 1), fmtValue(4.6, 2), fmtValue(0.0300, 3), fmtValue(1013.25, 1),
+    fmtValue(38, 0), fmtValue("CHECKSUM", 2), fmtValue(true, 2),
+    fmtValue(-12.345, 1), fmtValue(-4.5678, 2), fmtValue(-0.004, 1), fmtValue(-1013.25, 1),
   ]);
   expect(out).toEqual(["71.2", "4.6", "0.03", "1013.3", "38", "CHECKSUM", "true",
                       "-12.3", "-4.57", "0", "-1013.3"]);

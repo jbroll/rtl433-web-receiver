@@ -51,7 +51,65 @@ export function splitUnit(field) {
 }
 
 // rtl_433 sends full float precision; the card only needs enough to read at a glance.
-export function fmtValue(v) {
+export function fmtValue(v, decimals = 1) {
   if (typeof v !== "number") return String(v);
-  return String(parseFloat(v.toFixed(Math.abs(v) >= 10 ? 1 : 2)));
+  return String(parseFloat(v.toFixed(decimals)));
+}
+
+// Unit groups that convert at display time, keyed on the display unit from splitUnit.
+const GROUP_OF_UNIT = {
+  "°F": "temperature", "°C": "temperature",
+  "mm": "rain", "in": "rain",
+  "mi/h": "wind", "km/h": "wind", "m/s": "wind",
+  "hPa": "pressure", "kPa": "pressure",
+};
+
+// Maps group names to the key used in settings.custom.
+const GROUP_SETTING_KEY = {
+  temperature: "temp",
+  rain: "rain",
+  wind: "wind",
+  pressure: "pressure",
+};
+
+// Every group converts through one canonical unit so any two units in the group
+// compose. Settings name targets by the suffix-less labels from the spec.
+const LABEL_UNIT = {
+  temperature: { C: "°C", F: "°F" },
+  rain: { mm: "mm", in: "in" },
+  wind: { "km/h": "km/h", "mi/h": "mi/h", "m/s": "m/s" },
+  pressure: { hPa: "hPa", kPa: "kPa" },
+};
+
+function toCanonical(group, unit, v) {
+  switch (group) {
+    case "temperature": return unit === "°F" ? (v - 32) * 5 / 9 : v;
+    case "rain": return unit === "in" ? v * 25.4 : v;
+    case "wind": return unit === "mi/h" ? v * 1.60934 : unit === "m/s" ? v * 3.6 : v;
+    case "pressure": return unit === "kPa" ? v * 10 : v;
+  }
+  return v;
+}
+
+function fromCanonical(group, v, label) {
+  switch (group) {
+    case "temperature": return label === "F" ? v * 9 / 5 + 32 : v;
+    case "rain": return label === "in" ? v / 25.4 : v;
+    case "wind": return label === "mi/h" ? v / 1.60934 : label === "m/s" ? v / 3.6 : v;
+    case "pressure": return label === "kPa" ? v / 10 : v;
+  }
+  return v;
+}
+
+export function displayValue(field, raw, settings) {
+  const parts = splitUnit(field);
+  const decimals = settings && Number.isInteger(settings.decimals) ? settings.decimals : 1;
+  const group = typeof raw === "number" ? GROUP_OF_UNIT[parts.unit] : undefined;
+  const settingKey = group ? GROUP_SETTING_KEY[group] : undefined;
+  if (!group || !settings || !settings.custom || !settings.custom[settingKey]) {
+    return { name: parts.name, num: fmtValue(raw, decimals), unit: parts.unit };
+  }
+  const label = settings.custom[settingKey];
+  const num = fromCanonical(group, toCanonical(group, parts.unit, raw), label);
+  return { name: parts.name, num: fmtValue(num, decimals), unit: LABEL_UNIT[group][label] || parts.unit };
 }
