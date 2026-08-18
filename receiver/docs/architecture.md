@@ -43,21 +43,22 @@ simpler.
 
 **`radio_health.h` / `radio_health.cpp`** — an Arduino-free decision module,
 host-tested by `test/host/run.sh` like `topic`. It watches the radio through
-two windows: `lastDecodeAt` (time since last decode) and `averageRssi` (mean
-RSSI of the receiver task). Three states — `silent` (no decodes in the
-window), `pinned` (decodes present but RSSI below threshold), `frozen` (no
-decodes and RSSI above threshold) — each with its own recovery action on a
-ladder: `frozen` escalates to `esp_restart()`, `pinned` runs a soft
-re-init (`initReceiver()`), `silent` does nothing. The soft re-init
-increments `recovery_count` in NVS and records the current uptime as
-`last_recovery_s`; any decode confirmed after a soft re-init resets the
-module's state. Backoff doubles on each failed attempt up to `MAX_SOFT_RECOVERY`.
-The window lengths and thresholds are build flags.
+`lastDecodeAt` (time since last decode) and `averageRssi` (mean RSSI of the
+receiver task). Three states: `silent` (no decode for `SILENT_MS`), `pinned`
+(`silent` AND `averageRssi` nonzero AND at or below `NOISE_FLOOR_DBM`), and
+`frozen` (`averageRssi` byte-identical for `FROZEN_MS`). Recovery ladder:
+`silent && frozen` → `esp_restart()` (the receiver task is wedged and cannot be
+restarted by a soft init); `silent && pinned` → soft re-init (`initReceiver()`);
+any other condition → no action. Soft re-init increments `recovery_count` in
+NVS and records the current uptime as `last_recovery_s`; a confirmed decode
+resets the module's state. A constant `RECOVERY_BACKOFF_MS` (2 min default)
+suppresses a re-trigger right after a recovery; the condition must re-confirm
+before the next attempt. The window lengths and thresholds are build flags.
 
 **`health_store.h` / `health_store.cpp`** — persists the radio health state
 to `Preferences` namespace `"health"`. Writes are bounded: once at boot
-(`boot_count`, `last_reset_reason`), once on first SNTP sync (`uptime_s`
-baseline), and once per recovery event (`recovery_count`,
+(`boot_count`, `last_reset_reason`), once on first SNTP sync (`last_boot_utc`,
+the boot timestamp), and once per recovery event (`recovery_count`,
 `last_recovery_s`). `radio_ok` is 1 when healthy and 0 while a soft
 re-init has not yet produced a confirmed decode.
 
@@ -235,8 +236,8 @@ RadioLib's `ArduinoHal` wraps every register transaction in
 race between them.
 
 The temperature read also verifies the OpMode register and recovers immediately
-on failure: if the register read returns an error, the health state goes to
-`frozen` and triggers a reboot on the next cycle.
+on failure: the first failure runs `reinitRadio()` and `recordRecoveryEvent()`
+and returns `INT16_MIN`; a second consecutive failure reboots.
 
 ## The build id
 

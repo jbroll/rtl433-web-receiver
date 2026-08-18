@@ -133,9 +133,10 @@ synthetic decode every 3 seconds and runs `signal_store::selfTest()` at startup,
 printing a PASS/FAIL line per check over serial.
 
 Set `'-DFAKE_RADIO_FAIL_MS=900000'` (15 minutes) to exercise the recovery
-path: the synthetic decode stops and the radio health state moves to `frozen`,
-triggering a soft re-init after the window closes, then a reboot if the
-re-init is not confirmed by a new decode.
+path: the synthetic decode stops and the health state moves to `silent` +
+`pinned` (floor pinned below threshold), triggering a soft re-init after the
+window closes; after enough unconfirmed soft re-inits the ladder escalates to
+a reboot.
 
 `topic.cpp` has no Arduino dependency and is host-tested: `bash test/host/run.sh`
 compiles and runs it on the host.

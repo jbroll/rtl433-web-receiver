@@ -31,6 +31,6 @@ On this machine the tools live at:
 
 To open an interactive GDB session with the core dump:
 
-    xtensa-esp32s3-elf-gdb -ex "corefile core.bin" firmware.elf
+    xtensa-esp32s3-elf-gdb -ex "corefile core.bin" receiver/.pio/build/esp32s3-generic/firmware.elf
 
 Replace the GDB and ELF paths above as needed for your platform.
