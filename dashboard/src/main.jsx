@@ -1,4 +1,5 @@
 import { render } from 'preact'
+import { effect } from '@preact/signals'
 import { App, tab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
@@ -7,12 +8,14 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
-import { loadSettings } from './settings.js'
+import { loadSettings, settings, setLocation } from './settings.js'
 import { measureGrid, installGestures, cellSignal, valueFont, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
 import './renderers.jsx'
+import { registerFeed, primeFeeds, pump } from './feeds/feed.js'
+import clock from './feeds/clock.js'
 
 let build = null
 
@@ -145,6 +148,7 @@ function exposeForTests() {
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
+    setLocation,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
@@ -165,6 +169,12 @@ loadSort()
 loadSources()
 loadSettings()
 installGestures()
+
+registerFeed(clock)
+primeFeeds()
+// tick is the app's only timer, so the feed scheduler rides it rather than
+// starting one of its own. Reading settings restarts the feeds on a move.
+effect(() => { tick.value; settings.value; pump() })
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()
