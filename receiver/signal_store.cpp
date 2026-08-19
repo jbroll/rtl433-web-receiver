@@ -15,6 +15,7 @@ static uint32_t   _total = 0;
 static uint32_t   _dropped = 0;
 static char       _source[SIGNAL_SOURCE_MAX] = "rtl433";
 static DeviceSub  _subs[SIGNAL_SUB_TABLE];
+static RecordHook _hook = nullptr;
 
 void reset() {
   memset(_devices, 0, sizeof(_devices));
@@ -40,6 +41,8 @@ void setSource(const char* source) {
 const char* source() {
   return _source;
 }
+
+void setRecordHook(RecordHook hook) { _hook = hook; }
 
 // A topic segment holding a slash or a space would not parse back out of the
 // topic, and rtl_433 model names are free text.
@@ -183,6 +186,22 @@ bool record(const char* payload, int rssi, bool isDecode) {
   }
   doc["rssi"] = rssi;
   doc["count"] = count;
+
+  if (_hook != nullptr) {
+    const char* model = doc["model"];
+    device_hooks::Reading r;
+    r.model = model ? model : "";
+    r.has_rain_mm = doc["rain_mm"].is<float>();
+    r.rain_mm = r.has_rain_mm ? doc["rain_mm"].as<float>() : 0.0f;
+    r.has_rain_in = doc["rain_in"].is<float>();
+    r.rain_in = r.has_rain_in ? doc["rain_in"].as<float>() : 0.0f;
+    r.set_rain_today_mm = false;
+    r.rain_today_mm = 0.0f;
+    _hook(key, r);
+    if (r.set_rain_today_mm) {
+      doc["rain_today_mm"] = r.rain_today_mm;
+    }
+  }
 
   // The frame embeds the payload as JSON rather than as an escaped string, so a
   // truncated one would be unparseable on the wire. Drop it instead.
