@@ -1,7 +1,7 @@
 #include "device_hooks.h"
 
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 namespace device_hooks {
 
@@ -81,15 +81,9 @@ static int claimRain() {
   return oldest;
 }
 
-static void rainHook(const char* key, Reading& r) {
-  float mm;
-  if (r.has_rain_mm) {
-    mm = r.rain_mm;
-  } else if (r.has_rain_in) {
-    mm = r.rain_in * 25.4f;
-  } else {
-    return;
-  }
+static void rainHook(const char* key, JsonDocument& doc) {
+  if (!doc["rain_mm"].is<float>()) return;
+  float mm = doc["rain_mm"].as<float>();
 
   int32_t day = localDay();
   int idx = findRain(key);
@@ -101,27 +95,25 @@ static void rainHook(const char* key, Reading& r) {
     _rain[idx].baseline = mm;
     _rain[idx].day = day;
     _rain[idx].used = true;
-    r.set_rain_today_mm = true;
-    r.rain_today_mm = 0.0f;
+    doc["rain_today_mm"] = 0.0f;
     return;
   }
 
   if (day != _rain[idx].day || mm < _rain[idx].baseline) {
     _rain[idx].baseline = mm;
     _rain[idx].day = day;
-    r.set_rain_today_mm = true;
-    r.rain_today_mm = 0.0f;
+    doc["rain_today_mm"] = 0.0f;
     return;
   }
 
-  r.set_rain_today_mm = true;
   float delta = mm - _rain[idx].baseline;
-  r.rain_today_mm = (float)(int)(delta * 10 + (delta >= 0 ? 0.5f : -0.5f)) / 10.0f;
+  doc["rain_today_mm"] = (float)(int)(delta * 10 + (delta >= 0 ? 0.5f : -0.5f)) / 10.0f;
 }
 
-void dispatch(const char* key, Reading& r) {
-  Hook h = findHook(r.model);
-  if (h != NULL) h(key, r);
+void dispatch(const char* key, JsonDocument& doc) {
+  const char* model = doc["model"].as<const char*>();
+  Hook h = findHook(model);
+  if (h != NULL) h(key, doc);
 }
 
 void begin() {

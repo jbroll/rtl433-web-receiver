@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include "device_hooks.h"
 
 // The rtl_433 message plus the time, rssi and count record() stamps into it. The
@@ -37,7 +38,7 @@ void reset();
 // The first segment of every key. mdnsHostname() supplies it once WiFi is up.
 void        setSource(const char* source);
 const char* source();
-typedef void (*RecordHook)(const char* key, device_hooks::Reading& r);
+typedef void (*RecordHook)(const char* key, JsonDocument& doc);
 void        setRecordHook(RecordHook hook);
 // isDecode false records the receiver's own telemetry: it takes a device slot
 // like any other, but stays out of the decode count.

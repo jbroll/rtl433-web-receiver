@@ -54,7 +54,8 @@ A NULL hook (the default) leaves `record()` exactly as it is today.
 
 ### `device_hooks.h` / `device_hooks.cpp` — per-model dispatch
 
-New module, Arduino-free so it host-tests like `topic` and `radio_health`.
+New module. It includes ArduinoJson but no other Arduino headers, so it
+host-tests with the ArduinoJson headers PlatformIO fetches into libdeps.
 
 A registry mapping model name to hook function:
 
@@ -91,8 +92,7 @@ struct RainBaseline { char key[96]; float baseline; int32_t day; bool used; };
 
 On each call for a registered rain model:
 
-1. Read `rain_mm` from the doc. Skip if absent. Read `rain_in` only when
-   `rain_mm` is absent and convert to mm.
+1. Read `rain_mm` from the doc. Skip if absent.
 2. Compute `localDay = (time(nullptr) + tz_store::offsetMinutes() * 60) / 86400`.
    If `time()` < 1700000000 (clock not set), use 0 as the day and skip the
    midnight reset check, but still track a baseline from the first reading so
@@ -175,12 +175,11 @@ dashboard code changes are needed for it to render:
 `test/host/device_hooks_test.cpp`, compiled by `test/host/run.sh`:
 
 - A model with no registered hook is untouched.
-- A registered model with no `rain_mm` and no `rain_in` is untouched.
+- A registered model with no `rain_mm` is untouched.
 - First reading sets baseline, `rain_today_mm` is 0.
 - Subsequent readings accumulate the delta.
 - Day change resets baseline, `rain_today_mm` is 0.
 - Station power-cycle (counter drops below baseline) resets baseline.
-- `rain_in` is converted to mm when `rain_mm` is absent.
 - Clock unset: baseline tracks, no day reset, delta accumulates.
 - `tz_store::set` changes the day boundary used by the rain hook.
 
