@@ -2,12 +2,6 @@
 
 Work that spans sub-projects. Each sub-project's own backlog holds the rest.
 
-## The receiver has no `install.md` or `development.md`
-
-`receiver/README.md` carries the wiring, the `.env` setup, the build commands, and the
-test commands. The bridge splits the same material into `docs/install.md` and
-`docs/development.md`. The receiver should match.
-
 ## No quickstart anywhere
 
 None of the three has a `docs/quickstart.md`.

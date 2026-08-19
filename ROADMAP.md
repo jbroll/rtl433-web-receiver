@@ -28,9 +28,7 @@ Three complete but unmerged branches: `preact-ui-migration`, `capacitor-app`,
 `feature/last-hour-message-types`.
 
 Cross-cutting debt: no `quickstart.md` anywhere; no single command runs
-all four test suites; the dashboard suite runs against a fake bridge;
-`receiver/README.md` carries material the bridge splits across `install.md`
-and `development.md`.
+all four test suites; the dashboard suite runs against a fake bridge.
 
 ## Goals
 
@@ -78,9 +76,7 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 - Add a root `Makefile` or `bin/test.sh` running `pio test`,
   `bash receiver/test/host/run.sh`, `npm test` in `bridge/`, and `npm test` in
   `dashboard/`, in order, non-zero exit on the first failure.
-- Write `docs/quickstart.md` at the root and one per sub-project; split
-  `receiver/README.md` into `receiver/docs/install.md` and
-  `receiver/docs/development.md` to match the bridge.
+- Write `docs/quickstart.md` at the root and one per sub-project.
 
 ### Goal 2 — Firmware 1.0
 
