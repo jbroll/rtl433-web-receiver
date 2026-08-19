@@ -1,5 +1,15 @@
 # User manual
 
+## Use
+
+The mDNS name is `MDNS_PREFIX` plus the low three bytes of the MAC, so two
+boards on one network do not collide. It is printed at startup along with the
+IP address: `mDNS started: rtl433-a1b2c3.local`.
+
+WiFi is not required to decode. If it is unavailable the sketch keeps decoding
+and logging to serial, and retries every 30 seconds, though the first connect
+attempt times out after 20 seconds before the receiver starts.
+
 ## Routes
 
 | Method and path | Behaviour |
@@ -119,6 +129,11 @@ which eviction does not produce.
 
 ## Topics
 
+The receiver serves the source-only subset of the
+[HTTP binding for MQTT](../../bridge/docs/binding.md): stable
+`<source>/<model>/<id>` topics, the rtl_433 message as the payload, and an alias
+at every level.
+
 A topic is `<source>/<model>/<id>`. `source` is this receiver's mDNS name,
 `rtl433-a1b2c3`. `id` is the decode's `id` field when it has one, its `channel`
 when it does not, and `0` when it has neither — the binding requires an id
@@ -130,6 +145,10 @@ also carries `rain_today_mm`, the rainfall since the start of the current local
 day. The receiver derives this from a per-device baseline reset at local
 midnight. The baseline is RAM-only, so a receiver reboot restarts today's
 count from 0.
+
+Every stored message carries `time` (ISO 8601 UTC, from SNTP), `rssi`, and
+`count`, stamped in by the receiver. Until the clock is set `time` is absent and
+the page ages that device from when it arrived.
 
 An alias is a topic with `$alias` appended as a final segment, at any of three
 levels:
@@ -174,7 +193,29 @@ any other viewer.
 
 The receiver serves a build of the [dashboard](../../dashboard/README.md). See
 [its user manual](../../dashboard/docs/user-manual.md) for the tabs, the card grid, and
-edit mode.
+edit mode, and [architecture.md](architecture.md) for the receiver's own card and its
+telemetry fields.
+
+`build` rides on the telemetry message. The page keeps the first id it sees and
+reloads itself when a later one differs, so a reflash reboots the device, the
+stream reconnects, and every open browser picks up the new page.
+
+## Limits
+
+- 24 devices tracked; a new decode evicts the least recently seen device once
+  the table is full, and a slot unheard from for `DEVICE_STALE_HOURS` (72 by
+  default, `0` to disable) is freed on its own. Weather sensors transmit every
+  16–60 seconds, so the default only clears a genuinely dead one. Raise it if
+  you receive TPMS, which is silent while a car is parked, or door contacts and
+  remotes, which transmit only when triggered.
+- payloads up to 600 bytes; a longer one is dropped rather than truncated
+- 32 aliases
+- 4 concurrent SSE clients, each subscribing up to 4 filters; a fifth client
+  evicts the longest-attached one, whose browser reconnects on its own
+- the radio monitors its own health once a minute; a stuck or parked radio is
+  recovered by re-running the radio init, or by rebooting if the init fails.
+  `radio_ok`, `recovery_count`, and `last_recovery_s` on the receiver's card
+  carry the state
 
 ## Cross-origin
 
