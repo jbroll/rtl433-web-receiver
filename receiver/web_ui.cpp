@@ -339,10 +339,12 @@ static void handleAliasPost(const char* path) {
 }
 
 static void handleTzPost(const char* path) {
+  // The dashboard POSTs a bare /$tz to its own origin; the source-prefixed
+  // form is the documented curl-able equivalent.
   const char* src = signal_store::source();
   size_t      srcLen = strlen(src);
   bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
-  if (!ownSource) {
+  if (strcmp(path, "$tz") != 0 && !ownSource) {
     sendStatus(405, "not allowed");
     return;
   }

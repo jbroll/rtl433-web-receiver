@@ -163,9 +163,9 @@ function startServer(opts = {}) {
       return;
     }
     if (req.method === "POST") {
-      const isTz = topic.endsWith("/$tz");
+      const isTz = topic.endsWith("/$tz") || topic === "$tz";
       if (isTz) {
-        if (!topic.startsWith(source + "/")) {
+        if (!topic.startsWith(source + "/") && topic !== "$tz") {
           res.writeHead(405).end("not allowed");
           return;
         }

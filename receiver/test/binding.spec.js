@@ -243,6 +243,13 @@ test("POST /\$tz sets the offset", async () => {
   expect(server.tzOffset()).toBe(-300);
 });
 
+test("POST /\$tz as a bare source-level topic sets the offset", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post("$tz", JSON.stringify(-360));
+  expect(r.status).toBe(204);
+  expect(server.tzOffset()).toBe(-360);
+});
+
 test("POST /\$tz with a non-number body is 400", async () => {
   server = await startServer({ devices: [] });
   const r = await server.post(SOURCE + "/Receiver/0/$tz", JSON.stringify("not a number"));

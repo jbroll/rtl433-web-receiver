@@ -8,7 +8,7 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
-import { loadSettings, settings, setLocation } from './settings.js'
+import { loadSettings, settings, setLocation, clearLocation } from './settings.js'
 import { measureGrid, installGestures, cellSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
@@ -151,7 +151,7 @@ function exposeForTests() {
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
-    setLocation, expireFeeds, setValueMode: store.setValueMode,
+    setLocation, clearLocation, expireFeeds, setValueMode: store.setValueMode,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
