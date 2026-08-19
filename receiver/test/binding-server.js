@@ -37,6 +37,29 @@ function startServer(opts = {}) {
   // topic -> Map(msgType -> { json, seq })
   const retained = new Map();
   let globalSeq = 0;
+  let tzOffset = -240;
+  const rainBaselines = new Map();  // topic -> { baseline, day }
+  const rainModels = new Set(["Acurite-5n1"]);
+
+  function localDay() {
+    const t = Date.now() / 1000;
+    if (t < 1700000000) return 0;
+    return Math.floor((t + tzOffset * 60) / 86400);
+  }
+
+  function applyRainHook(topic, payload) {
+    if (!rainModels.has(payload.model)) return;
+    if (typeof payload.rain_mm !== "number") return;
+    const mm = payload.rain_mm;
+
+    const day = localDay();
+    let entry = rainBaselines.get(topic);
+    if (!entry || entry.day !== day || mm < entry.baseline) {
+      entry = { baseline: mm, day };
+      rainBaselines.set(topic, entry);
+    }
+    payload.rain_today_mm = Math.round((mm - entry.baseline) * 10) / 10;
+  }
   const counts = new Map();
   const streams = new Set();
 
@@ -71,6 +94,7 @@ function startServer(opts = {}) {
       count: count,
     });
     if (stamped.model === "Receiver") stamped.build = meta.build !== undefined ? meta.build : build;
+    applyRainHook(topic, stamped);
     publish(topic, JSON.stringify(stamped));
     return topic;
   }
@@ -139,6 +163,23 @@ function startServer(opts = {}) {
       return;
     }
     if (req.method === "POST") {
+      const isTz = topic.endsWith("/$tz");
+      if (isTz) {
+        if (!topic.startsWith(source + "/")) {
+          res.writeHead(405).end("not allowed");
+          return;
+        }
+        const body = await readBody(req);
+        let value;
+        try { value = JSON.parse(body); } catch (e) { value = undefined; }
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+          res.writeHead(400).end("body must be a JSON number");
+          return;
+        }
+        tzOffset = Math.round(value);
+        res.writeHead(204).end();
+        return;
+      }
       const isAlias = topic.endsWith(ALIAS_SUFFIX);
       if (!isAlias || !topic.startsWith(source + "/")) {
         res.writeHead(405).end("not allowed");
@@ -208,6 +249,7 @@ function startServer(opts = {}) {
         post(topic, body) { return request("POST", topic, body === undefined ? "" : body); },
         options(topic) { return request("OPTIONS", topic); },
         setBuild(id) { build = id; },
+        tzOffset() { return tzOffset; },
         close() {
           for (const s of streams) s.res.end();
           // close() waits out every idle keep-alive socket, and the page's
