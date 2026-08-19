@@ -101,7 +101,6 @@ static uint32_t      rtl433QueueDropped  = 0;
 static volatile unsigned long lastDecodeAt = 0;
 static radio_health::HealthState healthState;
 static bool                      bootCoredumpPending = false;
-static int                       tempFailures = 0;
 static bool                      bootUtcStamped = false;
 
 bool wifiReady() {
@@ -277,15 +276,10 @@ static int radioTemperature() {
   // read confirms the part is actually in RX, not parked in standby.
   if (state != RADIOLIB_ERR_NONE || !radioBackInRx(mod)) {
     Log.error(F("radio not back in RX after temperature read" CR));
-    if (++tempFailures >= 2) {
-      Log.error(F("radio health: two temperature failures, rebooting" CR));
-      esp_restart();
-    }
     reinitRadio();
     recordRecoveryEvent();
     return INT16_MIN;
   }
-  tempFailures = 0;
   rf.enableReceiver();
   return t;
 #else

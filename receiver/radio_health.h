@@ -17,9 +17,6 @@
 #ifndef RECOVERY_BACKOFF_MS
 #define RECOVERY_BACKOFF_MS 120000UL // suppress re-trigger this long after a soft re-init
 #endif
-#ifndef MAX_SOFT_RECOVERY
-#define MAX_SOFT_RECOVERY 3 // soft re-inits without a decode before rebooting
-#endif
 
 namespace radio_health {
 
@@ -31,15 +28,12 @@ struct HealthState {
   unsigned long lastDecodeAt = 0;    // uptime ms of the most recent decode, 0 until first
   int           lastFloor = INT16_MIN; // previous averageRssi, for the frozen window
   unsigned long floorSince = 0;      // uptime ms when lastFloor last changed
-  uint8_t       recoveryCount = 0;   // soft re-inits since the last decode
   unsigned long lastRecoveryAt = 0;  // uptime ms of the last soft re-init, 0 until first
 };
 
 // Pure decision, host-tested directly. silent/pinned/frozen are the window
-// states; recoveryCount is soft re-inits since the last decode; elapsedMs is
-// uptime since the last recovery (ULONG_MAX if none yet).
-HealthAction decide(bool silent, bool pinned, bool frozen, uint8_t recoveryCount,
-                    unsigned long elapsedMs);
+// states; elapsedMs is uptime since the last recovery (ULONG_MAX if none yet).
+HealthAction decide(bool silent, bool pinned, bool frozen, unsigned long elapsedMs);
 
 // One telemetry cycle. now is uptime ms, floor the current averageRssi, and
 // lastDecodeAt the uptime ms of the most recent decode. Resets counters when a

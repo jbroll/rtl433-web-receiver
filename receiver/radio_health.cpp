@@ -2,21 +2,19 @@
 
 namespace radio_health {
 
-HealthAction decide(bool silent, bool pinned, bool frozen, uint8_t recoveryCount,
-                    unsigned long elapsedMs) {
+HealthAction decide(bool silent, bool pinned, bool frozen, unsigned long elapsedMs) {
   // A wedged receiver task cannot be restarted by a soft re-init (initReceiver's
   // task creation guard), so the only way back is a reboot.
-  if (silent && frozen) {
+  if (silent && frozen && !pinned) {
     return HealthAction::reboot;
   }
+  // A chip pinned at or below the noise floor is stuck refusing OP_MODE writes;
+  // it survives esp_restart() because the reboot does not power-cycle the radio,
+  // so a reboot here only takes the web server down. Soft re-init is the recovery
+  // attempt, gated by the backoff, until a power cycle clears the chip.
   if (silent && pinned) {
-    // Backoff suppresses a re-trigger right after a recovery; the silent + pinned
-    // condition must re-confirm before the next attempt.
     if (elapsedMs < RECOVERY_BACKOFF_MS) {
       return HealthAction::none;
-    }
-    if (recoveryCount >= MAX_SOFT_RECOVERY) {
-      return HealthAction::reboot;
     }
     return HealthAction::softReinit;
   }
@@ -29,7 +27,6 @@ HealthAction evaluate(HealthState& state, unsigned long now, int floor,
     // A decode arrived since the last cycle: it resets the recovery ladder and
     // the frozen window.
     state.lastDecodeAt   = lastDecodeAt;
-    state.recoveryCount  = 0;
     state.lastFloor      = INT16_MIN;
     state.floorSince     = 0;
     state.lastRecoveryAt = 0;
@@ -48,11 +45,10 @@ HealthAction evaluate(HealthState& state, unsigned long now, int floor,
   bool frozen = state.lastFloor == floor && (now - state.floorSince) >= FROZEN_MS;
   unsigned long elapsed = state.lastRecoveryAt == 0 ? ULONG_MAX
                                                     : now - state.lastRecoveryAt;
-  return decide(silent, pinned, frozen, state.recoveryCount, elapsed);
+  return decide(silent, pinned, frozen, elapsed);
 }
 
 void noteRecovery(HealthState& state, unsigned long now) {
-  state.recoveryCount++;
   state.lastRecoveryAt = now;
 }
 
