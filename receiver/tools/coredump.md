@@ -1,7 +1,7 @@
 # Coredump fetch and decode
 
 When the ESP32-S3 crashes it writes a core dump to flash before resetting. The
-coredump partition is 64 KiB at address `0x3f0000`.
+coredump partition is 64 KiB at address `0xFF0000` (`receiver/partitions.csv`).
 
 On the USB console the boot log prints `Found core dump N bytes in flash` if a
 coredump is present. The `coredump_pending` telemetry field is set to `true`
@@ -13,7 +13,7 @@ Connect the serial port and run:
 
     ./tools/fetch_coredump.sh /dev/ttyACM0
 
-The script reads 64 KiB from `0x3f0000` into `core.bin` and decodes it against
+The script reads 64 KiB from `0xFF0000` into `core.bin` and decodes it against
 `receiver/.pio/build/esp32s3-generic/firmware.elf`.
 
 The tools used are:
