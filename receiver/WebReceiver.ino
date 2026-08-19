@@ -15,9 +15,11 @@
 #include <rtl_433_ESP.h>
 
 #include "alias_store.h"
+#include "device_hooks.h"
 #include "health_store.h"
 #include "radio_health.h"
 #include "signal_store.h"
+#include "tz_store.h"
 #include "web_ui.h"
 #include "esp_core_dump.h"  // esp_core_dump_image_check()
 #include "esp_system.h"     // esp_reset_reason()
@@ -452,6 +454,9 @@ void setup() {
              (unsigned long)ESP.getFreeHeap(), bootCoredumpPending ? 1 : 0);
   connectWiFi();
   signal_store::setSource(mdnsHostname());
+  tz_store::begin();
+  device_hooks::begin();
+  signal_store::setRecordHook(device_hooks::dispatch);
   alias_store::begin();
   web_ui::begin();
   rtl433Queue = xQueueCreate(RTL433_QUEUE_LEN, sizeof(SignalQueueItem));
