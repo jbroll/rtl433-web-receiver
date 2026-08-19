@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include "device_hooks.h"
 
 // The rtl_433 message plus the time, rssi and count record() stamps into it. The
 // library's own buffer is 512 bytes and the three fields cost about 56.

@@ -1,6 +1,5 @@
 #include "device_hooks.h"
 
-#include <stdlib.h>
 #include <string.h>
 
 namespace device_hooks {

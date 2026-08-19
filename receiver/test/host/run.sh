@@ -1,12 +1,12 @@
 #!/bin/sh
-# topic.cpp, radio_health.cpp and device_hooks.cpp are the firmware modules
-# with no Arduino dependency, so their rules are checked here rather than by
-# compilation alone.
+# topic.cpp and radio_health.cpp are the firmware modules with no Arduino
+# dependency, so their rules are checked here rather than by compilation alone.
+# device_hooks.cpp includes ArduinoJson, fetched by PlatformIO into libdeps.
 set -e
 root=$(cd "$(dirname "$0")/../.." && pwd)
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
-# device_hooks.cpp includes ArduinoJson, fetched by PlatformIO into libdeps.
+# device_hooks.cpp compiles against the ArduinoJson headers in libdeps.
 # Run 'pio run' once so the include path exists.
 aj="$root/.pio/libdeps/esp32s3-generic/ArduinoJson/src"
 if [ ! -d "$aj" ]; then
