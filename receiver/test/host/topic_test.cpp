@@ -45,6 +45,10 @@ int main() {
   check("a device topic is not an alias", !topic::isAlias("rtl433-a1b2c3/Acurite-5n1/1234"));
   check("$alias not in the last segment is not an alias", !topic::isAlias("a/$alias/b"));
 
+  check("isTz identifies a $tz topic", topic::isTz("src/Receiver/0/$tz"));
+  check("isTz rejects a non-$tz topic", !topic::isTz("src/Acurite-5n1/396"));
+  check("isTz rejects NULL", !topic::isTz(NULL));
+
   printf("%s\n", failures == 0 ? "topic: PASS" : "topic: FAIL");
   return failures == 0 ? 0 : 1;
 }

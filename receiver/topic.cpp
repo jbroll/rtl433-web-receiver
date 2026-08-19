@@ -95,4 +95,10 @@ bool isAlias(const char* t) {
   return strcmp(last != NULL ? last + 1 : t, "$alias") == 0;
 }
 
+bool isTz(const char* t) {
+  if (t == NULL) return false;
+  const char* last = strrchr(t, '/');
+  return strcmp(last != NULL ? last + 1 : t, "$tz") == 0;
+}
+
 } // namespace topic

@@ -7,4 +7,5 @@ bool validTopic(const char* topic);
 bool validFilter(const char* filter);
 bool matchFilter(const char* filter, const char* topic);
 bool isAlias(const char* topic);
+bool isTz(const char* topic);
 } // namespace topic

@@ -11,6 +11,7 @@
 #include "dashboard_html.h"
 #include "signal_store.h"
 #include "topic.h"
+#include "tz_store.h"
 
 extern bool wifiReady();
 
@@ -337,6 +338,26 @@ static void handleAliasPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
+static void handleTzPost(const char* path) {
+  const char* src = signal_store::source();
+  size_t      srcLen = strlen(src);
+  bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
+  if (!ownSource) {
+    sendStatus(405, "not allowed");
+    return;
+  }
+  String body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<long>()) {
+    sendStatus(400, "body must be a JSON number");
+    return;
+  }
+  tz_store::set((int16_t)doc.as<long>());
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(204, "text/plain", "");
+}
+
 static void handleTopic() {
   String      uri = _server.uri();
   const char* path = uri.c_str();
@@ -356,6 +377,10 @@ static void handleTopic() {
     return;
   }
   if (_server.method() == HTTP_POST) {
+    if (topic::isTz(path)) {
+      handleTzPost(path);
+      return;
+    }
     handleAliasPost(path);
     return;
   }
