@@ -161,6 +161,10 @@ section[hidden] { display:none; }
 .cval .big { font-size:clamp(11px,34cqh,64px); font-variant-numeric:tabular-nums;
              line-height:1.05; }
 .cval .ctext { font-size:clamp(9px,16cqh,22px); overflow:hidden; }
+/* The clock's .cfn + .big have no flex:1 1 auto wrapper, so they sit at the
+   top of the cell under .cval's flex-start. Center them like a plain .val. */
+.card .val.cval[data-f="local_time_12"],
+.card .val.cval[data-f="local_time_24"] { justify-content:center; }
 #settings-location { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line); }
 #settings-location .row { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 0;
                           margin-bottom:.35rem; }
