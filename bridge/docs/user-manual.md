@@ -33,8 +33,8 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
   on it is empty. A deletion the bridge sees live arrives as an empty message,
   because the broker clears the retain flag on what it forwards; one it sees
   at reconnect removes the topic. Both answer `404`.
-- `400` if the topic is malformed (empty, contains a space, or contains an
-  MQTT wildcard `+` or `#`).
+- `400` if the topic is malformed (empty, contains a space, contains an
+  MQTT wildcard `+` or `#`, or has an empty segment).
 - `503` if the bridge is not currently connected to the broker.
 
 ## POST to a topic

@@ -16,7 +16,7 @@ if [ ! -d "$aj" ]; then
 fi
 g++ -std=c++17 -Wall -Wextra -Werror -I"$root" \
     -o "$out/topic_test" "$root/topic.cpp" "$root/test/host/topic_test.cpp"
-"$out/topic_test"
+"$out/topic_test" "$(dirname "$root")/test/topic_cases.txt"
 g++ -std=c++17 -Wall -Wextra -Werror -I"$root" \
     -o "$out/radio_health_test" "$root/radio_health.cpp" "$root/test/host/radio_health_test.cpp"
 "$out/radio_health_test"

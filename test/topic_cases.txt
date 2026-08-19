@@ -1,0 +1,63 @@
+# Shared topic and filter cases for the HTTP binding's namespace rules.
+#
+# Read by receiver/test/host/topic_test.cpp (compiled by test/host/run.sh) and
+# by bridge/test/topic.test.js. Both must agree with every line here.
+#
+# Format: <function>|<arg1>|<arg2>|<expected>   ('|'-separated, '#' starts a
+# comment). validTopic and validFilter take one argument; matchFilter takes
+# two. Arguments are topics or filters, which never contain '|'.
+
+# validTopic: empty, a wildcard, a space, or an empty segment is malformed
+validTopic|rtl433-a1b2c3/Acurite-5n1/1234|true
+validTopic|rtl433-a1b2c3/Receiver/0|true
+validTopic|rtl433-a1b2c3|true
+validTopic|a/b/c/$alias|true
+validTopic|rtl433-a1b2c3/$tz|true
+validTopic||false
+validTopic|a/+/c|false
+validTopic|a/#|false
+validTopic|a/b c/d|false
+validTopic|a/ /c|false
+validTopic|a//c|false
+validTopic|a/b/|false
+validTopic|/a/b|false
+
+# validFilter: wildcards only as whole segments, # only as the last segment,
+# no empty segment, no space
+validFilter|#|true
+validFilter|+|true
+validFilter|a/#|true
+validFilter|a/b/#|true
+validFilter|a/+/c|true
+validFilter|a/+/#|true
+validFilter||false
+validFilter|a/#/c|false
+validFilter|a/b#/c|false
+validFilter|a/b+/c|false
+validFilter|a/#b|false
+validFilter|a/b c|false
+validFilter|a//c|false
+validFilter|a/b/|false
+validFilter|/a/b|false
+validFilter|a/+/|false
+
+# matchFilter: + matches exactly one segment (an empty one included), # the
+# remainder including nothing
+matchFilter|#|a/b/c|true
+matchFilter|a/#|a/b/c|true
+matchFilter|a/#|a|true
+matchFilter|a/#|b/c|false
+matchFilter|a/+/c|a/b/c|true
+matchFilter|a/+/c|a//c|true
+matchFilter|a/+/c|a/b/x/c|false
+matchFilter|a/+/c|a/c|false
+matchFilter|+|a|true
+matchFilter|a/+|a|false
+matchFilter|a/b/c|a/b/c|true
+matchFilter|a/b/c|a/b/d|false
+matchFilter|a/b/c|a/b|false
+matchFilter|a/b/c|a/b/c/d|false
+matchFilter|a/b|a/b/c|false
+matchFilter|rtl433-a1b2c3/+/+|rtl433-a1b2c3/Acurite-5n1/1234|true
+matchFilter|rtl433-a1b2c3/+/+|rtl433-a1b2c3/Acurite-5n1/1234/$alias|false
+matchFilter|rtl433-a1b2c3/#|rtl433-a1b2c3/Acurite-5n1/1234/$alias|true

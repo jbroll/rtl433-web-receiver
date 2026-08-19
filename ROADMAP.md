@@ -27,8 +27,7 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 Three complete but unmerged branches: `preact-ui-migration`, `capacitor-app`,
 `feature/last-hour-message-types`.
 
-Cross-cutting debt: the topic rules have drifted between `receiver/topic.cpp`
-and `bridge/src/topic.js`; no `quickstart.md` anywhere; no single command runs
+Cross-cutting debt: no `quickstart.md` anywhere; no single command runs
 all four test suites; the dashboard suite runs against a fake bridge;
 `receiver/README.md` carries material the bridge splits across `install.md`
 and `development.md`.

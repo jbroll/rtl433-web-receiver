@@ -1,51 +1,33 @@
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { matchFilter, validFilter, validTopic } from '../src/topic.js'
 
-test('a literal filter matches only its own topic', () => {
-  assert.equal(matchFilter('a/b/c', 'a/b/c'), true)
-  assert.equal(matchFilter('a/b/c', 'a/b/d'), false)
-  assert.equal(matchFilter('a/b/c', 'a/b'), false)
-  assert.equal(matchFilter('a/b/c', 'a/b/c/d'), false)
-})
+// The topic rules are shared with receiver/topic.cpp; both suites run the
+// same table so a change has to land in both implementations at once.
+const cases = readFileSync(new URL('../../test/topic_cases.txt', import.meta.url), 'utf8')
+  .split('\n')
+  .filter((line) => line && !line.startsWith('#'))
+  .map((line) => {
+    const fields = line.split('|')
+    const want = fields[fields.length - 1]
+    return { fn: fields[0], a: fields[1], b: fields[2], want: want === 'true', line }
+  })
 
-test('+ matches exactly one segment', () => {
-  assert.equal(matchFilter('a/+/c', 'a/b/c'), true)
-  assert.equal(matchFilter('a/+/c', 'a//c'), true)
-  assert.equal(matchFilter('a/+/c', 'a/b/d/c'), false)
-  assert.equal(matchFilter('a/+', 'a'), false)
-})
+for (const c of cases) {
+  test(`shared case: ${c.line}`, () => {
+    let got
+    if (c.fn === 'validTopic') got = validTopic(c.a)
+    else if (c.fn === 'validFilter') got = validFilter(c.a)
+    else if (c.fn === 'matchFilter') got = matchFilter(c.a, c.b)
+    else throw new Error(`unknown function ${c.fn}`)
+    assert.equal(got, c.want, c.line)
+  })
+}
 
-test('# matches the remainder including nothing', () => {
-  assert.equal(matchFilter('a/#', 'a/b/c'), true)
-  assert.equal(matchFilter('a/#', 'a'), true)
-  assert.equal(matchFilter('#', 'a/b/c'), true)
-  assert.equal(matchFilter('a/#', 'b/c'), false)
-})
-
-test('a device filter excludes alias topics below it', () => {
-  const filter = 'rtl433-a1b2c3/+/+'
-  assert.equal(matchFilter(filter, 'rtl433-a1b2c3/Acurite-5n1/1234'), true)
-  assert.equal(matchFilter(filter, 'rtl433-a1b2c3/Acurite-5n1/1234/$alias'), false)
-  assert.equal(matchFilter('rtl433-a1b2c3/#', 'rtl433-a1b2c3/Acurite-5n1/1234/$alias'), true)
-})
-
-test('a topic may not be empty or carry a wildcard', () => {
-  assert.equal(validTopic('a/b/c'), true)
-  assert.equal(validTopic('a/b/c/$alias'), true)
-  assert.equal(validTopic(''), false)
-  assert.equal(validTopic('a/+/c'), false)
-  assert.equal(validTopic('a/#'), false)
-  assert.equal(validTopic('a/ /c'), false)
-})
-
-test('a filter takes wildcards only as whole segments, # only last', () => {
-  assert.equal(validFilter('a/+/c'), true)
-  assert.equal(validFilter('#'), true)
-  assert.equal(validFilter('a/#'), true)
-  assert.equal(validFilter(''), false)
-  assert.equal(validFilter('a/#/c'), false)
-  assert.equal(validFilter('a/b+/c'), false)
-  assert.equal(validFilter('a/#b'), false)
+test('a non-string input is rejected', () => {
+  assert.equal(validTopic(undefined), false)
+  assert.equal(validTopic(null), false)
+  assert.equal(validFilter(123), false)
 })
