@@ -19,6 +19,11 @@ function fakeStorage() {
   return map
 }
 
+// setLocation POSTs the offset to location.origin; the node tests have neither
+// global, so stand in for the browser.
+globalThis.location = { origin: 'http://receiver.test' }
+globalThis.fetch = async () => ({})
+
 const settle = () => new Promise(done => setImmediate(done))
 
 // Bring a feed's next run forward to now without disturbing its failure count.

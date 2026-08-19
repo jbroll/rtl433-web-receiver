@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals'
+import { offsetMinutes } from './feeds/zone.js'
 
 export const SETTINGS_KEY = 'rtl433.settings.v1'
 
@@ -107,6 +108,14 @@ export function setLocation(next) {
   const clean = cleanLocation({ ...settings.value.location, ...next })
   settings.value = { ...settings.value, location: clean }
   saveSettings()
+  if (hasLocation()) {
+    const offset = offsetMinutes(new Date(), activeZone())
+    fetch(`${location.origin}/$tz`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(offset),
+    }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
+  }
   return clean
 }
 

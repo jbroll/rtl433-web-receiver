@@ -14,6 +14,11 @@ function fakeStorage() {
   return map
 }
 
+// setLocation POSTs the offset to location.origin; the node tests have neither
+// global, so stand in for the browser.
+globalThis.location = { origin: 'http://receiver.test' }
+globalThis.fetch = async () => ({})
+
 beforeEach(() => {
   fakeStorage()
   loadSettings()
