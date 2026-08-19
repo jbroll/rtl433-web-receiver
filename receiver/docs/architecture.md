@@ -261,6 +261,24 @@ The temperature read also verifies the OpMode register and recovers immediately
 on failure: the first failure runs `reinitRadio()` and `recordRecoveryEvent()`
 and returns `INT16_MIN`; a second consecutive failure reboots.
 
+A noise floor at or below the SX1231's measurement floor is an error value, not
+a quiet band. A working receiver with its antenna connected reads roughly -105
+to -115 dBm on a quiet 433 MHz band; a reading past the chip's own floor (about
+-120 dBm) means the front-end is not measuring RF. Observed stuck: the chip
+reported `RegOpMode` as RX yet refused every OP_MODE write (`setMode` returned
+-16, `RADIOLIB_ERR_SPI_WRITE_FAILED`) while SPI reads and other register writes
+succeeded, so RSSI sampling kept reporting -125 dBm and no decode ever arrived.
+`NOISE_FLOOR_DBM` (-120) already gates the `pinned` state on that signature, but
+nothing names a below-floor reading as an error.
+
+A stuck chip survives `esp_restart()`: the reboot does not power-cycle the
+radio, so the bad state persists across the resulting reboot loop. Recovery
+comes from a clean boot whose RST-pin pulse finally clears it, or from a full
+power cycle. The health ladder's repeated re-inits and reboots eventually land
+such a boot; the observed ~60-second reboot loop (two consecutive temperature-
+read failures restart the board) ends when the chip clears, with no software
+change.
+
 ## The build id
 
 `load_env.py` sets `BUILD_ID` to `git describe --always --dirty --exclude "*"`

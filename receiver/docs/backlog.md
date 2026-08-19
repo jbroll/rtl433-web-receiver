@@ -40,6 +40,16 @@ alias, and lay out. Nothing else uses it. Three directions, none started:
   A `GET` of a topic from an HA REST sensor works today with no firmware
   change at all, and is the cheapest first step.
 
+## An out-of-range noise floor is not flagged as an error
+
+A working receiver reads roughly -105 to -115 dBm on a quiet 433 MHz band. A
+floor at or below the SX1231's measurement floor (about -120 dBm, e.g. the
+-125 dBm seen when the chip was stuck refusing OP_MODE writes) is an error
+value: the front-end is not measuring RF. `NOISE_FLOOR_DBM` feeds it into the
+`pinned` health state, but the receiver card shows the value with no error
+marking. Flag it — a telemetry field and a page indicator — so a broken radio
+reads as broken instead of merely quiet.
+
 ## The library dependency is pinned to a branch, not a commit
 
 `platformio.ini:13` points at `jbroll/rtl_433_ESP#sx1231-support`. PlatformIO
