@@ -215,3 +215,42 @@ test("a device payload carries time, rssi and count", async () => {
   server.emit(ACURITE);
   expect(JSON.parse((await server.get(topicOf(ACURITE))).body).count).toBe(2);
 });
+
+test("an Acurite-5n1 rain payload gets rain_today_mm stamped", async () => {
+  server = await startServer({ devices: [ACURITE_RAIN] });
+  const body = JSON.parse((await server.get(topicOf(ACURITE_RAIN))).body);
+  expect(typeof body.rain_today_mm).toBe("number");
+  expect(body.rain_today_mm).toBe(0);
+});
+
+test("a second rain payload shows the accumulated delta", async () => {
+  server = await startServer({ devices: [ACURITE_RAIN] });
+  server.emit({ ...ACURITE_RAIN, rain_mm: 2.3 });
+  const body = JSON.parse((await server.get(topicOf(ACURITE_RAIN))).body);
+  expect(body.rain_today_mm).toBeCloseTo(1.8, 1);
+});
+
+test("a non-rain model is not augmented", async () => {
+  server = await startServer({ devices: [ACURITE_WIND] });
+  const body = JSON.parse((await server.get(topicOf(ACURITE_WIND))).body);
+  expect(body.rain_today_mm).toBeUndefined();
+});
+
+test("POST /\$tz sets the offset", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post(SOURCE + "/Receiver/0/$tz", JSON.stringify(-300));
+  expect(r.status).toBe(204);
+  expect(server.tzOffset()).toBe(-300);
+});
+
+test("POST /\$tz with a non-number body is 400", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post(SOURCE + "/Receiver/0/$tz", JSON.stringify("not a number"));
+  expect(r.status).toBe(400);
+});
+
+test("POST /\$tz to another source is 405", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post("other/Receiver/0/$tz", JSON.stringify(-300));
+  expect(r.status).toBe(405);
+});
