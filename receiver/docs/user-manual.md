@@ -7,6 +7,7 @@
 | `GET /` | The live page. `200`, `text/html` |
 | `GET /<topic>` | The stored message. `200`, `application/json`, `Cache-Control: no-store`. `404` if there is none |
 | `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success |
+| `POST /$tz` | Store the GMT offset. Body is a JSON number, signed minutes. `204`; `405` unless the topic is `$tz` or under this receiver's source |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `200`, `text/event-stream` |
 
 `GET` and `POST` share one handler, so a malformed topic is `400` regardless of
@@ -64,6 +65,24 @@ A malformed topic — empty, holding a wildcard character, holding a space, or
 with an empty segment — is `400`, body `malformed topic`, for both `GET` and
 `POST`.
 
+### `POST /$tz`
+
+Stores the GMT offset the dashboard uses to reset its daily rain counter at
+local midnight. The body is a JSON number, signed minutes west of UTC negative:
+
+    POST /rtl433-a1b2c3/$tz
+    Content-Type: application/json
+
+    -240
+
+    204
+
+The bare `/$tz` form works when the receiver is the origin the dashboard was
+served from; the source-prefixed `/<source>/$tz` form is equivalent. A body
+that is not a JSON number is `400`, body `body must be a JSON number`. A
+`$tz` topic under another source is `405`. The offset survives a reboot via
+NVS.
+
 ### `GET /events`
 
 Filters use MQTT wildcards: `+` matches one segment, `#` matches the rest and
@@ -105,6 +124,12 @@ A topic is `<source>/<model>/<id>`. `source` is this receiver's mDNS name,
 when it does not, and `0` when it has neither — the binding requires an id
 segment, and a device with one instance uses `0`. The receiver's own telemetry
 keys as `rtl433-a1b2c3/Receiver/0`.
+
+A weather station reporting `rain_mm` (cumulative bucket tips since power-up)
+also carries `rain_today_mm`, the rainfall since the start of the current local
+day. The receiver derives this from a per-device baseline reset at local
+midnight. The baseline is RAM-only, so a receiver reboot restarts today's
+count from 0.
 
 An alias is a topic with `$alias` appended as a final segment, at any of three
 levels:

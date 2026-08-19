@@ -157,6 +157,11 @@ receiver serves over plain http on your LAN and present on localhost.
 The time zone defaults to this device's. Choosing another moves the clock, the
 sunrise and sunset times, and the forecast day names with it.
 
+Setting the weather location pushes the local GMT offset to the receiver so
+its daily rain counter resets at your midnight, not UTC midnight. The offset
+is sent only when the location changes; a DST transition leaves the reset
+boundary off by an hour until the location is set again.
+
 ## Feed cards
 
 Once a location is set, four cards appear alongside the sensor cards. They are

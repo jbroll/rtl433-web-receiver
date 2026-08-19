@@ -62,6 +62,22 @@ the boot timestamp), and once per recovery event (`recovery_count`,
 `last_recovery_s`). `radio_ok` is 1 when healthy and 0 while a soft
 re-init has not yet produced a confirmed decode.
 
+**`device_hooks.h` / `device_hooks.cpp`** — a decision module host-tested by
+`test/host/run.sh` (compiled against the ArduinoJson headers in libdeps). It
+holds a registry mapping rtl_433 model names to hook functions, and a rain
+baseline table that tracks the cumulative `rain_mm` per device, resetting at
+local midnight. `signal_store::record()` calls `device_hooks::dispatch` with
+its `JsonDocument`; the hook looks up the model and the rain hook writes
+`rain_today_mm` (the delta from the baseline) into the doc before it is
+stored. The baseline is RAM-only; a receiver reboot loses it and today's
+rain restarts from 0.
+
+**`tz_store.h` / `tz_store.cpp`** — persists the GMT offset (signed minutes)
+to `Preferences` namespace `"tz"`. Defaults to -240 (EDT) at first boot. The
+dashboard POSTs the offset to `/$tz` when the location is set; `tz_store::set`
+persists it and pushes it into `device_hooks` so the rain hook's midnight
+boundary follows the user's timezone.
+
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. Only `/` and
 `/events` are registered routes; every topic is an arbitrary path, so `GET`
 and `POST` of a topic are both dispatched from `WebServer::onNotFound`, which
@@ -132,6 +148,12 @@ message and RSSI into an 8-deep FreeRTOS queue. `loop()` drains it:
 it to `broadcast()`, which builds one SSE frame and sends it to every
 subscriber whose filters match and whose replay cursor has already passed
 that device's newest sub.
+
+Before the size check, `record()` calls the registered record hook (if any).
+`device_hooks::dispatch` reads the model from the payload, calls the matching
+hook, and the rain hook computes `rain_today_mm` from the cumulative `rain_mm`
+and a per-device baseline reset at local midnight. The hook writes back into
+the `JsonDocument` before it is serialized into the sub.
 
 ## The replay design
 
