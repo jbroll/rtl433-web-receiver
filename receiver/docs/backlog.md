@@ -26,10 +26,11 @@ The receiver's own card proved the shape: anything recorded through
 `signal_store::record()` becomes a device the page already knows how to draw,
 alias, and lay out. Nothing else uses it. Three directions, none started:
 
-- A wired sensor on a spare GPIO (a DS18B20 on 1-Wire) recorded the same way.
-  Bit-banged 1-Wire masks interrupts for tens of microseconds per bit, and the
-  decoder timestamps every DIO2 edge in an ISR, so a read can cost a decode.
-  The RMT-based 1-Wire driver avoids that and is the way in if this happens.
+- A wired sensor on the I2C bus at GPIO 21 (SDA) and GPIO 47 (SCL), recorded
+  the same way. The BMP280 driver reads temperature and pressure every 30 s
+  and records them through `signal_store::record()`. The bus is sized for an
+  AHT20 later. Add 10k pull-ups to 3V3 at the sensor header unless the breakout
+  provides them.
 - Ingest from elsewhere: an authenticated `POST /api/signal` taking the same
   rtl_433 JSON is about twenty lines and no new dependency. An MQTT
   subscription needs a broker and roughly 10 KB of flash, against 144 KB free.
@@ -141,8 +142,6 @@ above.
   a bare expression statement rather than a `#define`, so it does nothing if
   `LOG_LEVEL` is ever undefined. Inherited from the upstream example; the build
   always defines `LOG_LEVEL`, so it is inert.
-- `platformio.ini:46` still labels the pin map "ESP32-S3-CAM", copied from the
-  upstream example. The pins are right; the board name is not.
 - `signal_store` and `alias_store` each have a `FAKE_SIGNALS` self-test that
   only compiles and runs on the device (see above); `topic` is the one module
   host-tested today. A PlatformIO `native` environment would make the other

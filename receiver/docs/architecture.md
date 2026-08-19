@@ -286,6 +286,34 @@ soft re-initing on the backoff in case a transient latch clears, and the
 receiver card reports `radio_ok` 0 and the pinned `noise_dBm` until the chip
 clears.
 
+## Pin map
+
+The firmware is built for the Freenove ESP32-S3-WROOM CAM on the
+`rtl433-carrier` PCB with a HopeRF RFM69CW radio module.
+
+| Signal | GPIO | Freenove header | RFM69CW pin | Note |
+|---|---|---|---|---|
+| MISO | 1 | right 3 | 8 | SPI |
+| MOSI | 42 | right 5 | 5 | SPI |
+| SCK | 41 | right 6 | 6 | SPI |
+| CS (NSS) | 39 | right 8 | 7 | idle high; 10k pull-up to 3V3 |
+| RST | 38 | right 9 | 13 | 10k pull-down to GND |
+| DIO2 (data) | 40 | right 7 | 10 | continuous data output; GPIO 40 already pulled up |
+| DIO0 | NC | — | 9 | unused; passed as `RADIOLIB_NC` |
+| DIO1 | NC | — | 11 | unused; passed as `RADIOLIB_NC` |
+| DIO3 | NC | — | 4 | unused |
+| DIO5 | NC | — | 12 | unused |
+
+I2C is on GPIO 21/47 for a BMP280/AHT20 sensor bus:
+
+| Signal | GPIO | Freenove header |
+|---|---|---|
+| SDA | 21 | right 17 |
+| SCL | 47 | right 16 |
+
+The SDMMC pins (38–40) are repurposed for the radio, so the Freenove microSD
+socket is not usable.
+
 ## The build id
 
 `load_env.py` sets `BUILD_ID` to `git describe --always --dirty --exclude "*"`

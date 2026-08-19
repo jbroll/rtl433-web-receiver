@@ -6,11 +6,11 @@ Add a dedicated I2C bus to the `rtl433-carrier` PCB and an ESP32-S3 firmware pat
 that records BMP280 temperature and pressure readings as if they were rtl_433
 decodes. The bus is sized for a BMP280 now and an AHT20 later, sharing SDA/SCL
 with no address collision. The microSD socket on the Freenove ESP32-S3-WROOM CAM
-is sacrificed: the SDMMC pins it sits on become the I2C bus, and future card
-access is dropped.
+is sacrificed: the SDMMC pins it sits on become radio control/data lines, and
+future card access is dropped.
 
-A prerequisite, folded into this spec, is a six-value pin-map fix in
-`receiver/platformio.ini` so the firmware actually drives the carrier's RFM69HCW.
+A prerequisite, folded into this spec, is a pin-map fix in
+`receiver/platformio.ini` so the firmware actually drives the carrier's RFM69CW.
 Without it the wrong pins are claimed as radio lines and the new I2C lines are
 fought at boot.
 
@@ -20,44 +20,50 @@ across the two repos; this spec is the single shared design.
 
 ## Carrier wiring today
 
-The carrier joins a Freenove ESP32-S3-WROOM CAM to a HopeRF RFM69HCW 433 MHz
-transceiver running `rtl_433_ESP`. The schematic is a SKiDL script (`board.py`)
-that generates `rtl433-carrier.net`; `seed_board.py` turns that into a placed
-PCB. The preferred wiring is the Pin map in the carrier README:
+The carrier joins a Freenove ESP32-S3-WROOM CAM to a HopeRF RFM69CW 433 MHz
+transceiver running `rtl_433_ESP`. The RFM69CW is a 14-pin module. Side A
+(pins 8-14) reads `MISO, DIO0, DIO2, DIO1, DIO5, RESET, GND`; side B
+(pins 7-1) reads `NSS, SCK, MOSI, DIO3, GND, 3.3V, ANT`. The schematic is a
+SKiDL script (`board.py`) that generates `rtl433-carrier.net`; `seed_board.py`
+turns that into a placed PCB. The chosen wiring uses only the pins
+`rtl_433_ESP` actually touches for RF69 continuous-data mode:
 
-| Signal | GPIO | Freenove header | RFM69HCW pin |
+| Signal | GPIO | Freenove header | RFM69CW pin |
 |---|---|---|---|
-| MISO | 1 | right 3 | 2 |
-| NSS | 2 | right 4 | 5 |
-| MOSI | 42 | right 5 | 3 |
-| SCK | 41 | right 6 | 4 |
-| DIO2 (data) | 47 | right 16 | 16 |
-| DIO0 | 21 | right 17 | 14 |
-| GND | - | right 20 | 1, 8, 10 |
-| 3V3 | - | left 1 | 13 |
-| RESET | 14 | left 19 | 6 |
-| ANT | - | - | 9 |
+| MISO | 1 | right 3 | 8 |
+| MOSI | 42 | right 5 | 5 |
+| SCK | 41 | right 6 | 6 |
+| NSS | 39 | right 8 | 7 |
+| DIO2 (data) | 40 | right 7 | 10 |
+| GND | - | right 20 | 3, 14 |
+| 3V3 | - | left 1 | 2 |
+| RESET | 38 | right 9 | 13 |
+| ANT | - | - | 1 |
 
 R1 10k pulls RESET to GND, R2 10k pulls NSS to 3V3. C1 100 nF, C2 1 uF, C3 47 uF
-decouple. ANT1 is a quarter-wave whip pad. DIO1 (RFM69 pin 15) is deliberately
-not connected; `rtl_433_ESP` never calls the FIFO hooks that read it, and `RADIOLIB_NC`
-is a supported configuration for that pin.
+decouple. ANT1 is a quarter-wave whip pad. DIO0 (RFM69CW pin 9), DIO1
+(RFM69CW pin 11), DIO3 (RFM69CW pin 4) and DIO5 (RFM69CW pin 12) are not
+connected; `rtl_433_ESP` never uses them in RF69 continuous-data mode, and
+`RADIOLIB_NC` is a supported configuration. GPIO 40 has the Freenove board's
+existing 10k pull-up on SDMMC DATA0, which keeps DIO2 at a defined level while
+the radio is in reset.
 
 ## Pin budget
 
 The Freenove ESP32-S3-WROOM CAM commits most of its GPIO before anything is
 added. The camera takes 4-13 and 15-18. Octal PSRAM takes 33-37. Strapping is
-0, 3, 45, 46. USB is 19 and 20. UART0 is 43 and 44. SDMMC is 38 (CMD), 39 (CLK)
-and 40 (DATA0). Header order, from `docs/architecture.md`:
+0, 3, 45, 46. USB is 19 and 20. UART0 is 43 and 44. The onboard LED is on GPIO 2.
+SDMMC is 38 (CMD), 39 (CLK) and 40 (DATA0). Header order, from `docs/architecture.md`:
 
 ```
 left : 3V3 EN 4 5 6 7 15 16 17 18 8 3 46 9 10 11 12 13 14 5V
 right: 43 44 1 2 42 41 40 39 38 37 36 35 0 45 48 47 21 20 19 GND
 ```
 
-That leaves 1, 2, 14, 21, 41, 42, 47 and 48 as the free set. The radio uses seven
-of those (1, 2, 14, 21, 41, 42, 47), and the eighth is GPIO 48, deliberately left
-for the onboard WS2812 NeoPixel status indicator.
+The SDMMC pins (38, 39, 40) are repurposed for the radio, sacrificing the
+microSD socket. With the radio on GPIO 1, 38, 39, 40, 41, 42, I2C on GPIO 21
+and 47, and the NeoPixel on GPIO 48, GPIO 14 is the only spare general-purpose
+pin.
 
 ### DIO0 is functionally inert in `rtl_433_ESP`
 
@@ -73,29 +79,23 @@ This spec keeps DIO0 wired on the carrier to preserve the option of using it in
 future firmware (packet mode, TX). The pin-budget lever it creates is noted but
 not spent.
 
-## Design: dedicated I2C on the SDMMC pins
+## Design: dedicated I2C bus
 
-A separate I2C bus is added on GPIO 40 (SDA) and GPIO 39 (SCL), the SDMMC pins
-the Freenove hard-wires to its microSD socket. GPIO 38 (CMD) is left unsocketed
-and unused. Future microSD use is dropped from the platform.
+A separate I2C bus is added on GPIO 21 (SDA) and GPIO 47 (SCL). GPIO 21 and 47
+are adjacent on the Freenove right header and were previously used for the
+radio's inert DIO0 and DIO2 lines. With those lines removed from the radio,
+21/47 become a clean I2C home. The carrier adds 10k pull-ups on both lines.
 
-The pins are electrically suitable: the Freenove already pulls DATA0 (GPIO 40) to
-3V3 with 10 k, which is a valid I2C pull-up for SDA. SDMMC CLK (GPIO 39) has no
-socket pull-up, so the carrier adds one.
-
-This choice preserves everything that the carrier went out of its way to keep:
-the NeoPixel on GPIO 48, the radio's soft-reset on GPIO 14, full UART0 (TX on 43
-and RX on 44), the camera, the existing SPI block, and every existing radio DIO
-line including the inert DIO0. The receiver task is untouched: the BMP280 read
-shares no bus with the radio, so the SPI contention the backlog already flags
+This choice preserves everything that does not move: the NeoPixel on GPIO 48,
+full UART0 (TX on 43 and RX on 44), the camera, the existing SPI block, and the
+radio's soft-reset line on GPIO 38. The receiver task is untouched: the BMP280
+read shares no bus with the radio, so the SPI contention the backlog already flags
 stays exactly where it is and gets no worse.
 
-The cost is real but deferred by design. The microSD socket becomes unusable. If
-microSD is ever enabled later in firmware, the SDMMC peripheral will drive GPIO 39
-and 40 with arbitrary push-pull traffic up to 40 MHz, producing spurious I2C
-STARTs on the BMP280/AHT20 lines and, when a sensor falsely decodes its address,
-risking ACKs and clock-stretching that corrupt SD data in both directions. The
-design drops future SD use entirely rather than carry that footgun.
+The cost is the microSD socket: GPIO 38, 39 and 40 are now used for the radio,
+so the Freenove microSD socket is not usable. If microSD is ever enabled later
+in firmware, the SDMMC peripheral will drive those pins with arbitrary push-pull
+traffic and corrupt the radio interface.
 
 ### Why not share with the radio SPI or with UART0
 
@@ -106,91 +106,81 @@ the I2C START pattern and desync the sensor state machine. Disabling the ESP32's
 I2C peripheral does nothing to the sensors' input buffers. There is no
 waveform-level guarantee that avoids this for arbitrary radio traffic.
 
-Sharing one pin with the radio SPI bus is no better: NSS (GPIO 2) is pulsed by
+Sharing one pin with the radio SPI bus is no better: NSS (GPIO 39) is pulsed by
 the receiver task continuously for RSSI reads, MOSI/SCK are actively driven, and
 MISO is acted on by the radio. Reusing any of them forces the receiver task to
 suspend during every sensor read and adds a third client to a bus the backlog
 already flags as contended (`receiver/docs/backlog.md:43-54`).
 
 Reusing UART0 RX (GPIO 44) works electrically but loses a future serial-console
-input. Reusing the radio RESET line (GPIO 14) works electrically but loses radio
-soft-reset. The SD pin reuse is the only path that preserves every other hardware
-feature.
+input. Reusing the radio RESET line (GPIO 38) works electrically but loses radio
+soft-reset. The chosen I2C placement on GPIO 21/47 is the only path that
+preserves every other hardware feature.
 
 ## Prerequisite: pin-map fix in `receiver/platformio.ini`
 
-The firmware's `RF_MODULE_*` map in `receiver/platformio.ini:48-56` does not
-match the carrier. SPI (MISO/MOSI/SCK) matches. Every other pin is wrong, and
-in a way that interacts with the S2 hardware change:
+The `RF_MODULE_*` map tells the firmware which GPIOs the radio occupies. The
+chosen map assigns the six pins `rtl_433_ESP` actually uses and passes the two
+unused DIO lines as `RADIOLIB_NC`:
 
-| `RF_MODULE_*` flag | Current value | Is the carrier's | Carrier uses it for |
-|---|---|---|---|
-| `CS`   | 40 | SDMMC DATA0 | new `I2C_SDA` |
-| `RST`  | 39 | SDMMC CLK   | new `I2C_SCL` |
-| `DIO0` | 38 | SDMMC CMD   | NC |
-| `DIO1` | 47 | DIO2 line   | RFM69 DIO2 (data) |
-| `DIO2` | 21 | DIO0 line   | RFM69 DIO0 |
+| `RF_MODULE_*` flag | GPIO | Note |
+|---|---|---|
+| `MISO` | 1 | SPI MISO |
+| `MOSI` | 42 | SPI MOSI |
+| `SCK`  | 41 | SPI SCK |
+| `CS`   | 39 | NSS/CS |
+| `RST`  | 38 | reset pulse |
+| `DIO0` | `RADIOLIB_NC` | unused in RF69 continuous-data mode |
+| `DIO1` | `RADIOLIB_NC` | unused in RF69 continuous-data mode |
+| `DIO2` | 40 | continuous data output |
 
-With the S2 change applied, the current map drives RFM69 NSS onto the I2C SDA
-line, drives the RFM69 reset pulse onto the I2C SCL line at boot, and never
-drives the actual radio. The carrier's RFM69 is left undriven, and the BMP280
-takes reset pulses as I2C clocks. The fix is a six-value edit:
-
-```ini
-'-DRF_MODULE_MISO=1'
-'-DRF_MODULE_MOSI=42'
-'-DRF_MODULE_SCK=41'
-'-DRF_MODULE_CS=2'       ; was 40, carrier NSS is GPIO 2 (right 4)
-'-DRF_MODULE_RST=14'     ; was 39, carrier RESET is GPIO 14 (left 19)
-'-DRF_MODULE_DIO0=21'    ; was 38, carrier DIO0 is GPIO 21 (right 17)
-'-DRF_MODULE_DIO1=RADIOLIB_NC'  ; was 47, carrier leaves DIO1 unwired
-'-DRF_MODULE_DIO2=47'    ; was 21, carrier DIO2 (data) is GPIO 47 (right 16)
-```
-
-The comment on `platformio.ini:48` ("ESP32-S3-CAM") is mislabelled per
-`receiver/docs/backlog.md:174-175` and is updated in the same edit.
+The comment on `platformio.ini:58` ("ESP32-S3-CAM") is updated in the same edit.
 
 ## Carrier hardware changes
 
 Edit `rtl433-carrier/board.py` (the authoritative SKiDL script), regenerate the
 netlist and seeded PCB, and re-run DRC.
 
-### New nets
+### RFM69 net changes
 
-- `I2C_SDA` on GPIO 40 (Freenove right pos 7)
-- `I2C_SCL` on GPIO 39 (Freenove right pos 8)
+The radio keeps MISO/MOSI/SCK on GPIO 1/42/41 and moves the remaining signals:
 
-GPIO 38 (CMD) gains no net and no socket. The existing 10 nets are unchanged.
+| Signal | Old GPIO | New GPIO | Freenove header |
+|---|---|---|---|
+| NSS | 2 | 39 | right 8 |
+| RESET | 14 | 38 | right 9 |
+| DIO2 (data) | 47 | 40 | right 7 |
+| DIO0 | 21 | NC | — |
+| DIO1 | NC | NC | — |
+
+R1 10k now pulls RESET (GPIO 38) to GND. R2 10k now pulls NSS (GPIO 39) to 3V3.
+GPIO 40 already has the Freenove 10k pull-up on SDMMC DATA0, so no extra pull-up
+is needed for DIO2.
+
+### New I2C nets
+
+- `I2C_SDA` on GPIO 21 (Freenove right pos 17)
+- `I2C_SCL` on GPIO 47 (Freenove right pos 16)
 
 ### New components
 
-- **J6** `PinSocket_1x01_P2.54mm_Vertical`, F.Cu, at Freenove right pos 7. Net
-  `I2C_SDA`. Sits immediately above the existing J1 SPI block (right pos 3-6),
-  on the same 2.54 mm grid.
-- **J7** `PinSocket_1x01_P2.54mm_Vertical`, F.Cu, at Freenove right pos 8. Net
-  `I2C_SCL`.
-- **J8** `PinHeader_1x04_P2.54mm`, F.Cu, near the top edge of the carrier.
+- **J6** `PinHeader_1x04_P2.54mm`, F.Cu, near the top edge of the carrier.
   Pinout `+3V3 | GND | I2C_SDA | I2C_SCL`. This is the off-board I2C header the
-  BMP280 breakout plugs into. `+3V3` taps the J4 net; `GND` reaches the existing
+  BMP280 breakout plugs into. `+3V3` taps the +3V3 net; `GND` reaches the existing
   ground pour through a via. Placement away from the bottom edge avoids the
   USB-C cable zone and the radio/antenna keepouts on the back.
-- **R3** 10 k 0603, `I2C_SCL` to `+3V3` (SDMMC CLK had no pull-up).
-- **R4** 10 k 0603, `I2C_SDA` to `+3V3`, for symmetry and self-documenting pull-up
-  placement near the new header. The Freenove's existing 10 k pull-up on DATA0
-  stays in parallel, giving an effective SDA pull-up of about 5 k, safe at the
-  100 kHz default and at 400 kHz.
+- **R3** 10 k 0603, `I2C_SCL` to `+3V3`.
+- **R4** 10 k 0603, `I2C_SDA` to `+3V3`.
 
-R3 and R4 sit on the front, near J8, so the pull-ups live with the off-board
+R3 and R4 sit on the front, near J6, so the pull-ups live with the off-board
 header rather than somewhere electrically convenient but visually obscure.
 
 ### What does not change on the carrier
 
-All existing nets and components are unchanged. J1 (SPI), J2 (DIO0/DIO2), J3
-(GND), J4 (+3V3), J5 (RESET), U1 (RFM69HCW), ANT1, R1, R2, C1, C2, C3 stay
-exactly as they are. RFM69 pin 14 (DIO0) stays wired to GPIO 21; pin 15 (DIO1)
-stays NC. No radio connection is rewired. The placement script's keepout and
-ground-stitch logic is unchanged; the new components sit outside the antenna,
-radio, and whip rule areas.
+The SPI block on GPIO 1/42/41 is unchanged. U1 (RFM69CW), ANT1, C1, C2, C3 and
+the ground/+3V3 distribution stay exactly as they are. The placement script's
+keepout and ground-stitch logic is unchanged; the new components sit outside the
+antenna, radio, and whip rule areas.
 
 ## Firmware
 
@@ -200,7 +190,7 @@ machinery work without changes.
 
 ### I2C bus
 
-`Wire.begin(40, 39)` in `setup()`, default 100 kHz. Move to 400 kHz only if a
+`Wire.begin(21, 47)` in `setup()`, default 100 kHz. Move to 400 kHz only if a
 longer cable or slower rise time demands it. No I2C peripheral reconfiguration
 is needed after boot; the bus is dedicated.
 
@@ -253,111 +243,108 @@ is required; the BMP280 reads as a normal device on the existing page.
 
 ## Documentation
 
-Update `receiver/docs/architecture.md` to describe the I2C bus and the BMP280
-recording path. Update `receiver/docs/backlog.md` to mark the "wired sensor"
-item as delivered (this design) and to drop the future microSD mention. Update
+Update `receiver/docs/architecture.md` and `receiver/docs/install.md` with the
+new RFM69 and I2C pin maps. Update `receiver/docs/backlog.md` to remove the
+stale "ESP32-S3-CAM" comment and note the planned I2C bus on GPIO 21/47. Update
 the carrier README Pin map and `rtl433-carrier/docs/architecture.md` to record
-the new `I2C_SDA` / `I2C_SCL` nets, J6/J7/J8, R3/R4, and the dropped microSD.
+the new RFM69 wiring on GPIO 38/39/40, the `I2C_SDA` / `I2C_SCL` nets on GPIO
+21/47, the J6 sensor header, R3/R4 pull-ups, and the dropped microSD.
 
 ## Out of scope
 
-- Reusing GPIO 21 (DIO0) as a freed pin for any other purpose. It stays wired to
-  RFM69 DIO0 on the carrier.
 - Adding the AHT20 in this change. The bus is sized for it; the driver is later.
-- Replacing the receiver-task SPI race (`receiver/docs/backlog.md:43-54`). The
-  BMP280 read shares no bus with the radio; the race is unchanged.
-- Moving logging from UART0 to USB-CDC (`receiver/docs/backlog.md:150-159`).
-  UART0 TX stays. That change is independent.
+- Replacing the receiver-task SPI race. The BMP280 read shares no bus with the
+  radio; the race is unchanged.
+- Moving logging from UART0 to USB-CDC. UART0 TX stays. That change is independent.
 - Any pins on the back of the carrier or any change to the antenna, radio, or
   whip keepouts.
 
-## Alternative pin mapping (future test)
+## Archived pin maps
 
-A second way to get both the RFM69 and a dedicated I2C bus without sacrificing
-the microSD socket. Documented here as an option to build and test later; the
-SDMMC mapping above stays the committed design until this is verified on
-hardware.
+Older RFM69/I2C pin assignments that were considered or used before the chosen
+design above. Kept for reference and hardware debugging.
 
-The SDMMC plan puts I2C on GPIO 39/40 and keeps the radio fully wired, but it
-gives up the microSD socket. This alternative keeps microSD (39/40) and instead
-frees two pins by dropping the radio RESET and DIO0 lines, then moves the SPI
-clock onto the `VDD_SPI` strapping pin GPIO 45.
+### Pre-remap `platformio.ini` (used before 2026-08-19)
 
-### Why GPIO 45 is safe here
+This was the firmware map checked in before the remap. It did not match the
+carrier and left the radio undriven if wiring was not updated:
 
-GPIO 45 is sampled at reset: high selects `VDD_SPI` = 1.8 V, low selects 3.3 V.
-The WROOM flash is 3.3 V, so 45 must be low at boot. It is a normal
-bidirectional GPIO (`I/O/T` in the datasheet, not input-only; the Freenove's
-on-board LED is on GPIO 2, which is what is unavailable), and strapping only
-matters at the reset sample. As an SPI *output* (SCK) it is driven by the ESP32
-and needs no external pull-up, so nothing holds it high at reset: its internal
-weak pull-down keeps it low and the part boots to 3.3 V `VDD_SPI`. After boot the
-firmware drives it normally. Put a pull-down (internal or a 10 k), never a
-pull-up, on the 45 trace.
+| `RF_MODULE_*` | GPIO |
+|---|---|
+| MISO | 1 |
+| MOSI | 42 |
+| SCK | 41 |
+| CS | 40 |
+| RST | 39 |
+| DIO0 | 38 |
+| DIO1 | 47 |
+| DIO2 | 21 |
 
-This is why 45 belongs on the SPI side and not on I2C: I2C is open-drain and
-must idle high, so an I2C line on 45 would need a pull-up that fights the
-strapping pull-down and would select 1.8 V at boot.
+### Original primary proposal (I2C on SDMMC)
 
-### Allocation
+This design kept the radio on the carrier's original wiring (NSS=2, RESET=14,
+DIO2=47, DIO0=21, DIO1=NC) and added I2C on GPIO 39/40, sacrificing the microSD
+socket:
+
+| `RF_MODULE_*` | GPIO |
+|---|---|
+| MISO | 1 |
+| MOSI | 42 |
+| SCK | 41 |
+| CS | 2 |
+| RST | 14 |
+| DIO0 | 21 |
+| DIO1 | RADIOLIB_NC |
+| DIO2 | 47 |
+
+I2C: `Wire.begin(40, 39)`.
+
+### Original alternative proposal (keep microSD)
+
+This design kept the microSD socket by moving SCK to the strapping pin GPIO 45,
+dropping radio RESET and DIO0, and putting I2C on GPIO 14/21:
 
 | Function | GPIO | Note |
 |---|---|---|
-| MISO | 41 | MTDI/JTAG as GPIO is bidirectional; costs JTAG TDI |
+| MISO | 41 | costs JTAG TDI |
 | MOSI | 42 | |
 | SCK | 45 | strapping: pull-down only, no pull-up |
-| NSS | 1 | moved off GPIO 2 (on-board LED) |
+| NSS | 1 | |
 | DIO2 | 47 | continuous data |
-| I2C SDA | 14 | 10 k pull-up, no strapping risk |
-| I2C SCL | 21 | was DIO0 (inert); 10 k pull-up |
+| I2C SDA | 14 | 10 k pull-up |
+| I2C SCL | 21 | 10 k pull-up |
 | NeoPixel | 48 | |
-| LED | 2 | unavailable (Freenove on-board) |
-
-Radio drops RESET (14, reused for I2C) and DIO0 (21, reused for I2C) plus the
-already-NC DIO1. That is seven pins (1, 14, 21, 41, 42, 45, 47) for the RFM69 +
-I2C. microSD (39/40) and the NeoPixel (48) are untouched. DIO0 is inert in
-`rtl_433_ESP` (see above), and RESET must be set `RADIOLIB_NC` rather than wired,
-so the radio initializes without a reset pulse.
-
-### platformio.ini flags for this alternative
+| LED | 2 | Freenove on-board |
 
 ```ini
 '-DRF_MODULE_MISO=41'
 '-DRF_MODULE_MOSI=42'
 '-DRF_MODULE_SCK=45'
-'-DRF_MODULE_CS=1'           ; was 2, GPIO 2 is the on-board LED
-'-DRF_MODULE_RST=RADIOLIB_NC' ; RESET line dropped, reused for I2C
-'-DRF_MODULE_DIO0=RADIOLIB_NC'; DIO0 dropped, reused for I2C
+'-DRF_MODULE_CS=1'
+'-DRF_MODULE_RST=RADIOLIB_NC'
+'-DRF_MODULE_DIO0=RADIOLIB_NC'
 '-DRF_MODULE_DIO1=RADIOLIB_NC'
 '-DRF_MODULE_DIO2=47'
 ```
 
-Firmware I2C is `Wire.begin(14, 21)` at the default 100 kHz. The carrier change
-is a re-route of the NSS and SCK nets off GPIO 2 and GPIO 41 onto GPIO 1 and
-GPIO 45, plus the I2C pull-ups moved to GPIO 14/21 instead of 39/40; the
-SDMMC nets (38/39/40) are left intact so the microSD socket stays usable.
+I2C: `Wire.begin(14, 21)`.
 
-### Open items before adopting
-
-- Confirm on hardware that the RFM69 initializes reliably with `RADIOLIB_NC`
-  RESET (no soft-reset) across cold boots and after brownouts.
-- Confirm the GPIO 45 SCK trace's pull-down is enough to keep `VDD_SPI` at 3.3 V
-  through the reset window with the RFM69 and carrier loads attached.
-- Decide whether losing JTAG TDI (GPIO 41) is acceptable, or swap MISO to GPIO 1
-  and NSS to GPIO 41.
+Open items before adopting: confirm RFM69 initializes reliably with `RADIOLIB_NC`
+RESET, confirm GPIO 45 SCK pull-down keeps `VDD_SPI` at 3.3 V through reset, and
+decide whether losing JTAG TDI is acceptable.
 
 ## Implementation outline
 
-The detailed plan is produced by the writing-plans skill after the spec is
-approved. The work splits at the repo boundary:
+The work splits at the repo boundary:
 
-1. `rtl433-web-receiver/receiver`: the pin-map fix in `platformio.ini`. Land this
-   first; without it, the carrier's RFM69 is undriven and the BMP280 lines are
-   fought at boot.
-2. `rtl433-carrier`: the hardware change in `board.py`, regenerate the netlist
-   and seeded PCB, DRC clean.
-3. `rtl433-web-receiver/receiver`: `Wire.begin(40, 39)`, BMP280 driver, recording
-   through `signal_store::record()`, host tests, hardware self-test.
+1. `rtl433-web-receiver/receiver`: the pin-map fix in `platformio.ini` to
+   MISO=1, MOSI=42, SCK=41, CS=39, RST=38, DIO2=40, DIO0/DIO1=RADIOLIB_NC.
+   Land this first; without it, the carrier's RFM69 is undriven.
+2. `rtl433-carrier`: the hardware change in `board.py` (RFM69 nets moved to
+   38/39/40, I2C nets added on 21/47), regenerate the netlist and seeded PCB,
+   DRC clean.
+3. `rtl433-web-receiver/receiver`: `Wire.begin(21, 47)`, BMP280 driver,
+   recording through `signal_store::record()`, host tests, hardware self-test.
 4. Documentation across both repos in the same commits as the code.
 
 The carrier work happens in a separate worktree in the `rtl433-carrier` repo; the

@@ -10,9 +10,12 @@
 #include <ArduinoLog.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <rtl_433_ESP.h>
+
+#include <Adafruit_BMP280.h>
 
 #include "alias_store.h"
 #include "device_hooks.h"
@@ -102,6 +105,8 @@ static volatile unsigned long lastDecodeAt = 0;
 static radio_health::HealthState healthState;
 static bool                      bootCoredumpPending = false;
 static bool                      bootUtcStamped = false;
+static bool                      bmp280_ok = false;
+static Adafruit_BMP280           bmp280;
 
 bool wifiReady() {
   return WiFi.status() == WL_CONNECTED;
@@ -333,6 +338,29 @@ static size_t appendf(char* buf, size_t size, size_t at, const char* fmt, ...) {
 // The receiver's own readings, recorded as a device so the page renders them
 // with everything it already does for a sensor. rssi is the WiFi link, which is
 // what the card's corner reading means for this one.
+static void recordBMP280() {
+  if (!bmp280_ok) {
+    return;
+  }
+  float t = bmp280.readTemperature();
+  float p = bmp280.readPressure() / 100.0F;
+  if (isnan(t) || isnan(p)) {
+    Log.warning(F("BMP280 read failed" CR));
+    return;
+  }
+
+  char buf[JSON_MSG_BUFFER];
+  snprintf(buf, sizeof(buf),
+           "{\"model\":\"BMP280\",\"id\":\"%s-bmp280\",\"channel\":1,"
+           "\"temperature_C\":%.2f,\"pressure_hPa\":%.2f}",
+           mdnsHostname(), t, p);
+  Log.notice(F("BMP280: %s" CR), buf);
+
+  if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0)) {
+    web_ui::broadcast(signal_store::device(0));
+  }
+}
+
 static void recordReceiver() {
   static int lastRadioC = INT16_MIN;
   int        radioC = radioTemperature();
@@ -439,6 +467,15 @@ void setup() {
   Log.begin(LOG_LEVEL, &Serial0);
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
+
+  Wire.begin(21, 47);
+  if (bmp280.begin(0x76) || bmp280.begin(0x77)) {
+    bmp280_ok = true;
+    Log.notice(F("BMP280 initialized" CR));
+  } else {
+    Log.warning(F("BMP280 not found on I2C" CR));
+  }
+
   health_store::begin();
   bootCoredumpPending = esp_core_dump_image_check() == ESP_OK;
   health_store::noteBoot((uint8_t)esp_reset_reason());
@@ -480,6 +517,12 @@ void loop() {
     lastTelemetry = millis();
     monitorRadioHealth();
     recordReceiver();
+  }
+
+  static unsigned long lastBMP280 = 0;
+  if (millis() - lastBMP280 >= 30000) {
+    lastBMP280 = millis();
+    recordBMP280();
   }
 
   // The clock comes up via SNTP after WiFi connects; stamp this boot's UTC once.
