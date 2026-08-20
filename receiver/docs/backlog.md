@@ -41,15 +41,15 @@ alias, and lay out. Nothing else uses it. Three directions, none started:
   A `GET` of a topic from an HA REST sensor works today with no firmware
   change at all, and is the cheapest first step.
 
-## An out-of-range noise floor is not flagged as an error
+## A below-floor noise reading has no error marking on the card
 
-A working receiver reads roughly -105 to -115 dBm on a quiet 433 MHz band. A
+The health monitor already surfaces the signature: `NOISE_FLOOR_DBM` feeds a
 floor at or below the SX1231's measurement floor (about -120 dBm, e.g. the
--125 dBm seen when the chip was stuck refusing OP_MODE writes) is an error
-value: the front-end is not measuring RF. `NOISE_FLOOR_DBM` feeds it into the
-`pinned` health state, but the receiver card shows the value with no error
-marking. Flag it — a telemetry field and a page indicator — so a broken radio
-reads as broken instead of merely quiet.
+-125 dBm seen when the chip was stuck refusing OP_MODE writes) into the
+`pinned` state, and the telemetry carries `radio_ok`, `noise_dBm`, and
+`rssi_thresh`. But the receiver card still renders `noise_dBm` as a plain
+value with no error marking, so a broken radio reads as merely quiet. Add a
+page indicator keyed on `radio_ok`.
 
 ## The library dependency is pinned to a branch, not a commit
 

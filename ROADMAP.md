@@ -11,36 +11,35 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 - **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
   Open gaps: false decodes from weak decoders, WiFi credentials baked into
-  the image, `rtl_433_ESP` pinned to a branch not a commit, `signal_store`
-  and `alias_store` self-tests never read on a device, `feature/daily-rainfall`
-  mid-flight with uncommitted rework.
+  the image, `rtl_433_ESP` pinned to a branch not a commit, and `signal_store`
+  and `alias_store` self-tests never read on a device.
 - **`bridge/`** — full MQTT to HTTP binding. No auth, no status endpoint, not
   published to a registry, slow-SSE and unbounded-body gaps.
-- **`dashboard/`** — one self-contained `index.html`. The
-  `preact-ui-migration` branch is complete but unmerged. Mobile and first-run
+- **`dashboard/`** — one self-contained `index.html` built from Preact sources
+  by esbuild. Mobile and first-run
   holes: 360 px viewport overflow, scrollbar jitter, sources not a tab, empty
   state broken for the Capacitor shell.
 - **`app/`** — Capacitor 7 shell. Android debug APK builds on the `gpu` CI
   host. iOS builds unsigned on macOS via GitHub Actions. Nothing signed,
   nothing in a store.
 
-Three complete but unmerged branches: `preact-ui-migration`, `capacitor-app`,
-`feature/last-hour-message-types`.
+`preact-ui-migration` and `capacitor-app` landed on main; the receiver's
+last-hour message-type replay exists only as a design, not an implementation.
 
 Cross-cutting debt: no `quickstart.md` anywhere; no single command runs
 all four test suites; the dashboard suite runs against a fake bridge.
 
 ## Goals
 
-1. **Consolidate in-flight work and cross-cutting debt.** Done when the four
-   open branches are merged, the topic rules share one case table read by both
-   suites, one command runs all four test suites, and every sub-project has a
-   `quickstart.md` plus the install and development split.
+1. **Consolidate in-flight work and cross-cutting debt.** Done when the
+   last-hour replay feature is implemented, the topic rules share one case
+   table read by both suites, one command runs all four test suites, and every
+   sub-project has a `quickstart.md` plus the install and development split.
 2. **Firmware 1.0 — trustworthy and portable.** Done when false-decode
    filtering ships (range checks and a seen-twice rule, not `MY_DEVICES`),
    WiFi is provisioned at runtime, `rtl_433_ESP` is pinned to a commit, the
    stores are host-tested, the self-test is observable over USB, OTA updates
-   work, and daily-rainfall and last-hour are merged.
+   work, and last-hour replay is implemented.
 3. **Bridge auth and release.** Done when the bridge has an HTTP auth path and
    is published to npm. Moved ahead of mobile because the mobile app reads
    bridges over the internet.
@@ -66,10 +65,8 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 
 ### Goal 1 — Consolidation
 
-- Resolve the uncommitted daily-rainfall rework (keep or revert), finish plan
-  Tasks 4 through 10, merge `feature/daily-rainfall`.
-- Review `preact-ui-migration`, `capacitor-app`, `feature/last-hour-message-types`
-  against main; resolve conflicts; merge.
+- Implement the last-hour message-type replay from its archived design
+  (commit 7260849).
 - Extract a shared topic and filter case table read by both
   `receiver/test/host/topic_test.cpp` and `bridge/test/topic.test.js`; add the
   `a//c` divergent case; fix whichever side is wrong.
