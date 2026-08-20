@@ -20,7 +20,7 @@ MQTT_URL=mqtt://broker.local:1883 node bin/mqtt-http-bridge.js
 ## Environment variables
 
 All are read once at startup, in `src/config.js`. Every field below except
-`HOST`, `MQTT_USERNAME`, and `MQTT_PASSWORD` also has a CLI flag; a flag
+`PORT`, `HOST`, `MQTT_USERNAME`, and `MQTT_PASSWORD` also has a CLI flag; a flag
 takes precedence over its environment variable, which takes precedence over
 the default.
 
