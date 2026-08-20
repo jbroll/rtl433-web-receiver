@@ -243,6 +243,27 @@ The record does not enter the raw log or the decode count: `signal_store::record
 takes `isDecode=false` for it, and the page recognises its topic's model
 segment, `Receiver`, and skips the Log tab entry it would otherwise add.
 
+## Filtering false decodes
+
+All 214 decoders in `rtl_433_devices.h` stay compiled in; two firmware-side
+checks in `receiver/signal_store.cpp` and `receiver/device_hooks.cpp` filter
+the noise weak decoders produce instead.
+
+`device_hooks::validate()` range-checks `humidity` (0–100), `wind_dir_deg`
+(0–360), and `pressure_hPa` (800–1100) when present, called from
+`signal_store::record()` right after the device key is built. A field outside
+its range drops the whole decode, the same outcome as an unparseable payload.
+
+A brand-new decode key is held in a small pending table rather than shown
+immediately: the first sighting returns without creating a device, and only a
+second sighting of the same key promotes it to a device slot. The pending
+table has no time window — an entry is lost only by eviction under churn from
+other new keys, never by age. This does not apply to the receiver's own
+telemetry (see above), which still gets a card on its first call. The pending
+table is fixed at `SIGNAL_PENDING_SLOTS` (8) entries, so a burst of distinct
+one-off noise decodes between a real device's two sightings can evict its
+pending entry before the second sighting arrives, losing the promotion.
+
 ## Radio health and recovery
 
 `radio_health` runs once per telemetry cycle in `loop()`, fed with the current

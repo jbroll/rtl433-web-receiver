@@ -4,22 +4,6 @@ Known gaps in the receiver, in rough priority order. None break it as it stands;
 found during review or hardware testing and deliberately left. Anything spanning
 sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
-## Nothing filters false decodes
-
-All 214 decoders in `rtl_433_devices.h` are compiled in, and the weak ones
-claim noise: a device shows up once, never repeats, and reads humidity 154,
-wind direction 458°, or 5768 hPa. New devices now start with no card, which
-keeps them off the dashboard but still lists them. Real filters, cheapest
-first: define `MY_DEVICES` and list only the protocols in use, which also
-frees flash; hold a new key until it is heard twice; or range-check the common
-fields (`humidity` 0–100, `wind_dir_deg` 0–360, `pressure_hPa` 800–1100). The
-first is a build flag and the others need firmware.
-
-A `mic` filter would not help. Cotech-36-7959, Telldus-FT0385R, and
-Watts-WFHTRF all declare `"mic":"CRC"` or `"CHECKSUM"`, so these payloads
-passed the decoder's own integrity check. A checksum that short passes on
-noise often enough to produce what the table shows.
-
 ## No path in or out for sensors that are not 433 MHz decodes
 
 The receiver's own card proved the shape: anything recorded through
@@ -130,7 +114,7 @@ lines. The board flashes and runs, and `ArduinoLog` writes to `Serial0`, a
 hardware UART at 921600 baud, while the port exposed over USB is the S3's CDC
 device. Reading the self-test needs a UART adapter on the TX pin, or the
 sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
-`signal_store`'s 31 checks and `alias_store`'s 21 are verified by compilation
+`signal_store`'s 51 checks and `alias_store`'s 21 are verified by compilation
 and by reasoning, not by execution.
 
 ## An alias surviving a reboot is unverified
