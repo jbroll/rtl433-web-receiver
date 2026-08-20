@@ -10,9 +10,9 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 
 - **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
-  Open gaps: false decodes from weak decoders, WiFi credentials baked into
-  the image, `rtl_433_ESP` pinned to a branch not a commit, and `signal_store`
-  and `alias_store` self-tests never read on a device.
+  Open gaps: WiFi credentials baked into the image, `rtl_433_ESP` pinned to a
+  branch not a commit, and `signal_store` and `alias_store` self-tests never
+  read on a device.
 - **`bridge/`** — full MQTT to HTTP binding. No auth, no status endpoint, not
   published to a registry, slow-SSE and unbounded-body gaps.
 - **`dashboard/`** — one self-contained `index.html` built from Preact sources
