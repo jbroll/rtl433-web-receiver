@@ -13,6 +13,8 @@ radio_health.cpp/.h        radio health monitoring and recovery
 device_hooks.cpp/.h        per-decode field checks
 health_store.cpp/.h        receiver health state
 tz_store.cpp/.h            GMT offset storage
+wifi_store.cpp/.h          WiFi credential storage
+provisioning.cpp/.h        SoftAP captive portal
 monitor.py                 headless serial monitor
 test/                      host topic tests, binding spec, fixtures
 docs/                      these pages

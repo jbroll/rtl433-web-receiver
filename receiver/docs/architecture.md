@@ -89,6 +89,36 @@ client slots (`WEB_UI_SSE_CLIENTS`), each a `WiFiClient` plus up to four
 filters and one replay cursor, are fixed arrays sized at compile time — there
 is no dynamic connection list.
 
+**`wifi_store.h` / `wifi_store.cpp`** — persists WiFi credentials to
+`Preferences` namespace `"wifi"`, in fixed `_ssid`/`_pass` buffers sized
+`WIFI_STORE_SSID_MAX`/`WIFI_STORE_PASS_MAX`. `set()` validates length and
+non-empty ssid before writing either buffer or NVS, so a rejected call leaves
+prior credentials untouched. An empty password clears the stored `pass` key
+rather than leaving a stale one paired with a new ssid. Boot order tries
+these stored credentials first; see "Boot order" below.
+
+**`provisioning.h` / `provisioning.cpp`** — the SoftAP captive portal used
+when no stored or `.env` credentials connect. It runs its own `WebServer` on
+port 80, separate from `web_ui.cpp`'s: `provisioning::run()` always ends in a
+reboot before `web_ui::begin()` ever runs, so there is no port conflict
+between the two. `run()` scans for nearby networks in STA mode before
+`WiFi.softAP()` brings the AP up, because `WiFi.scanNetworks()` forces the
+radio through STA-mode channel-hopping that would otherwise briefly
+destabilize an already-joined client. The scanned list, deduplicated and
+sorted by RSSI, is cached and rendered into the setup page rather than
+rescanned per request. A DNS server answering every query with the AP's own
+IP is what makes a phone or laptop auto-open the captive portal.
+
+## Boot order
+
+WiFi connection is tried in three steps, each a fallback for the one before:
+stored credentials from `wifi_store` first, then the `.env`-supplied
+`WIFI_SSID`/`WIFI_PASSWORD` build macros if there were no stored credentials,
+persisting them to `wifi_store` on a successful connect so later boots skip
+straight to the stored path. If neither connects within the boot window, the
+device falls back to `provisioning::run()`, the SoftAP captive portal, as the
+final step.
+
 ## The page the firmware serves
 
 `GET /` answers with a gzipped byte array in PROGMEM, generated at build time by

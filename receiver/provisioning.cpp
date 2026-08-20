@@ -115,11 +115,19 @@ static void handleRoot() {
 
 static void handleSave() {
   String manual = _server.arg("ssid_manual");
-  String ssid   = manual.length() > 0 ? manual : _server.arg("ssid");
-  String pass   = _server.arg("pass");
+  manual.trim();
+  String ssid = manual.length() > 0 ? manual : _server.arg("ssid");
+  String pass = _server.arg("pass");
 
-  if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX ||
-      pass.length() == 0 || pass.length() >= WIFI_STORE_PASS_MAX) {
+  if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX) {
+    _server.send(400, "text/plain", "Choose a network and a password that fits.");
+    return;
+  }
+  if (pass.length() == 0) {
+    _server.send(400, "text/plain", "A password is required; open networks aren't supported.");
+    return;
+  }
+  if (pass.length() >= WIFI_STORE_PASS_MAX) {
     _server.send(400, "text/plain", "Choose a network and a password that fits.");
     return;
   }
@@ -140,12 +148,17 @@ void run() {
   char ap[32];
   apName(ap, sizeof(ap));
 
+  // Scan before the AP comes up: scanNetworks() forces the radio through
+  // STA-mode channel-hopping, which would otherwise briefly destabilize an
+  // already-joined client. STA mode here is scan-only, dropped once the scan
+  // completes; WIFI_AP is set fresh afterward before softAP() brings the AP up.
+  WiFi.mode(WIFI_STA);
+  _scanCount = scanSorted(_scanSsid, _scanRssi, PROVISIONING_SCAN_MAX);
+
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ap, nullptr);
   IPAddress apIP = WiFi.softAPIP();
   Log.notice(F("provisioning: AP \"%s\" up at %s" CR), ap, apIP.toString().c_str());
-
-  _scanCount = scanSorted(_scanSsid, _scanRssi, PROVISIONING_SCAN_MAX);
 
   _dns.start(53, "*", apIP);
 

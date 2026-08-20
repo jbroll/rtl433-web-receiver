@@ -10,10 +10,13 @@ At boot the device tries to connect WiFi (stored credentials, or the `.env`
 macros if there are none) for up to 20 seconds. If that fails — no
 credentials, bad `.env` macros, or a network that doesn't come up in time —
 it opens a `rtl433-receiver-XXXX` SoftAP with a captive-portal setup page
-instead of decoding, so the device stays reachable over HTTP rather than
-sitting on a dead connection. Holding the BOOT button ~3 seconds at boot
-clears stored credentials and returns to this state. See `docs/install.md`
-for the full flow.
+instead of decoding, so the setup page stays reachable rather than the device
+sitting on a dead connection; the receiver's normal UI, routes, and SSE are
+not up during provisioning. Holding the BOOT button ~3 seconds at boot clears
+stored credentials and returns to this state — unless the build has `.env`
+present, in which case it reconnects with the compiled-in credentials and
+re-persists them on the same boot, never reaching the portal. See
+`docs/install.md` for the full flow.
 
 Once connected, WiFi is not required to keep decoding: if the connection
 later drops, the sketch keeps decoding and logging to serial, and retries

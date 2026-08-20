@@ -43,9 +43,13 @@ const char* password() {
   return _pass;
 }
 
+static bool validCredentials(const char* ssid, const char* password) {
+  return ssid != NULL && password != NULL && ssid[0] != '\0' &&
+         strlen(ssid) < WIFI_STORE_SSID_MAX && strlen(password) < WIFI_STORE_PASS_MAX;
+}
+
 bool set(const char* ssid, const char* password) {
-  if (ssid == NULL || password == NULL || ssid[0] == '\0' ||
-      strlen(ssid) >= WIFI_STORE_SSID_MAX || strlen(password) >= WIFI_STORE_PASS_MAX) {
+  if (!validCredentials(ssid, password)) {
     return false;
   }
   if (!_open) {
@@ -60,6 +64,7 @@ bool set(const char* ssid, const char* password) {
 
   bool ok;
   if (password[0] == '\0') {
+    _prefs.remove("pass");
     ok = _prefs.putString("ssid", _ssid) > 0;
   } else {
     // Write pass first: if ssid then fails, NVS still has prevSsid paired
@@ -125,19 +130,26 @@ bool selfTest() {
   ok &= check("clearing the internal state removes credentials", !hasCredentials());
   ok &= check("ssid reads empty after clearing", ssid()[0] == '\0');
 
-  ok &= check("set rejects an empty ssid", !set("", "TestPass1"));
-
   char longSsid[WIFI_STORE_SSID_MAX + 1];
   memset(longSsid, 'a', sizeof(longSsid) - 1);
   longSsid[sizeof(longSsid) - 1] = '\0';
-  ok &= check("set rejects an over-length ssid", !set(longSsid, "TestPass1"));
 
   char longPass[WIFI_STORE_PASS_MAX + 1];
   memset(longPass, 'b', sizeof(longPass) - 1);
   longPass[sizeof(longPass) - 1] = '\0';
-  ok &= check("set rejects an over-length password", !set("TestNet", longPass));
 
-  ok &= check("a rejected set leaves prior credentials in place", !hasCredentials());
+  // Seed known credentials directly so the "leaves prior credentials in
+  // place" check below has something real to verify was left untouched.
+  copyTruncated(_ssid, sizeof(_ssid), "TestNet");
+  copyTruncated(_pass, sizeof(_pass), "TestPass1");
+
+  ok &= check("validCredentials rejects an empty ssid", !validCredentials("", "TestPass1"));
+  ok &= check("validCredentials rejects an over-length ssid", !validCredentials(longSsid, "TestPass1"));
+  ok &= check("validCredentials rejects an over-length password", !validCredentials("TestNet", longPass));
+  ok &= check("validCredentials accepts a valid pair", validCredentials("TestNet", "TestPass1"));
+
+  ok &= check("a rejected set leaves prior credentials in place",
+              strcmp(ssid(), "TestNet") == 0 && strcmp(password(), "TestPass1") == 0);
 
   copyTruncated(_ssid, sizeof(_ssid), saved_ssid);
   copyTruncated(_pass, sizeof(_pass), saved_pass);
