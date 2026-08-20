@@ -144,8 +144,11 @@ bool remove(const char* topic) {
     return false;
   }
   _used[i] = false;
-  persist();
-  return true;
+  if (persist()) {
+    return true;
+  }
+  _used[i] = true;
+  return false;
 }
 
 uint8_t count() {
@@ -204,7 +207,7 @@ bool selfTest() {
   int idx1 = indexOf("s/M/1/$alias");
   int idx2 = indexOf("s/M/2/$alias");
   int idx3 = indexOf("s/M/3/$alias");
-  remove("s/M/2/$alias");
+  ok &= check("removing a set topic reports true", remove("s/M/2/$alias"));
   ok &= check("removing an entry drops the count", count() == 2);
   ok &= check("a removed entry's neighbours keep their indices",
               indexOf("s/M/1/$alias") == idx1 && indexOf("s/M/3/$alias") == idx3);

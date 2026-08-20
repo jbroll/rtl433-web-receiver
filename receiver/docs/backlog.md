@@ -146,9 +146,6 @@ above.
   only compiles and runs on the device (see above); `topic` is the one module
   host-tested today. A PlatformIO `native` environment would make the other
   two stores' tests a normal `pio test` as well.
-- `alias_store::remove()` calls `persist()` and ignores its result, so an NVS
-  write that fails after a removal is silent and the alias returns on the next
-  boot. `set()` reports the same failure to its caller, which answers `503`.
 - `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test
   check. The alias self-test casts `indexOf()`'s result to `uint8_t`, so a `-1`
   would read as 255 and `topicAt()` would return NULL, passing the check for

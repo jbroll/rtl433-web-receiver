@@ -327,7 +327,10 @@ static void handleAliasPost(const char* path) {
   }
   const char* name = doc.as<const char*>();
   if (*name == '\0') {
-    alias_store::remove(path);
+    if (!alias_store::remove(path)) {
+      sendStatus(503, "alias remove failed");
+      return;
+    }
   } else if (!alias_store::set(path, name)) {
     sendStatus(503, "alias store full");
     return;
