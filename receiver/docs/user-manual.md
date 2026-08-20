@@ -213,7 +213,7 @@ stream reconnects, and every open browser picks up the new page.
 - 4 concurrent SSE clients, each subscribing up to 4 filters; a fifth client
   evicts the longest-attached one, whose browser reconnects on its own
 - the radio monitors its own health once a minute; a stuck or parked radio is
-  recovered by re-running the radio init, or by rebooting if the init fails.
+  recovered by re-running the radio init.
   `radio_ok`, `recovery_count`, and `last_recovery_s` on the receiver's card
   carry the state
 

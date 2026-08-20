@@ -410,8 +410,8 @@ static bool fakeSignalTick() {
 }
 #endif
 
-// The radio health monitor, run once per telemetry cycle. Recovery and reboot
-// happen here; a soft re-init is logged and carried out immediately.
+// The radio health monitor, run once per telemetry cycle. Recovery happens
+// here; a soft re-init is logged and carried out immediately.
 static void monitorRadioHealth() {
 #ifdef FAKE_SIGNALS
   // Recovery-exercise mode: after FAKE_RADIO_FAIL_MS pretend the radio is deaf
