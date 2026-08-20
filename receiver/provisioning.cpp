@@ -1,0 +1,161 @@
+#include "provisioning.h"
+
+#include <ArduinoLog.h>
+#include <DNSServer.h>
+#include <WebServer.h>
+#include <WiFi.h>
+
+#include "wifi_store.h"
+
+namespace provisioning {
+
+// Separate from web_ui.cpp's WebServer: this one only runs during
+// provisioning, which always ends in a reboot before web_ui's server starts,
+// so there is no port-80 conflict.
+static DNSServer _dns;
+static WebServer _server(80);
+
+#define PROVISIONING_SCAN_MAX 16
+
+static void apName(char* out, size_t outSize) {
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  snprintf(out, outSize, "rtl433-receiver-%02x%02x", mac[4], mac[5]);
+}
+
+static void writeHtmlEscaped(String& out, const char* s) {
+  for (const char* p = s; *p; p++) {
+    switch (*p) {
+      case '&': out += "&amp;"; break;
+      case '<': out += "&lt;"; break;
+      case '>': out += "&gt;"; break;
+      case '"': out += "&quot;"; break;
+      default:  out += *p; break;
+    }
+  }
+}
+
+// Scans and returns SSIDs by descending RSSI, deduplicated by name (the
+// strongest instance of a repeated SSID across APs/channels wins).
+static int scanSorted(String outSsid[], int32_t outRssi[], int maxOut) {
+  int found = WiFi.scanNetworks();
+  int count = 0;
+  for (int i = 0; i < found && count < maxOut; i++) {
+    String ssid = WiFi.SSID(i);
+    if (ssid.length() == 0) {
+      continue;
+    }
+    int existing = -1;
+    for (int j = 0; j < count; j++) {
+      if (outSsid[j] == ssid) {
+        existing = j;
+        break;
+      }
+    }
+    if (existing >= 0) {
+      if (WiFi.RSSI(i) > outRssi[existing]) {
+        outRssi[existing] = WiFi.RSSI(i);
+      }
+      continue;
+    }
+    outSsid[count] = ssid;
+    outRssi[count] = WiFi.RSSI(i);
+    count++;
+  }
+  // Simple insertion sort by descending RSSI; PROVISIONING_SCAN_MAX is small.
+  for (int i = 1; i < count; i++) {
+    String  ssid = outSsid[i];
+    int32_t rssi = outRssi[i];
+    int     j    = i - 1;
+    while (j >= 0 && outRssi[j] < rssi) {
+      outSsid[j + 1] = outSsid[j];
+      outRssi[j + 1] = outRssi[j];
+      j--;
+    }
+    outSsid[j + 1] = ssid;
+    outRssi[j + 1] = rssi;
+  }
+  WiFi.scanDelete();
+  return count;
+}
+
+static void handleRoot() {
+  String   ssids[PROVISIONING_SCAN_MAX];
+  int32_t  rssis[PROVISIONING_SCAN_MAX];
+  int      count = scanSorted(ssids, rssis, PROVISIONING_SCAN_MAX);
+
+  String page =
+      "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+      "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+      "<title>rtl433 receiver setup</title></head><body>"
+      "<h1>WiFi setup</h1>"
+      "<form method=\"POST\" action=\"/save\">"
+      "<label>Network<br><select name=\"ssid\">"
+      "<option value=\"\">(choose or type below)</option>";
+  for (int i = 0; i < count; i++) {
+    page += "<option value=\"";
+    writeHtmlEscaped(page, ssids[i].c_str());
+    page += "\">";
+    writeHtmlEscaped(page, ssids[i].c_str());
+    page += " (" + String(rssis[i]) + " dBm)</option>";
+  }
+  page +=
+      "</select></label><br><br>"
+      "<label>Or type a network name<br>"
+      "<input type=\"text\" name=\"ssid_manual\" maxlength=\"32\"></label><br><br>"
+      "<label>Password<br>"
+      "<input type=\"password\" name=\"pass\" maxlength=\"64\"></label><br><br>"
+      "<button type=\"submit\">Save and connect</button>"
+      "</form></body></html>";
+
+  _server.send(200, "text/html", page);
+}
+
+static void handleSave() {
+  String manual = _server.arg("ssid_manual");
+  String ssid   = manual.length() > 0 ? manual : _server.arg("ssid");
+  String pass   = _server.arg("pass");
+
+  if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX ||
+      pass.length() >= WIFI_STORE_PASS_MAX) {
+    _server.send(400, "text/plain", "Choose a network and a password that fits.");
+    return;
+  }
+
+  if (!wifi_store::set(ssid.c_str(), pass.c_str())) {
+    _server.send(500, "text/plain", "Could not save credentials, try again.");
+    return;
+  }
+
+  _server.send(200, "text/html",
+               "<!DOCTYPE html><html><body><h1>Saved</h1>"
+               "<p>Restarting and joining the network...</p></body></html>");
+  delay(500); // let the response flush before the socket goes away
+  ESP.restart();
+}
+
+void run() {
+  char ap[32];
+  apName(ap, sizeof(ap));
+
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ap, nullptr);
+  IPAddress apIP = WiFi.softAPIP();
+  Log.notice(F("provisioning: AP \"%s\" up at %s" CR), ap, apIP.toString().c_str());
+
+  _dns.start(53, "*", apIP);
+
+  _server.on("/", HTTP_GET, handleRoot);
+  _server.on("/save", HTTP_POST, handleSave);
+  // Most OSes probe an arbitrary URL to detect a captive portal; answering
+  // with the same page there is what makes them auto-open it.
+  _server.onNotFound(handleRoot);
+  _server.begin();
+
+  for (;;) {
+    _dns.processNextRequest();
+    _server.handleClient();
+  }
+}
+
+} // namespace provisioning
