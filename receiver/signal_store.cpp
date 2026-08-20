@@ -4,6 +4,8 @@
 #include <ArduinoLog.h>
 #include <time.h>
 
+#include "device_hooks.h"
+
 namespace signal_store {
 
 static DeviceSlot _devices[SIGNAL_DEVICE_SLOTS];
@@ -173,6 +175,10 @@ bool record(const char* payload, int rssi, bool isDecode) {
   }
   char key[SIGNAL_KEY_MAX];
   if (!buildKey(doc, key, sizeof(key))) {
+    _dropped++;
+    return false;
+  }
+  if (!device_hooks::validate(doc)) {
     _dropped++;
     return false;
   }
