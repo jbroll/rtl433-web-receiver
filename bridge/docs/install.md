@@ -80,5 +80,17 @@ on the defaults, quietly talking to `mqtt://localhost:1883`. Enable with
 `ln -s /etc/sv/mqtt-http-bridge /var/service/`.
 
 The bridge exits 0 on `SIGTERM`, after closing every open SSE stream, the
-HTTP server, and the broker connection in that order, so a plain `sv down`
-is enough to stop it cleanly.
+HTTP server, the broker connection, and the embedded broker (if running) in
+that order, so a plain `sv down` is enough to stop it cleanly.
+
+## Deploying to weather.rkroll.com
+
+`bridge/deploy.conf` and `bridge/secrets.env.example` in this repo are set up
+for that deploy, using the `deploy.sh` system. Copy `secrets.env.example` to
+`secrets.env` (gitignored) and fill in `AUTH_TOKEN` — generate one with
+`openssl rand -hex 24` — before running `deploy init`.
+
+TCP 8883 must be opened in the VPS firewall manually before `deploy init`
+runs: `deploy.sh` has no firewall module, so nothing opens it for you. Skip
+this and the firmware's MQTTS connection fails with nothing in the bridge's
+log to explain why.

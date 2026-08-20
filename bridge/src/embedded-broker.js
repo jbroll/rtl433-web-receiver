@@ -10,6 +10,9 @@ import { tokenMatches } from './auth.js'
 // is not a state this can start into silently, and a loopback debug port
 // alongside the public one is a future decision, not a default.
 export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, tlsCert, tlsKey, authToken }) {
+  if (Boolean(tlsCert) !== Boolean(tlsKey)) {
+    throw new Error('TLS_CERT and TLS_KEY must both be set, or neither')
+  }
   const tlsEnabled = Boolean(tlsCert && tlsKey)
   if (tlsEnabled && !authToken) {
     throw new Error('AUTH_TOKEN must be set when TLS is configured for the embedded broker')

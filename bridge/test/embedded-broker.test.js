@@ -54,6 +54,30 @@ test('TLS configured without AUTH_TOKEN throws before listening', async () => {
   }
 })
 
+test('TLS_CERT without TLS_KEY throws before listening', async () => {
+  const { certPath, dir } = selfSignedCertFiles()
+  try {
+    await assert.rejects(
+      () => startEmbeddedBroker({ mqttPort: 0, mqttsPort: 0, tlsCert: certPath }),
+      /TLS_CERT and TLS_KEY must both be set, or neither/,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('TLS_KEY without TLS_CERT throws before listening', async () => {
+  const { keyPath, dir } = selfSignedCertFiles()
+  try {
+    await assert.rejects(
+      () => startEmbeddedBroker({ mqttPort: 0, mqttsPort: 0, tlsKey: keyPath }),
+      /TLS_CERT and TLS_KEY must both be set, or neither/,
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('TLS: a client with the right token connects, a wrong or missing one is refused', async () => {
   const { certPath, keyPath, dir } = selfSignedCertFiles()
   try {

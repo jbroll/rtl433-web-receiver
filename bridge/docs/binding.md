@@ -103,8 +103,8 @@ appear in a topic.
 |---|---|
 | `400` | Malformed topic, malformed filter, or a body that is not JSON |
 | `404` | `GET` of a topic with no retained message |
-| `405` | An operation the implementation does not offer for that topic |
 | `401` | `POST` with a missing or wrong bearer token, when the implementation has auth enabled |
+| `405` | An operation the implementation does not offer for that topic |
 | `503` | The bridge's backend is unavailable |
 
 An implementation that refuses an operation returns `405` rather than silently

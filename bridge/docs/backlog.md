@@ -75,3 +75,8 @@
 - `Access-Control-Allow-Origin: *` means a page on any site the user visits can read a
   reachable bridge and publish to it. Authentication is the fix; an origin allowlist
   alone is not, since a non-browser client sends whatever origin it likes.
+- The dashboard's alias-write `POST` (`dashboard/src/alias.js`) has no way to configure
+  or send `Authorization: Bearer <AUTH_TOKEN>`, so alias writes fail with `401` against
+  any bridge that has `AUTH_TOKEN` set — including the `weather.rkroll.com` deploy this
+  branch adds. The dashboard needs its own token-configuration surface before that
+  deploy's alias-editing UI can work.

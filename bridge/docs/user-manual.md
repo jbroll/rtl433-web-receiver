@@ -106,9 +106,9 @@ replay; a client that acts on each event should be able to act on a repeat.
 
 ## Other status codes
 
+- `401` — a `POST` with a missing or wrong bearer token, when `AUTH_TOKEN` is configured.
 - `405` — a method other than GET/POST on a topic path, or anything but GET
   on `/events`.
-- `401` — a `POST` with a missing or wrong bearer token, when `AUTH_TOKEN` is configured.
 
 `400`, `404`, `405`, `401`, and `503` are the only statuses the binding defines. A
 `500` means an unforeseen error inside the bridge, which is a bug.
@@ -117,5 +117,6 @@ replay; a client that acts on each event should be able to act on a repeat.
 
 Every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` on any topic is
 `204` with `Access-Control-Allow-Methods: GET, POST, OPTIONS`. A dashboard served from
-anywhere can therefore read this. There is no authentication for an origin check to
-protect, so this exposes nothing a direct request did not.
+anywhere can therefore read this. With `AUTH_TOKEN` set, `POST` still requires the
+token regardless of origin, so the wildcard origin doesn't weaken that: a cross-origin
+caller still needs the token to publish.

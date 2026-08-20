@@ -29,14 +29,16 @@ export function createBridge({ broker, cache, authToken }) {
 async function handle(req, res, { broker, cache, clients, authToken }) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
-  // The dashboard is served from a different origin than any bridge it reads,
-  // and there is no authentication here for an origin check to protect.
+  // The dashboard is served from a different origin than any bridge it reads.
+  // A wildcard origin adds nothing an attacker doesn't already lack: with
+  // AUTH_TOKEN set, POST still requires the bearer token regardless of
+  // origin, and a wildcard-origin caller has no way to know or attach it.
   res.setHeader('access-control-allow-origin', '*')
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'access-control-allow-methods': 'GET, POST, OPTIONS',
-      'access-control-allow-headers': 'content-type',
+      'access-control-allow-headers': 'content-type, authorization',
       'access-control-max-age': '600',
     })
     return res.end()
@@ -139,6 +141,6 @@ function send(res, status, message) {
 
 function authorized(req, authToken) {
   const header = req.headers['authorization']
-  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false
+  if (typeof header !== 'string' || !/^Bearer /i.test(header)) return false
   return tokenMatches(header.slice('Bearer '.length), authToken)
 }
