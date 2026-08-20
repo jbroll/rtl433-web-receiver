@@ -4,9 +4,9 @@ namespace radio_health {
 
 HealthAction decide(bool silent, bool pinned, unsigned long elapsedMs) {
   // A chip pinned at or below the noise floor is stuck refusing OP_MODE writes;
-  // it survives esp_restart() because the reboot does not power-cycle the radio,
-  // so a reboot here only takes the web server down. Soft re-init is the recovery
-  // attempt, gated by the backoff, until a power cycle clears the chip.
+  // the reboot does not power-cycle the radio, so a reboot only takes the web
+  // server down. Soft re-init is the recovery attempt, gated by the backoff,
+  // until a power cycle clears the chip.
   if (silent && pinned) {
     if (elapsedMs < RECOVERY_BACKOFF_MS) {
       return HealthAction::none;

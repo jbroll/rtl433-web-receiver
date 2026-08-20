@@ -234,29 +234,9 @@ static int radioTemperature() {
   int    t = INT16_MIN;
   // The RF69 defers OP_MODE writes for a while after entering RX (the mode
   // change lands once the receiver settles), so the STANDBY write right after
-  // init can time RadioLib's checkback out. Retrying with a delay waits it out.
-  int mode = RADIOLIB_ERR_UNKNOWN;
-  for (int i = 0; i < 12 && mode != RADIOLIB_ERR_NONE; i++) {
-    if (i) {
-      delay(10);
-    }
-    mode = radio.setMode(RADIOLIB_RF69_STANDBY);
-    Log.warning(F("dbg setMode standby attempt %d -> %d" CR), i, mode);
-  }
-  int diow = mod->SPIsetRegValue(RADIOLIB_RF69_REG_DIO_MAPPING_2, 0x07, 5, 0);
-  int dior = mod->SPIgetRegValue(RADIOLIB_RF69_REG_DIO_MAPPING_2, 5, 0);
-  Log.warning(F("dbg dio2 write=%d read=%d" CR), diow, dior);
-  mod->SPIsetRegValue(RADIOLIB_RF69_REG_RSSI_CONFIG, RADIOLIB_RF69_RSSI_START, 1, 0);
-  delay(3);
-  int8_t rssi = (int8_t)mod->SPIgetRegValue(RADIOLIB_RF69_REG_RSSI_VALUE);
-  int opmode = mod->SPIgetRegValue(RADIOLIB_RF69_REG_OP_MODE, 4, 2);
-  int opfull = mod->SPIreadRegister(RADIOLIB_RF69_REG_OP_MODE);
-  int irq1 = mod->SPIreadRegister(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
-  int irq2 = mod->SPIreadRegister(RADIOLIB_RF69_REG_IRQ_FLAGS_2);
-  int thresh = mod->SPIreadRegister(RADIOLIB_RF69_REG_RSSI_THRESH);
-  Log.warning(F("dbg rssi=%d opmode=%d opfull=%d irq1=%d irq2=%d thresh=%d" CR),
-              rssi, opmode, opfull, irq1, irq2, thresh);
-  if (mode == RADIOLIB_ERR_NONE) {
+  // init can time RadioLib's checkback out. A failed write skips the read; the
+  // radio is put back in RX below, so reception resumes either way.
+  if (radio.setMode(RADIOLIB_RF69_STANDBY) == RADIOLIB_ERR_NONE) {
     mod->SPIsetRegValue(RADIOLIB_RF69_REG_TEMP_1, RADIOLIB_RF69_TEMP_MEAS_START, 3, 3);
     for (int i = 0; i < RADIO_TEMP_TRIES; i++) {
       if (mod->SPIgetRegValue(RADIOLIB_RF69_REG_TEMP_1, 2, 2) !=
@@ -267,8 +247,9 @@ static int radioTemperature() {
       }
       delay(1);
     }
+  } else {
+    Log.warning(F("setMode standby failed, skipping radio temperature read" CR));
   }
-  Log.warning(F("dbg temp: mode=%d tempC=%d" CR), mode, t);
   // Silently leaving the part in standby would look exactly like a quiet band:
   // the receiver task keeps sampling RSSI and no decode ever arrives again.
   int state = radio.receiveDirect();
@@ -276,7 +257,6 @@ static int radioTemperature() {
     Log.warning(F("receiveDirect after temperature read failed: %d, retrying" CR), state);
     state = radio.receiveDirect();
   }
-  Log.warning(F("dbg receiveDirect state=%d" CR), state);
   // receiveDirect's return alone is not the whole proof: the OpMode register
   // read confirms the part is actually in RX, not parked in standby.
   if (state != RADIOLIB_ERR_NONE || !radioBackInRx(mod)) {
