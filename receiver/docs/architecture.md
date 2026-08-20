@@ -44,19 +44,17 @@ simpler.
 **`radio_health.h` / `radio_health.cpp`** — an Arduino-free decision module,
 host-tested by `test/host/run.sh` like `topic`. It watches the radio through
 `lastDecodeAt` (time since last decode) and `averageRssi` (mean RSSI of the
-receiver task). Three states: `silent` (no decode for `SILENT_MS`), `pinned`
-(`silent` AND `averageRssi` nonzero AND at or below `NOISE_FLOOR_DBM`), and
-`frozen` (`averageRssi` byte-identical for `FROZEN_MS`). Recovery ladder:
-`silent && frozen && !pinned` → `esp_restart()` (the receiver task is wedged
-and cannot be restarted by a soft init); `silent && pinned` → soft re-init
-(`initReceiver()`); any other condition → no action. A pinned chip is stuck
-refusing OP_MODE writes and survives `esp_restart()`, so the pinned signature
-never escalates to a reboot; it soft re-inits on the backoff until a power
-cycle clears the chip. Soft re-init increments `recovery_count` in NVS and
-records the current uptime as `last_recovery_s`; a confirmed decode resets the
-module's state. A constant `RECOVERY_BACKOFF_MS` (2 min default) suppresses a
-re-trigger right after a recovery; the condition must re-confirm before the
-next attempt. The window lengths and thresholds are build flags.
+receiver task). Two states: `silent` (no decode for `SILENT_MS`) and `pinned`
+(`silent` AND `averageRssi` nonzero AND at or below `NOISE_FLOOR_DBM`).
+`silent && pinned` soft re-inits (`initReceiver()`); anything else takes no
+action. A pinned chip is stuck refusing OP_MODE writes and survives
+`esp_restart()`, so the firmware never reboots for it: it soft re-inits on the
+backoff until a power cycle clears the chip. Soft re-init increments
+`recovery_count` in NVS and records the current uptime as `last_recovery_s`; a
+confirmed decode resets the module's state. A constant `RECOVERY_BACKOFF_MS`
+(2 min default) suppresses a re-trigger right after a recovery; the condition
+must re-confirm before the next attempt. The window lengths and thresholds are
+build flags.
 
 **`health_store.h` / `health_store.cpp`** — persists the radio health state
 to `Preferences` namespace `"health"`. Writes are bounded: once at boot
@@ -248,13 +246,13 @@ segment, `Receiver`, and skips the Log tab entry it would otherwise add.
 ## Radio health and recovery
 
 `radio_health` runs once per telemetry cycle in `loop()`, fed with the current
-`lastDecodeAt` and `averageRssi`. It classifies the radio state as `silent`,
-`pinned`, or `frozen` and returns an action. `pinned` triggers a soft
-re-init: `initReceiver()` re-creates the receiver task and restarts the radio.
-`frozen` without `pinned` escalates to `esp_restart()`: a wedged receiver task
-cannot be restarted by a soft init, and a healthy radio's floor is not pinned.
-A decode arriving after a soft re-init marks the recovery confirmed and resets
-the health state.
+`lastDecodeAt` and `averageRssi`. It classifies the radio state as `silent` or
+`pinned` and returns an action. `pinned` triggers a soft re-init:
+`initReceiver()` re-creates the receiver task and restarts the radio. There is
+no reboot path: the firmware never calls `esp_restart()` for the radio, because
+a reboot does not power-cycle the radio and a stuck chip survives it. A decode
+arriving after a soft re-init marks the recovery confirmed and resets the
+health state.
 
 The two SPI users — the receiver task reading RSSI and `loop()` reading the
 temperature register — are serialised by the ESP32 SPI driver's per-bus mutex:
@@ -262,11 +260,14 @@ RadioLib's `ArduinoHal` wraps every register transaction in
 `beginTransaction()/endTransaction()`, which the driver guards. There is no
 race between them.
 
-The temperature read also verifies the OpMode register and recovers immediately
-on failure: the failure runs `reinitRadio()` and `recordRecoveryEvent()` and
-returns `INT16_MIN`. It does not reboot — the failure signature is the stuck
-chip below, which survives a reboot, so a reboot would only take the web server
-down. The board stays up serving HTTP with `radio_ok` 0.
+The temperature read parks the radio in standby for the measurement and then
+puts it back in RX. A single `setMode(STANDBY)` attempt is made; if it fails the
+measurement is skipped. After the read the OpMode register is verified, and on
+failure the path runs `reinitRadio()` and `recordRecoveryEvent()` and returns
+`INT16_MIN` (the previous reading is kept). It does not reboot — the failure
+signature is the stuck chip below, which survives a reboot, so a reboot would
+only take the web server down. The board stays up serving HTTP with `radio_ok`
+0.
 
 A noise floor at or below the SX1231's measurement floor is an error value, not
 a quiet band. A working receiver with its antenna connected reads roughly -105
@@ -280,8 +281,8 @@ nothing names a below-floor reading as an error.
 
 A stuck chip survives `esp_restart()`: the reboot does not power-cycle the
 radio, so the bad state persists across the resulting reboot loop. Recovery
-comes from a full power cycle, which drops the radio's supply. The firmware no
-longer reboots into that loop: the pinned signature keeps the board alive,
+comes from a full power cycle, which drops the radio's supply. The firmware
+never reboots into that loop: the pinned signature keeps the board alive,
 soft re-initing on the backoff in case a transient latch clears, and the
 receiver card reports `radio_ok` 0 and the pinned `noise_dBm` until the chip
 clears.
