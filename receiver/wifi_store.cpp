@@ -57,8 +57,20 @@ bool set(const char* ssid, const char* password) {
   copyTruncated(prevPass, sizeof(prevPass), _pass);
   copyTruncated(_ssid, sizeof(_ssid), ssid);
   copyTruncated(_pass, sizeof(_pass), password);
-  if (_prefs.putString("ssid", _ssid) > 0 &&
-      (password[0] == '\0' || _prefs.putString("pass", _pass) > 0)) {
+
+  bool ok;
+  if (password[0] == '\0') {
+    ok = _prefs.putString("ssid", _ssid) > 0;
+  } else {
+    // Write pass first: if ssid then fails, NVS still has prevSsid paired
+    // with the new pass, so restore prevPass to keep the pair consistent.
+    bool passOk = _prefs.putString("pass", _pass) > 0;
+    ok = passOk && _prefs.putString("ssid", _ssid) > 0;
+    if (passOk && !ok) {
+      _prefs.putString("pass", prevPass);
+    }
+  }
+  if (ok) {
     return true;
   }
   copyTruncated(_ssid, sizeof(_ssid), prevSsid);
