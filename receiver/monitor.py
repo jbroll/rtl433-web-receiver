@@ -101,17 +101,45 @@ def main():
         action="store_true",
         help="Suppress non-printable startup bytes",
     )
+    parser.add_argument(
+        "--hex",
+        action="store_true",
+        help="Show non-printable lines as hex instead of suppressing or mangling them",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        metavar="FILE",
+        help="Also append decoded lines to FILE",
+    )
+    parser.add_argument(
+        "--marker",
+        metavar="TEXT",
+        help="Do not print anything until a line containing TEXT is seen (line still printed)",
+    )
     args = parser.parse_args()
 
     if not args.port:
         print("error: no serial port found", file=sys.stderr)
         sys.exit(1)
 
+    output_handle = open(args.output, "a") if args.output else None
+
+    def emit(decoded):
+        if args.timestamp:
+            decoded = f"{time.strftime('%H:%M:%S')} {decoded}"
+        print(decoded)
+        sys.stdout.flush()
+        if output_handle is not None:
+            output_handle.write(decoded + "\n")
+            output_handle.flush()
+
     with contextlib.closing(serial.Serial(args.port, args.baud, timeout=0.1)) as port:
         if not args.no_reset:
             reset_board(port)
 
         start = time.time()
+        marker_seen = args.marker is None
         line_buffer = b""
         while True:
             if args.duration and time.time() - start >= args.duration:
@@ -124,13 +152,22 @@ def main():
             line_buffer = lines.pop()
             for line in lines:
                 line = line.rstrip(b"\r")
-                if args.quiet and not all(32 <= b <= 126 or b in (9, 10, 13) for b in line):
+                printable = all(32 <= b <= 126 or b in (9, 10, 13) for b in line)
+                if not printable and args.hex:
+                    emit("HEX " + " ".join(f"{b:02x}" for b in line))
+                    continue
+                if args.quiet and not printable:
                     continue
                 decoded = line.decode("utf-8", errors="replace")
-                if args.timestamp:
-                    decoded = f"{time.strftime('%H:%M:%S')} {decoded}"
-                print(decoded)
-                sys.stdout.flush()
+                if not marker_seen:
+                    if args.marker in decoded:
+                        marker_seen = True
+                    else:
+                        continue
+                emit(decoded)
+
+    if output_handle is not None:
+        output_handle.close()
 
 
 if __name__ == "__main__":
