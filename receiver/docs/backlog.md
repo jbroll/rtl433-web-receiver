@@ -26,7 +26,7 @@ The receiver's own card proved the shape: anything recorded through
 `signal_store::record()` becomes a device the page already knows how to draw,
 alias, and lay out. Nothing else uses it. Three directions, none started:
 
-- A wired sensor on the I2C bus at GPIO 21 (SDA) and GPIO 47 (SCL), recorded
+- A wired sensor on the I2C bus at GPIO 21 (SCL) and GPIO 47 (SDA), recorded
   the same way. The BMP280 driver reads temperature and pressure every 30 s
   and records them through `signal_store::record()`. The bus is sized for an
   AHT20 later. Add 10k pull-ups to 3V3 at the sensor header unless the breakout
@@ -50,6 +50,27 @@ floor at or below the SX1231's measurement floor (about -120 dBm, e.g. the
 `rssi_thresh`. But the receiver card still renders `noise_dBm` as a plain
 value with no error marking, so a broken radio reads as merely quiet. Add a
 page indicator keyed on `radio_ok`.
+
+## The health path never reads `RegIrqFlags1`
+
+Everything the firmware knows about a sick radio comes from `setMode` returning
+-16 and from the noise floor, and -16 means only "readback did not match". It
+cannot tell a chip that is refusing a mode change from an SPI bus that has
+stopped working, which is the wrong turn the last hardware fault sent the
+diagnosis down. `RegIrqFlags1` (0x27) answers it directly: ModeReady in bit 7
+and PllLock in bit 4. Reading it in `reinitRadio()` and carrying the byte in
+telemetry would name the fault in the log instead of leaving it to a probe
+sketch. A scratch write to `RegOokFix` and a `RegVersion` check would settle
+the bus question in the same pass.
+
+## `src_filter` excludes `probe` by name, not by shape
+
+`platformio.ini:24` is `src_filter = +<*> -<test> -<probe>`, so any other
+directory under `receiver/` is compiled into the firmware, including the `.pio`
+tree a sibling PlatformIO project leaves behind. A scratch `probe2/` broke the
+receiver build until it was removed, and the error pointed at a RadioLib example
+rather than at the real cause. `-<probe*>` plus an exclusion for `.pio` would
+make it stop depending on the directory being named exactly `probe`.
 
 ## The library dependency is pinned to a branch, not a commit
 

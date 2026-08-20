@@ -264,28 +264,52 @@ The temperature read parks the radio in standby for the measurement and then
 puts it back in RX. A single `setMode(STANDBY)` attempt is made; if it fails the
 measurement is skipped. After the read the OpMode register is verified, and on
 failure the path runs `reinitRadio()` and `recordRecoveryEvent()` and returns
-`INT16_MIN` (the previous reading is kept). It does not reboot — the failure
-signature is the stuck chip below, which survives a reboot, so a reboot would
-only take the web server down. The board stays up serving HTTP with `radio_ok`
-0.
+`INT16_MIN` (the previous reading is kept). It does not reboot. The failure
+signature is the refused OP_MODE write below, which a reboot does not clear, so
+rebooting would only take the web server down. The board stays up serving HTTP
+with `radio_ok` 0.
 
 A noise floor at or below the SX1231's measurement floor is an error value, not
 a quiet band. A working receiver with its antenna connected reads roughly -105
 to -115 dBm on a quiet 433 MHz band; a reading past the chip's own floor (about
--120 dBm) means the front-end is not measuring RF. Observed stuck: the chip
-reported `RegOpMode` as RX yet refused every OP_MODE write (`setMode` returned
--16, `RADIOLIB_ERR_SPI_WRITE_FAILED`) while SPI reads and other register writes
-succeeded, so RSSI sampling kept reporting -125 dBm and no decode ever arrived.
-`NOISE_FLOOR_DBM` (-120) already gates the `pinned` state on that signature, but
-nothing names a below-floor reading as an error.
+-120 dBm) means the front-end is not measuring RF. `NOISE_FLOOR_DBM` (-120)
+gates the `pinned` state on that signature, but nothing names a below-floor
+reading as an error.
 
-A stuck chip survives `esp_restart()`: the reboot does not power-cycle the
-radio, so the bad state persists across the resulting reboot loop. Recovery
-comes from a full power cycle, which drops the radio's supply. The firmware
-never reboots into that loop: the pinned signature keeps the board alive,
-soft re-initing on the backoff in case a transient latch clears, and the
-receiver card reports `radio_ok` 0 and the pinned `noise_dBm` until the chip
-clears.
+## A refused OP_MODE write is not an SPI fault
+
+`setMode` returns -16 (`RADIOLIB_ERR_SPI_WRITE_FAILED`) on any readback
+mismatch, so a chip refusing a mode change reads in the log exactly like a
+broken SPI bus. Check the bus before believing it. A chip that is answering SPI
+returns `RegVersion` 0x24, and a scratch write to `RegOokFix` reads back
+exactly; if those pass and only writes to the `RegOpMode` mode field are
+refused, the bus is fine and the radio is not.
+
+`RegIrqFlags1` (0x27) is what separates the two, and the firmware does not read
+it. ModeReady (bit 7) asserts when a mode transition completes and PllLock
+(bit 4) when the synthesizer is locked. A healthy chip in FS reads 0x90 and
+holds it. A chip that cannot hold lock shows PllLock asserting a few hundred
+microseconds after a mode change and dropping again within a millisecond, and
+once RX is entered `RegIrqFlags1` reads 0x00 and stays there, ModeReady never
+asserts, and every later mode write is refused. Nothing in firmware works
+around that state: minimum LNA gain with a 25 kHz bandwidth behaves identically,
+manual transitions with `SequencerOff` never reach PllLock at all, and it does
+not recover with time. A soft re-init clears it, because `RF69::begin()` pulses
+RST, but `initReceiver()` re-enters RX milliseconds later and loses lock again,
+which is why the state looks like it survives `esp_restart()`.
+
+Seen once on this board, over roughly 1500 recovery attempts. The cause was a
+high-resistance solder joint on the RFM69CW power and ground leads: the digital
+side had enough current to run SPI, calibrate the RC oscillator and complete a
+temperature measurement, so the 32 MHz crystal was demonstrably running, while
+the synthesizer could not hold lock. Reflowing the VDD and GND leads fixed it.
+The board now reads a -86 dBm noise floor and decodes at -74 dBm. If the
+signature returns, reflow or reseat the module's supply pins before suspecting
+the chip.
+
+The firmware treats it as a hardware fault and stays up: the pinned signature
+keeps the board serving HTTP, soft re-initing on the backoff in case the fault
+is transient, with `radio_ok` 0 and the pinned `noise_dBm` on the receiver card.
 
 ## Pin map
 
@@ -309,8 +333,8 @@ I2C is on GPIO 21/47 for a BMP280/AHT20 sensor bus:
 
 | Signal | GPIO | Freenove header |
 |---|---|---|
-| SDA | 21 | right 17 |
-| SCL | 47 | right 16 |
+| SCL | 21 | right 17 |
+| SDA | 47 | right 16 |
 
 The SDMMC pins (38–40) are repurposed for the radio, so the Freenove microSD
 socket is not usable.

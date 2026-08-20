@@ -445,7 +445,7 @@ void setup() {
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
 
-  Wire.begin(21, 47);
+  Wire.begin(47, 21);
   if (bmp280.begin(0x76) || bmp280.begin(0x77)) {
     bmp280_ok = true;
     Log.notice(F("BMP280 initialized" CR));
