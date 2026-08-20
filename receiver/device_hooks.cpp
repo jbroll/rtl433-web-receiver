@@ -89,7 +89,7 @@ static bool checkRange(JsonDocument& doc, const char* field, float lo, float hi)
 bool validate(JsonDocument& doc) {
   if (!checkRange(doc, "humidity", 0, 100)) return false;
   if (!checkRange(doc, "wind_dir_deg", 0, 360)) return false;
-  if (!checkRange(doc, "pressure_hPa", 800, 1100)) return false;
+  if (!checkRange(doc, "pressure_hPa", 300, 1100)) return false;
   return true;
 }
 

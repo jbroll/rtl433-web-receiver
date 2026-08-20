@@ -67,8 +67,10 @@ re-init has not yet produced a confirmed decode.
 `test/host/run.sh` (compiled against the ArduinoJson headers in libdeps). It
 holds a registry mapping rtl_433 model names to hook functions, and a rain
 baseline table that tracks the cumulative `rain_mm` per device, resetting at
-local midnight. `signal_store::record()` calls `device_hooks::dispatch` with
-its `JsonDocument`; the hook looks up the model and the rain hook writes
+local midnight. It also range-checks known fields via `validate()` (see
+"Filtering false decodes" below). `signal_store::record()` calls
+`device_hooks::dispatch` with its `JsonDocument`; the hook looks up the
+model and the rain hook writes
 `rain_today_mm` (the delta from the baseline) into the doc before it is
 stored. The baseline is RAM-only; a receiver reboot loses it and today's
 rain restarts from 0.
@@ -245,18 +247,22 @@ segment, `Receiver`, and skips the Log tab entry it would otherwise add.
 
 ## Filtering false decodes
 
-All 214 decoders in `rtl_433_devices.h` stay compiled in; two firmware-side
-checks in `receiver/signal_store.cpp` and `receiver/device_hooks.cpp` filter
-the noise weak decoders produce instead.
+All decoders in `rtl_433_devices.h` stay compiled in; two firmware-side
+checks in `signal_store.cpp` and `device_hooks.cpp` filter the noise weak
+decoders produce instead.
 
 `device_hooks::validate()` range-checks `humidity` (0–100), `wind_dir_deg`
-(0–360), and `pressure_hPa` (800–1100) when present, called from
-`signal_store::record()` right after the device key is built. A field outside
-its range drops the whole decode, the same outcome as an unparseable payload.
+(0–360), and `pressure_hPa` (300–1100) when present, called from
+`signal_store::record()` right after the device key is built. The pressure
+range has to cover both sea-level-corrected readings from RF decoders and the
+receiver's own wired BMP280, which reports raw absolute station pressure and
+drops well below 800 hPa at altitude. A field outside its range drops the
+whole decode, the same outcome as an unparseable payload.
 
 A brand-new decode key is held in a small pending table rather than shown
-immediately: the first sighting returns without creating a device, and only a
-second sighting of the same key promotes it to a device slot. The pending
+immediately: the first sighting produces no broadcast and leaves no visible
+trace anywhere, and only a second sighting of the same key promotes it to a
+device slot. The pending
 table has no time window — an entry is lost only by eviction under churn from
 other new keys, never by age. This does not apply to the receiver's own
 telemetry (see above), which still gets a card on its first call. The pending

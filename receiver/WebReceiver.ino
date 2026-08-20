@@ -400,7 +400,7 @@ static bool fakeSignalTick() {
   snprintf(buf, sizeof(buf),
            "{\"model\":\"Fake-TH\",\"id\":%d,\"channel\":%d,\"temperature_C\":%d.%d,"
            "\"humidity\":%d,\"battery_ok\":1,\"wind_avg_km_h\":%d}",
-           seq % 4, (seq % 3) + 1, 18 + (seq % 10), seq % 10, 30 + (seq % 60),
+           (seq / 2) % 30, (seq % 3) + 1, 18 + (seq % 10), seq % 10, 30 + (seq % 60),
            seq % 25);
   seq++;
   if (signal_store::record(buf, -60 - (seq % 30))) {

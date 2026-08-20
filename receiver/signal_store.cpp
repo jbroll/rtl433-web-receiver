@@ -572,7 +572,6 @@ bool selfTest() {
   for (int i = 0; i < SIGNAL_PENDING_SLOTS + 3; i++) {
     snprintf(buf, sizeof(buf), "{\"model\":\"Churn\",\"id\":%d}", i);
     record(buf, -70);  // each a distinct new key: pending only, never confirmed
-    delay(2);
   }
   ok &= check("churn through distinct one-off keys creates no devices",
               deviceCount() == 0);

@@ -112,6 +112,12 @@ int main() {
   }
   {
     JsonDocument doc;
+    doc["pressure_hPa"] = 650;
+    check("a low absolute station pressure (e.g. a wired sensor at altitude) passes",
+          device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
     doc["pressure_hPa"] = 5768;
     check("pressure_hPa out of range fails", !device_hooks::validate(doc));
   }

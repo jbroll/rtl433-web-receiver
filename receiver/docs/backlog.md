@@ -91,7 +91,9 @@ both help.
 
 The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in the fork's
 `rtl_433_devices.h` is what narrows them. Space is not the reason to: `app0` is 4 MB and
-the image uses 28% of it. Cutting the false decodes above is.
+the image uses 28% of it. False decodes are filtered by firmware now (see
+`architecture.md`), so nothing currently motivates narrowing the compiled decoder set
+either.
 
 ## WiFi credentials are compiled into the image
 
@@ -114,7 +116,7 @@ lines. The board flashes and runs, and `ArduinoLog` writes to `Serial0`, a
 hardware UART at 921600 baud, while the port exposed over USB is the S3's CDC
 device. Reading the self-test needs a UART adapter on the TX pin, or the
 sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
-`signal_store`'s 51 checks and `alias_store`'s 21 are verified by compilation
+`signal_store`'s 51 checks and `alias_store`'s 22 are verified by compilation
 and by reasoning, not by execution.
 
 ## An alias surviving a reboot is unverified

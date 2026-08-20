@@ -79,9 +79,6 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 
 - Pin `rtl_433_ESP` to a commit sha in `platformio.ini`; document the update
   procedure.
-- Add range checks in `device_hooks` (humidity 0 to 100, wind_dir 0 to 360,
-  pressure 800 to 1100) and a seen-twice-before-card rule in `signal_store`.
-  Keep all decoders compiled in; do not gate on `MY_DEVICES`.
 - Implement SoftAP provisioning: first boot or a long press clears NVS
   credentials, a captive portal stores them, and `.env` becomes optional.
   `receiver/partitions.csv` notes that growing `nvs` is blocked on a platform
