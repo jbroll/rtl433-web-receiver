@@ -7,16 +7,20 @@ the bridge and what each HTTP call does.
 
 ## Configuration
 
-Set as environment variables before starting the process (see
-[`docs/install.md`](install.md) for defaults):
+Set as environment variables (or the matching CLI flag) before starting the
+process (see [`docs/install.md`](install.md) for the full table and
+defaults):
 
 | Variable | Purpose |
 |---|---|
-| `MQTT_URL` | Broker to connect to, e.g. `mqtt://broker.local:1883`. |
+| `MQTT_URL` | Broker to dial when `EMBED_BROKER=false`, e.g. `mqtt://broker.local:1883`. |
 | `PORT` | HTTP port to listen on. |
 | `HOST` | Interface to bind. |
 | `MQTT_USERNAME` | Broker username, if the broker requires one. |
 | `MQTT_PASSWORD` | Broker password, if the broker requires one. |
+| `EMBED_BROKER` | `false` to dial `MQTT_URL` instead of starting an embedded broker (default: embed). |
+| `TLS_CERT` / `TLS_KEY` | Configuring both switches the embedded broker to public MQTTS and requires `AUTH_TOKEN`. |
+| `AUTH_TOKEN` | Shared secret for `POST` (HTTP) and `CONNECT` (MQTT, TLS mode only). Unset disables both checks. |
 
 ## GET a topic
 
@@ -47,10 +51,20 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
   -d '{"temperature_C":21.5}'
 ```
 
+With `AUTH_TOKEN` set:
+
+```
+curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
+  -H 'Authorization: Bearer <AUTH_TOKEN>' \
+  -d '{"temperature_C":21.5}'
+```
+
 - `204` on success, empty body.
 - `400` if the body is not valid JSON, or the topic is malformed.
 - `503` if the bridge is not currently connected to the broker, or the broker
   did not take the publish within 5 seconds.
+- `401` if `AUTH_TOKEN` is configured and the request's `Authorization: Bearer <token>`
+  header is missing or wrong.
 
 A `204` means the broker has taken the message and sent it back over the
 bridge's own subscription: a `GET` of the same topic immediately after
@@ -94,8 +108,9 @@ replay; a client that acts on each event should be able to act on a repeat.
 
 - `405` — a method other than GET/POST on a topic path, or anything but GET
   on `/events`.
+- `401` — a `POST` with a missing or wrong bearer token, when `AUTH_TOKEN` is configured.
 
-`400`, `404`, `405`, and `503` are the only statuses the binding defines. A
+`400`, `404`, `405`, `401`, and `503` are the only statuses the binding defines. A
 `500` means an unforeseen error inside the bridge, which is a bug.
 
 ## Cross-origin

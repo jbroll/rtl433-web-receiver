@@ -5,8 +5,6 @@
 - Broker connect, disconnect, and error are printed but nothing exposes them
   over HTTP; there is no status endpoint to ask why the bridge is answering
   `503`.
-- No authentication on the HTTP side. Anyone who can reach the port can
-  publish, including to `$alias` topics.
 - `readBody` in `src/server.js` buffers a request body with no size cap and
   no timeout, so a large or slow-drip POST accumulates in memory.
 - `PORT` is parsed with `Number` in `src/config.js`, which accepts hex, so

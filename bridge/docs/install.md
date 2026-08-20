@@ -17,20 +17,39 @@ npm install
 MQTT_URL=mqtt://broker.local:1883 node bin/mqtt-http-bridge.js
 ```
 
-`npm install` also pulls `aedes`, a dev dependency used only by the test
-suite. It is not needed to run the bridge.
-
 ## Environment variables
 
-All are read once at startup, in `src/config.js`.
+All are read once at startup, in `src/config.js`. Every field below except
+`HOST`, `MQTT_USERNAME`, and `MQTT_PASSWORD` also has a CLI flag; a flag
+takes precedence over its environment variable, which takes precedence over
+the default.
 
-| Variable | Default | Notes |
-|---|---|---|
-| `MQTT_URL` | `mqtt://localhost:1883` | The broker to connect to. |
-| `PORT` | `8080` | Must be an integer 0–65535. An empty string, a non-numeric value, or a value outside that range makes the bridge refuse to start rather than fall back to the default. |
-| `HOST` | `0.0.0.0` | Interface the HTTP server binds to. |
-| `MQTT_USERNAME` | unset | Passed to the broker if set. |
-| `MQTT_PASSWORD` | unset | Passed to the broker if set. |
+| Variable | CLI flag | Default | Notes |
+|---|---|---|---|
+| `MQTT_URL` | `--broker-url` | `mqtt://localhost:1883` | Only consulted when `EMBED_BROKER` is `false`. |
+| `PORT` | — | `8080` | Must be an integer 0–65535. An empty string, a non-numeric value, or a value outside that range makes the bridge refuse to start rather than fall back to the default. |
+| `HOST` | — | `0.0.0.0` | Interface the HTTP server binds to. |
+| `MQTT_USERNAME` | — | unset | Passed to the broker if set. |
+| `MQTT_PASSWORD` | — | unset | Passed to the broker if set. |
+| `EMBED_BROKER` | `--no-embed-broker` | `true` | `false` (or the flag) disables the embedded broker and dials `MQTT_URL`/`--broker-url` instead, like every version of the bridge before this. |
+| `MQTT_PORT` | `--mqtt-port` | `1883` | The embedded broker's plaintext loopback port, used when no TLS cert/key is configured. |
+| `MQTTS_PORT` | `--mqtts-port` | `8883` | The embedded broker's public TLS port, used when a cert/key is configured. |
+| `TLS_CERT` | `--tls-cert` | unset | PEM certificate file. Presence (with `TLS_KEY`) switches the embedded broker from the loopback-plaintext listener to the public-MQTTS one. |
+| `TLS_KEY` | `--tls-key` | unset | PEM key file. |
+| `AUTH_TOKEN` | `--auth-token` | unset | Shared secret gating HTTP `POST` (`401` without it) and, when embedding with TLS, MQTT `CONNECT` (refused without it). Required if `TLS_CERT`/`TLS_KEY` are set — the bridge refuses to start otherwise. |
+
+## The embedded broker
+
+By default (`EMBED_BROKER` unset or `true`), the bridge starts its own
+`aedes` MQTT broker in-process rather than dialing out to one — nothing
+external has to be running first. Without `TLS_CERT`/`TLS_KEY`, it binds
+plain MQTT to `127.0.0.1:<MQTT_PORT>`, loopback only. With them, it binds
+MQTTS to `0.0.0.0:<MQTTS_PORT>`, publicly reachable, and requires
+`AUTH_TOKEN` on every `CONNECT`. Only one of these two ever runs.
+
+`npm install` also pulls `aedes`, now a runtime dependency (it always did
+pull it as a dev dependency for the test suite; embedding needs it at
+runtime too).
 
 ## As a runit service
 

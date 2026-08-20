@@ -124,6 +124,26 @@ The broker is named in those lines by protocol, host, and port only.
 verbatim put a password in the log of every service that ran the bridge;
 `brokerLabel` in `src/config.js` is what every line uses instead.
 
+## The embedded broker
+
+`bin/mqtt-http-bridge.js` can start its own `aedes` broker before calling
+`connectBroker`, in `src/embedded-broker.js`. `broker.js`, `cache.js`, and
+`server.js` never know the difference — they only ever see "a broker at a
+URL," the same as when `MQTT_URL` points at a broker running somewhere
+else. That is what lets the whole tested `connectBroker` code path — echo
+matching, reconnect, the cache rebuild on `connect` — apply unchanged to an
+embedded broker.
+
+Exactly one listener runs: plain MQTT on `127.0.0.1`, loopback only, or
+public MQTTS on `0.0.0.0` with an `authenticate` hook requiring
+`AUTH_TOKEN`. There is no mode that runs both. In the public-MQTTS case,
+the bridge's own internal connection reaches the same public listener over
+loopback (`0.0.0.0` already includes `127.0.0.1`) — the certificate is
+issued for the public domain, not `127.0.0.1`, so `connectBroker` accepts
+an optional `tls` option (`{ rejectUnauthorized: false }` in this one case)
+to skip hostname verification for that self-connection specifically. Every
+other caller leaves it unset and keeps today's behavior exactly.
+
 ## Filters are fixed per connection
 
 An SSE client's filters are set once, from the `f` query parameters at

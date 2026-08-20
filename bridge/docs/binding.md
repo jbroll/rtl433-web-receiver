@@ -104,10 +104,16 @@ appear in a topic.
 | `400` | Malformed topic, malformed filter, or a body that is not JSON |
 | `404` | `GET` of a topic with no retained message |
 | `405` | An operation the implementation does not offer for that topic |
+| `401` | `POST` with a missing or wrong bearer token, when the implementation has auth enabled |
 | `503` | The bridge's backend is unavailable |
 
 An implementation that refuses an operation returns `405` rather than silently
 accepting it, so a client can tell what will actually happen.
+
+`401` is implementation-specific, the same way CORS is: not every implementation
+of this binding has to gate writes behind a token, and a client should not assume
+one that doesn't answers `401` to anything. The receiver's own source-only subset
+keeps its existing `405` answer for a non-`$alias` `POST` regardless.
 
 Every response carries `Access-Control-Allow-Origin: *`, so a dashboard on any
 origin can read any source.
