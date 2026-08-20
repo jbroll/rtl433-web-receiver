@@ -9,10 +9,8 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "aedes": "^0.51.3",
     "mqtt": "^5.10.1"
-  },
-  "devDependencies": {
-    "aedes": "^0.51.3"
   },
   "license": "MIT"
 }
