@@ -80,6 +80,19 @@ static int claimRain() {
   return oldest;
 }
 
+static bool checkRange(JsonDocument& doc, const char* field, float lo, float hi) {
+  if (doc[field].isNull()) return true;
+  float v = doc[field].as<float>();
+  return v >= lo && v <= hi;
+}
+
+bool validate(JsonDocument& doc) {
+  if (!checkRange(doc, "humidity", 0, 100)) return false;
+  if (!checkRange(doc, "wind_dir_deg", 0, 360)) return false;
+  if (!checkRange(doc, "pressure_hPa", 800, 1100)) return false;
+  return true;
+}
+
 static void rainHook(const char* key, JsonDocument& doc) {
   if (!doc["rain_mm"].is<float>()) return;
   float mm = doc["rain_mm"].as<float>();

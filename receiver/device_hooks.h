@@ -10,6 +10,7 @@ typedef void (*Hook)(const char* key, JsonDocument& doc);
 
 void registerHook(const char* model, Hook h);
 void dispatch(const char* key, JsonDocument& doc);
+bool validate(JsonDocument& doc);
 void begin();
 
 void setTzOffset(int16_t minutes);

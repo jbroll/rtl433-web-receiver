@@ -84,6 +84,52 @@ int main() {
   check("TZ offset change can cross a day boundary",
         fabs(rainToday("src/Acurite-5n1/5", "Acurite-5n1", 11.0f) - 0.0f) < 0.01f);
 
+  // validate(): range checks on humidity, wind_dir_deg, pressure_hPa.
+  {
+    JsonDocument doc;
+    doc["humidity"] = 50;
+    check("humidity in range passes", device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["humidity"] = 154;
+    check("humidity out of range fails", !device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["wind_dir_deg"] = 180;
+    check("wind_dir_deg in range passes", device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["wind_dir_deg"] = 458;
+    check("wind_dir_deg out of range fails", !device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["pressure_hPa"] = 1013;
+    check("pressure_hPa in range passes", device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["pressure_hPa"] = 5768;
+    check("pressure_hPa out of range fails", !device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["model"] = "Acurite-Tower";
+    doc["temperature_C"] = 21.5f;
+    check("a payload with none of the checked fields passes",
+          device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["humidity"] = 50;
+    doc["wind_dir_deg"] = 458;
+    check("one out-of-range field among several fails",
+          !device_hooks::validate(doc));
+  }
+
   printf("%d failures\n", failures);
   return failures ? 1 : 0;
 }
