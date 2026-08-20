@@ -418,6 +418,7 @@ bool selfTest() {
   ok &= check("first sighting of a new key is pending, not a device",
               !record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70));
   ok &= check("no device after a first sighting", deviceCount() == 0);
+  ok &= check("a pending sighting is not a drop", droppedCount() == 0);
   ok &= check("record accepts a decode on the second sighting",
               record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70));
   ok &= check("one device after the second sighting", deviceCount() == 1);
