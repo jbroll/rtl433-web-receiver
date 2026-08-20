@@ -95,19 +95,6 @@ the image uses 28% of it. False decodes are filtered by firmware now (see
 `architecture.md`), so nothing currently motivates narrowing the compiled decoder set
 either.
 
-## WiFi credentials are compiled into the image
-
-`load_env.py` turns `.env` into `-D` build flags and the build stops with an `#error`
-without them, so the SSID and password are baked into the binary. Every network change
-needs a rebuild and a reflash, one image cannot be flashed to boards on different
-networks, and the credentials are readable in a flash dump.
-
-Provisioning at runtime is the fix, and most of its cost is already paid:
-`libwifi_provisioning.a` (33,330 bytes) and `libsmartconfig.a` (38,160) are linked into
-the image today and unused. A SoftAP portal on first boot, credentials in NVS, and a
-long press or an unprovisioned boot to clear them would drop `.env` to a build
-convenience rather than a requirement. The 1 MB `nvs` above leaves room for it.
-
 ## The firmware self-test has never been read on a device
 
 `signal_store::selfTest()` and `alias_store::selfTest()` run at startup under

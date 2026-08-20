@@ -133,9 +133,11 @@ because the app was never written where the table points. Check the upload log's
 with `monitor.py --baud 115200`: the application talks at 921600 and prints nothing when
 it never gets that far, so only the ROM bootloader's output shows the fault.
 
-20 KB of `nvs` is about three times what the firmware can put there. Radio calibration
-under `phy/cal_data` is the largest entry at ~1,950 bytes; the WiFi credentials in
-`nvs.net80211` are a few hundred; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB.
+20 KB of `nvs` is about three times what the firmware can put there. Radio
+calibration under `phy/cal_data` is the largest entry at ~1,950 bytes; the
+WiFi driver's own credentials in `nvs.net80211` are a few hundred; the
+`wifi_store` module's copy of those same credentials (namespace `wifi`) is
+under 100 bytes; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB.
 
 ## Data flow
 

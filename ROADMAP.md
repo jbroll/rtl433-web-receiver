@@ -10,9 +10,8 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 
 - **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
-  Open gaps: WiFi credentials baked into the image, `rtl_433_ESP` pinned to a
-  branch not a commit, and `signal_store` and `alias_store` self-tests never
-  read on a device.
+  Open gaps: `rtl_433_ESP` pinned to a branch not a commit, and
+  `signal_store` and `alias_store` self-tests never read on a device.
 - **`bridge/`** — full MQTT to HTTP binding. No auth, no status endpoint, not
   published to a registry, slow-SSE and unbounded-body gaps.
 - **`dashboard/`** — one self-contained `index.html` built from Preact sources
@@ -79,11 +78,9 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 
 - Pin `rtl_433_ESP` to a commit sha in `platformio.ini`; document the update
   procedure.
-- Implement SoftAP provisioning: first boot or a long press clears NVS
-  credentials, a captive portal stores them, and `.env` becomes optional.
-  `receiver/partitions.csv` notes that growing `nvs` is blocked on a platform
-  hardcoded-offset issue; the current 0x5000 slot must be checked for fit
-  before this lands.
+- Add range checks in `device_hooks` (humidity 0 to 100, wind_dir 0 to 360,
+  pressure 800 to 1100) and a seen-twice-before-card rule in `signal_store`.
+  Keep all decoders compiled in; do not gate on `MY_DEVICES`.
 - Add an OTA update module. The partition table already has `app0`, `app1`,
   and `otadata` slots. The module fetches a version manifest, compares
   versions, pulls the binary, writes it to the next app slot, updates

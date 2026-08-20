@@ -45,11 +45,19 @@ provides them.
 
 ## Configure
 
-    cp .env.example .env
+WiFi credentials no longer need to be baked into the firmware. On first boot
+(or after holding the BOOT button ~3 seconds to clear stored credentials) the
+device opens a SoftAP named `rtl433-receiver-XXXX` (no password) with a
+captive-portal page at `192.168.4.1`: join it, pick or type a network,
+enter its password, and the device reboots onto that network.
 
-Fill in `WIFI_SSID`, `WIFI_PASSWORD`, and `MDNS_PREFIX`. `.env` is bash
-syntax, gitignored, and read by `load_env.py`, which turns each entry into a
-`-D` build flag. The build stops with an `#error` if it is absent.
+`.env` is an optional dev/CI shortcut: `cp .env.example .env`, fill in
+`WIFI_SSID`, `WIFI_PASSWORD`, and `MDNS_PREFIX`, and a build with `.env`
+present connects with those credentials on first boot, then stores them so
+later boots skip straight to connecting (no portal). `MDNS_PREFIX` has no
+runtime equivalent yet, so a device provisioned entirely through the portal
+uses the `rtl433` default. `.env` is bash syntax, gitignored, and read by
+`load_env.py`, which turns each entry into a `-D` build flag.
 
 The radio pin map and OOK settings are in `platformio.ini`.
 
@@ -57,3 +65,19 @@ The radio pin map and OOK settings are in `platformio.ini`.
 
     pio run -e esp32s3-generic
     pio run -e esp32s3-generic -t upload
+
+## Verifying WiFi provisioning on hardware
+
+The SoftAP/DNS/captive-portal path needs a real WiFi radio and isn't
+host-testable. After flashing a board with no stored credentials (or after a
+long BOOT-button press):
+
+1. Join the `rtl433-receiver-XXXX` AP from a phone or laptop.
+2. Confirm the captive portal opens automatically, or browse to
+   `192.168.4.1` if it doesn't.
+3. Pick a network from the dropdown (or type one manually) and enter its
+   password. Confirm the device reboots.
+4. Confirm the device joins the target network — check `monitor.py` for
+   `WiFi connected: ...` or look it up on the router.
+5. Hold the BOOT button for ~3 seconds, then release. Confirm the device
+   reboots into provisioning mode again (re-check step 1).

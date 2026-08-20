@@ -10,6 +10,11 @@ WiFi is not required to decode. If it is unavailable the sketch keeps decoding
 and logging to serial, and retries every 30 seconds, though the first connect
 attempt times out after 20 seconds before the receiver starts.
 
+A device with no stored WiFi credentials opens a `rtl433-receiver-XXXX`
+SoftAP with a captive-portal setup page instead of decoding. Holding the
+BOOT button ~3 seconds at boot clears stored credentials and returns to this
+state. See `docs/install.md` for the full flow.
+
 ## Routes
 
 | Method and path | Behaviour |
