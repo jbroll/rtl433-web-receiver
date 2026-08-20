@@ -69,7 +69,9 @@ then `404`.
 
 A `POST` that would exceed the 32-alias table, or the 2 KB blob the table
 serialises to for storage, is `503`, body `alias store full`, and the alias is
-not stored.
+not stored. Removing an alias that existed is `503`, body `alias remove
+failed`, if the NVS persist write fails; removing a topic with no stored
+alias always succeeds.
 
 A malformed topic — empty, holding a wildcard character, holding a space, or
 with an empty segment — is `400`, body `malformed topic`, for both `GET` and

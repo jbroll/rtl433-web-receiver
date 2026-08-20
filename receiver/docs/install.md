@@ -8,6 +8,12 @@ The library dependency is a fork,
 [jbroll/rtl_433_ESP](https://github.com/jbroll/rtl_433_ESP) branch
 `sx1231-support`, which adds SX1231/RF69 receive support upstream does not have.
 `platformio.ini` points at it and PlatformIO fetches it on the first build.
+`platformio.ini:13` pins that dependency to a commit sha on that branch, not
+the branch itself; to move the pin forward, resolve the branch's current head
+with `git ls-remote https://github.com/jbroll/rtl_433_ESP.git sx1231-support`,
+edit the sha in `platformio.ini:13`, then
+`rm -rf .pio/libdeps/esp32s3-generic/rtl_433_ESP` and rebuild to force
+PlatformIO to re-resolve it.
 
 Node 22 or newer. `pio run` runs `dashboard/build.js` to generate the page it serves,
 so run `npm install` in `../dashboard` before the first `pio run` — its `build.js`
