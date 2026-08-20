@@ -9,6 +9,68 @@ import { createBridge } from '../src/server.js'
 import { startBridge, waitFor, withTimeout } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
+test('a POST without a token is 401 when AUTH_TOKEN is set, and the topic is left alone', async () => {
+  const bridge = await startBridge({ authToken: 's3cr3t' })
+  try {
+    const unauthed = await fetch(`${bridge.base}/src/Acurite/1234`, {
+      method: 'POST',
+      body: '{"a":1}',
+    })
+    assert.equal(unauthed.status, 401)
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 404)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a POST with the wrong token is 401', async () => {
+  const bridge = await startBridge({ authToken: 's3cr3t' })
+  try {
+    const wrong = await fetch(`${bridge.base}/src/Acurite/1234`, {
+      method: 'POST',
+      body: '{"a":1}',
+      headers: { authorization: 'Bearer wrong' },
+    })
+    assert.equal(wrong.status, 401)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a POST with the right bearer token is 204, same as with no AUTH_TOKEN configured', async () => {
+  const bridge = await startBridge({ authToken: 's3cr3t' })
+  try {
+    const ok = await fetch(`${bridge.base}/src/Acurite/1234`, {
+      method: 'POST',
+      body: '{"a":1}',
+      headers: { authorization: 'Bearer s3cr3t' },
+    })
+    assert.equal(ok.status, 204)
+    assert.equal(await (await fetch(`${bridge.base}/src/Acurite/1234`)).text(), '{"a":1}')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('GET is never gated, even with AUTH_TOKEN set', async () => {
+  const bridge = await startBridge({ authToken: 's3cr3t' })
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1234`, {
+      method: 'POST',
+      body: '{"a":1}',
+      headers: { authorization: 'Bearer s3cr3t' },
+    })
+    const got = await fetch(`${bridge.base}/src/Acurite/1234`)
+    assert.equal(got.status, 200)
+
+    const stream = await fetch(`${bridge.base}/events`)
+    assert.equal(stream.status, 200)
+    await stream.body.cancel()
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('a topic with no message is 404, and a POST makes it readable byte for byte', async () => {
   const bridge = await startBridge()
   try {

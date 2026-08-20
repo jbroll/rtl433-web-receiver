@@ -1,14 +1,15 @@
 import http from 'node:http'
 
+import { tokenMatches } from './auth.js'
 import { openStream } from './sse.js'
 import { validFilter, validTopic } from './topic.js'
 
-export function createBridge({ broker, cache }) {
+export function createBridge({ broker, cache, authToken }) {
   const clients = new Set()
 
   const bridge = {
     httpServer: http.createServer((req, res) => {
-      handle(req, res, { broker, cache, clients }).catch(() => {
+      handle(req, res, { broker, cache, clients, authToken }).catch(() => {
         try {
           if (res.headersSent) res.end()
           else send(res, 500, 'internal error')
@@ -25,7 +26,7 @@ export function createBridge({ broker, cache }) {
   return bridge
 }
 
-async function handle(req, res, { broker, cache, clients }) {
+async function handle(req, res, { broker, cache, clients, authToken }) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
   // The dashboard is served from a different origin than any bridge it reads,
@@ -69,6 +70,8 @@ async function handle(req, res, { broker, cache, clients }) {
   }
 
   if (req.method === 'POST') {
+    if (authToken && !authorized(req, authToken)) return send(res, 401, 'unauthorized')
+
     let body
     try {
       body = await readBody(req)
@@ -132,4 +135,10 @@ function readBody(req) {
 function send(res, status, message) {
   res.writeHead(status, { 'content-type': 'text/plain' })
   res.end(`${message}\n`)
+}
+
+function authorized(req, authToken) {
+  const header = req.headers['authorization']
+  if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false
+  return tokenMatches(header.slice('Bearer '.length), authToken)
 }
