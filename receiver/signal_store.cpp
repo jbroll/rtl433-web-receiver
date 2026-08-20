@@ -8,6 +8,16 @@
 
 namespace signal_store {
 
+#define SIGNAL_PENDING_SLOTS 8
+
+struct PendingKey {
+  char     key[SIGNAL_KEY_MAX];
+  uint32_t seq;
+  bool     used;
+};
+
+static PendingKey _pending[SIGNAL_PENDING_SLOTS];
+
 static DeviceSlot _devices[SIGNAL_DEVICE_SLOTS];
 static uint32_t   _seq[SIGNAL_DEVICE_SLOTS]; // orders and evicts devices; unlike lastSeen, never rolls over
 static uint8_t    _order[SIGNAL_DEVICE_SLOTS];
@@ -23,6 +33,7 @@ void reset() {
   memset(_devices, 0, sizeof(_devices));
   memset(_seq, 0, sizeof(_seq));
   memset(_subs, 0, sizeof(_subs));
+  memset(_pending, 0, sizeof(_pending));
   _deviceCount = 0;
   _seqCounter = 0;
   _total = 0;
@@ -118,6 +129,26 @@ static int claimSlot() {
   return oldest;
 }
 
+static int findPending(const char* key) {
+  for (int i = 0; i < SIGNAL_PENDING_SLOTS; i++) {
+    if (_pending[i].used && strcmp(_pending[i].key, key) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int claimPending() {
+  for (int i = 0; i < SIGNAL_PENDING_SLOTS; i++) {
+    if (!_pending[i].used) return i;
+  }
+  int oldest = 0;
+  for (int i = 1; i < SIGNAL_PENDING_SLOTS; i++) {
+    if (_pending[i].seq < _pending[oldest].seq) oldest = i;
+  }
+  return oldest;
+}
+
 static int findSub(int slotIdx, const char* msgType) {
   for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
     if (_subs[i].used && _subs[i].slotIdx == (uint8_t)slotIdx &&
@@ -183,7 +214,18 @@ bool record(const char* payload, int rssi, bool isDecode) {
     return false;
   }
 
-  int      idx = findSlot(key);
+  int idx = findSlot(key);
+  if (isDecode && idx < 0) {
+    int p = findPending(key);
+    if (p < 0) {
+      p = claimPending();
+      copyTruncated(_pending[p].key, SIGNAL_KEY_MAX, key);
+      _pending[p].seq = ++_seqCounter;
+      _pending[p].used = true;
+      return false;
+    }
+    _pending[p].used = false;
+  }
   uint32_t count = (idx < 0 ? 0 : _devices[idx].count) + 1;
 
   char stamp[24];
@@ -373,9 +415,12 @@ bool selfTest() {
 
   setSource("rtl433-a1b2c3");
   reset();
-  ok &= check("record accepts a decode",
+  ok &= check("first sighting of a new key is pending, not a device",
+              !record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70));
+  ok &= check("no device after a first sighting", deviceCount() == 0);
+  ok &= check("record accepts a decode on the second sighting",
               record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70));
-  ok &= check("one device after one decode", deviceCount() == 1);
+  ok &= check("one device after the second sighting", deviceCount() == 1);
   ok &= check("key is source/model/id",
               strcmp(device(0).key, "rtl433-a1b2c3/Acurite-Tower/1234") == 0);
   ok &= check("rssi is stamped into the payload",
@@ -389,20 +434,28 @@ bool selfTest() {
   ok &= check("the stamped count follows",
               strstr(latestPayload(device(0)), "\"count\":2") != NULL);
 
+  record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.7}", -73);
+  ok &= check("a third sighting behaves as an ordinary repeat",
+              deviceCount() == 1 && device(0).count == 3);
+
   ok &= check("channel is the id segment when id is absent",
-              record("{\"model\":\"Nexus-TH\",\"channel\":2}", -60) &&
+              !record("{\"model\":\"Nexus-TH\",\"channel\":2}", -60) &&
+                  record("{\"model\":\"Nexus-TH\",\"channel\":2}", -60) &&
                   strcmp(device(0).key, "rtl433-a1b2c3/Nexus-TH/2") == 0);
   ok &= check("the id segment is 0 when id and channel are absent",
-              record("{\"model\":\"Generic-Remote\"}", -60) &&
+              !record("{\"model\":\"Generic-Remote\"}", -60) &&
+                  record("{\"model\":\"Generic-Remote\"}", -60) &&
                   strcmp(device(0).key, "rtl433-a1b2c3/Generic-Remote/0") == 0);
   ok &= check("a slash in a model name is replaced",
-              record("{\"model\":\"Odd/Name\",\"id\":1}", -60) &&
+              !record("{\"model\":\"Odd/Name\",\"id\":1}", -60) &&
+                  record("{\"model\":\"Odd/Name\",\"id\":1}", -60) &&
                   strcmp(device(0).key, "rtl433-a1b2c3/Odd-Name/1") == 0);
 
   reset();
   for (int i = 0; i < SIGNAL_DEVICE_SLOTS + 6; i++) {
     snprintf(buf, sizeof(buf), "{\"model\":\"Dev\",\"id\":%d}", i);
-    record(buf, -70);
+    record(buf, -70);  // first sighting: pending
+    record(buf, -70);  // second sighting: promotes to a device
     delay(2);
   }
   ok &= check("table caps at SIGNAL_DEVICE_SLOTS", deviceCount() == SIGNAL_DEVICE_SLOTS);
@@ -413,6 +466,7 @@ bool selfTest() {
 
   reset();
   record("{\"model\":\"Dev\",\"id\":1}", -70);
+  record("{\"model\":\"Dev\",\"id\":1}", -70);
   ok &= check("slotAt finds a used slot", slotAt(0) != NULL);
   ok &= check("slotAt reports an unused slot",
               slotAt(SIGNAL_DEVICE_SLOTS - 1) == NULL);
@@ -421,27 +475,52 @@ bool selfTest() {
   reset();
   ok &= check("unparseable payload is dropped", !record("not json at all", -70));
   ok &= check("payload without model is dropped", !record("{\"id\":7}", -70));
-  ok &= check("dropped counter advances", droppedCount() == 2);
+  ok &= check("a field outside its valid range is dropped",
+              !record("{\"model\":\"Dev\",\"id\":1,\"humidity\":154}", -70));
+  ok &= check("dropped counter advances", droppedCount() == 3);
   ok &= check("dropped payloads leave no device", deviceCount() == 0);
-
-  reset();
-  record("{\"model\":\"Real\",\"id\":1}", -70);
-  record("{\"model\":\"Receiver\",\"temperature_C\":40}", -50, false);
-  ok &= check("telemetry takes a device slot", deviceCount() == 2);
-  ok &= check("telemetry keys with a 0 id",
-              strcmp(device(0).key, "rtl433-a1b2c3/Receiver/0") == 0);
-  ok &= check("telemetry is not counted as a decode", totalRecorded() == 1);
 
   reset();
   char note[SIGNAL_PAYLOAD_MAX]; // valid JSON, but longer than a slot holds
   memset(note, 'A', sizeof(note) - 1);
   note[sizeof(note) - 1] = '\0';
   snprintf(buf, sizeof(buf), "{\"model\":\"Long\",\"id\":1,\"note\":\"%s\"}", note);
+  record(buf, -70);  // first sighting: held pending, not yet size-checked
   ok &= check("an over-long payload is dropped rather than truncated",
               !record(buf, -70) && deviceCount() == 0);
 
   reset();
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // pending
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // promotes: sub for type 0
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);         // sub for type 1
+  ok &= check("two message_types create two subs", deviceCount() == 1);
+  ok &= check("latest payload is the most recent message_type",
+              strstr(latestPayload(device(0)), "\"rain_mm\"") != NULL);
+
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":5.0}", -72);
+  ok &= check("re-recording message_type 0 updates its sub",
+              strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":5") != NULL);
+
+  reset();
+  record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70);
+  record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70);
+  ok &= check("device without message_type has one sub",
+              deviceCount() == 1);
+
+  reset();
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // pending
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // promotes
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);
+  {
+    unsigned long base = _subs[0].lastSeen;
+    sweepSubStale(base + SUB_STALE_MS + 1, SUB_STALE_MS);
+    ok &= check("stale sub is swept", deviceCount() == 0);
+  }
+
+  reset();
   record("{\"model\":\"Stale\",\"id\":1,\"temperature_C\":1}", -50);
+  record("{\"model\":\"Stale\",\"id\":1,\"temperature_C\":1}", -50);
+  record("{\"model\":\"Fresh\",\"id\":2,\"temperature_C\":2}", -50);
   record("{\"model\":\"Fresh\",\"id\":2,\"temperature_C\":2}", -50);
   ok &= check("both devices present before sweep", deviceCount() == 2);
 
@@ -461,6 +540,7 @@ bool selfTest() {
   // (unsigned long)(now - lastSeen) still yields the true elapsed time.
   reset();
   record("{\"model\":\"Wrap\",\"id\":3,\"temperature_C\":3}", -50);
+  record("{\"model\":\"Wrap\",\"id\":3,\"temperature_C\":3}", -50);
   unsigned long nearWrap = (unsigned long)-1 - 100;
   _devices[0].lastSeen = nearWrap;
   _subs[0].lastSeen = nearWrap; // sweepStale also sweeps subs; spare the wrap's sub too
@@ -472,29 +552,34 @@ bool selfTest() {
               deviceCount() == 0);
 
   reset();
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);
-  ok &= check("two message_types create two subs", deviceCount() == 1);
-  ok &= check("latest payload is the most recent message_type",
-              strstr(latestPayload(device(0)), "\"rain_mm\"") != NULL);
+  ok &= check("telemetry gets a card on the first call",
+              record("{\"model\":\"Receiver\",\"temperature_C\":40}", -50, false));
+  ok &= check("telemetry takes a device slot", deviceCount() == 1);
+  ok &= check("telemetry keys with a 0 id",
+              strcmp(device(0).key, "rtl433-a1b2c3/Receiver/0") == 0);
+  ok &= check("telemetry is not counted as a decode", totalRecorded() == 0);
 
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":5.0}", -72);
-  ok &= check("re-recording message_type 0 updates its sub",
-              strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":5") != NULL);
+  ok &= check("a decode's first sighting does not take a slot",
+              !record("{\"model\":\"Real\",\"id\":1}", -70));
+  ok &= check("still just the telemetry device", deviceCount() == 1);
+  ok &= check("a decode's second sighting promotes it",
+              record("{\"model\":\"Real\",\"id\":1}", -70));
+  ok &= check("both devices present", deviceCount() == 2);
+  ok &= check("only the promoted decode counts as recorded", totalRecorded() == 1);
 
   reset();
-  record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70);
-  ok &= check("device without message_type has one sub",
-              deviceCount() == 1);
-
-  reset();
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);
-  {
-    unsigned long base = _subs[0].lastSeen;
-    sweepSubStale(base + SUB_STALE_MS + 1, SUB_STALE_MS);
-    ok &= check("stale sub is swept", deviceCount() == 0);
+  for (int i = 0; i < SIGNAL_PENDING_SLOTS + 3; i++) {
+    snprintf(buf, sizeof(buf), "{\"model\":\"Churn\",\"id\":%d}", i);
+    record(buf, -70);  // each a distinct new key: pending only, never confirmed
+    delay(2);
   }
+  ok &= check("churn through distinct one-off keys creates no devices",
+              deviceCount() == 0);
+  ok &= check("a repeat of an evicted pending key is pending again",
+              !record("{\"model\":\"Churn\",\"id\":0}", -70));
+  ok &= check("a repeat of a still-pending key promotes it",
+              record("{\"model\":\"Churn\",\"id\":10}", -70));
+  ok &= check("the promoted device is the only one", deviceCount() == 1);
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
