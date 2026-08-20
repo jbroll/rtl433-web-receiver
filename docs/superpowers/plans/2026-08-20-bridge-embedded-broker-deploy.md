@@ -647,6 +647,12 @@ test('TLS: the bridge itself can reach its own embedded broker over loopback', a
         cache,
         onMessage: () => {},
         tls: embedded.tlsOptions,
+        // mqtt.js's underlying mqtt-packet encoder refuses to send a
+        // CONNECT with a password and no username at all ("Username is
+        // required to use password"), so a username is required here even
+        // though aedes's authenticate hook (src/embedded-broker.js) accepts
+        // any username and checks only the password.
+        username: 'bridge',
         password: 's3cr3t',
       })
       try {
@@ -983,6 +989,8 @@ const config = readConfig(process.env, {
 let embedded
 let brokerUrl = config.mqttUrl
 let brokerTls
+let brokerUsername = config.username
+let brokerPassword = config.password
 if (config.embedBroker) {
   embedded = await startEmbeddedBroker({
     mqttPort: config.mqttPort,
@@ -993,6 +1001,16 @@ if (config.embedBroker) {
   })
   brokerUrl = embedded.url
   brokerTls = embedded.tlsOptions
+  if (embedded.tlsOptions) {
+    // TLS mode: the embedded aedes's authenticate hook (src/embedded-broker.js)
+    // accepts any username and checks only the password against AUTH_TOKEN.
+    // MQTT_USERNAME/MQTT_PASSWORD are for dialing an external broker
+    // (EMBED_BROKER=false) and are not relevant to this self-connection.
+    // A username has to be sent regardless of its value: mqtt.js's
+    // mqtt-packet encoder refuses to send a password with no username.
+    brokerUsername = 'bridge'
+    brokerPassword = config.authToken
+  }
 }
 
 const brokerName = brokerLabel(brokerUrl)
@@ -1007,8 +1025,8 @@ const broker = connectBroker({
   // and any subscriber connecting later is replayed from it, so it is safe
   // to drop.
   onMessage: (topic, payload) => bridge?.broadcast(topic, payload),
-  username: config.username,
-  password: config.password,
+  username: brokerUsername,
+  password: brokerPassword,
   onConnect: () => console.log(`broker ${brokerName} connected`),
   onDisconnect: () => console.error(`broker ${brokerName} disconnected, retrying`),
   onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
