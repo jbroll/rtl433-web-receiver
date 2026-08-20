@@ -142,10 +142,6 @@ above.
 
 ## Smaller items
 
-- `WebReceiver.ino:244-246` has `#ifndef LOG_LEVEL / LOG_LEVEL_SILENT / #endif`,
-  a bare expression statement rather than a `#define`, so it does nothing if
-  `LOG_LEVEL` is ever undefined. Inherited from the upstream example; the build
-  always defines `LOG_LEVEL`, so it is inert.
 - `signal_store` and `alias_store` each have a `FAKE_SIGNALS` self-test that
   only compiles and runs on the device (see above); `topic` is the one module
   host-tested today. A PlatformIO `native` environment would make the other

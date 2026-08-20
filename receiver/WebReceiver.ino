@@ -439,7 +439,7 @@ void setup() {
   Serial0.begin(921600);
   delay(1000);
 #ifndef LOG_LEVEL
-  LOG_LEVEL_SILENT
+  #define LOG_LEVEL LOG_LEVEL_SILENT
 #endif
   Log.begin(LOG_LEVEL, &Serial0);
   Log.notice(F(" " CR));
