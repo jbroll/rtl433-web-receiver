@@ -39,7 +39,7 @@ DIO2 carries the demodulated data and is the pin the decoder reads. Change the
 
 ## I2C header
 
-The BMP280/AHT20 bus is on GPIO 21 (SCL) and GPIO 47 (SDA). Add 10k pull-ups
+The BMP280/AHT20 bus is on GPIO 47 (SCL) and GPIO 21 (SDA). Add 10k pull-ups
 to 3V3 on both lines at the sensor header unless the breakout board already
 provides them.
 

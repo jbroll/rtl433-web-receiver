@@ -483,7 +483,7 @@ void setup() {
     wifi_store::clear();
   }
 
-  Wire.begin(47, 21);
+  Wire.begin(21, 47);
   if (bmp280.begin(0x76) || bmp280.begin(0x77)) {
     bmp280_ok = true;
     Log.notice(F("BMP280 initialized" CR));
