@@ -19,12 +19,19 @@ export function connectBroker({
   onError,
   echoTimeoutMs = ECHO_TIMEOUT_MS,
   reconnectMs = RECONNECT_MS,
+  tls,
 }) {
   const client = mqtt.connect(url, {
     username,
     password,
     reconnectPeriod: reconnectMs,
     resubscribe: true,
+    // Only set for the embedded broker's own internal TLS connection in
+    // src/embedded-broker.js: a loopback self-connection to a certificate
+    // issued for the public domain, not 127.0.0.1, which Node's default
+    // hostname check would otherwise reject. Every other caller leaves this
+    // undefined and gets today's behavior unchanged.
+    ...(tls ?? {}),
   })
 
   let ending = false

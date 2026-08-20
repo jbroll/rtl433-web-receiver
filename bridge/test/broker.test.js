@@ -2,6 +2,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import mqtt from 'mqtt'
+import tls from 'node:tls'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+
+import Aedes from 'aedes'
 
 import { cacheMessage, connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
@@ -33,6 +40,59 @@ test('a published message reaches the cache and the callback', async () => {
     await broker.close()
   }
 })
+
+test('a tls option is passed through to mqtt.connect, unused by default', async () => {
+  // A self-signed cert whose CN does not match 127.0.0.1: the point of this
+  // test is that supplying { rejectUnauthorized: false } is what lets the
+  // connection succeed anyway, proving the option reaches mqtt.connect.
+  const { key, cert, dir } = selfSignedCert()
+  const aedes = new Aedes()
+  const server = tls.createServer({ key, cert }, aedes.handle)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+
+  try {
+    const cache = createCache()
+    const client = connectBroker({
+      url: `mqtts://127.0.0.1:${port}`,
+      cache,
+      onMessage: () => {},
+      tls: { rejectUnauthorized: false },
+    })
+    try {
+      await withTimeoutForTest(client.subscribed, 3000)
+      assert.equal(client.connected(), true)
+    } finally {
+      await client.end()
+    }
+  } finally {
+    await new Promise((resolve) => aedes.close(() => server.close(resolve)))
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+function withTimeoutForTest(promise, timeoutMs) {
+  let timer
+  const expiry = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timed out')), timeoutMs)
+  })
+  return Promise.race([promise, expiry]).finally(() => clearTimeout(timer))
+}
+
+// A throwaway self-signed cert generated at test time via the openssl CLI
+// (present on the dev machine and the target Void Linux host alike) — good
+// enough to prove the TLS handshake happens, which is all this test needs.
+function selfSignedCert() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bridge-test-cert-'))
+  const keyPath = path.join(dir, 'key.pem')
+  const certPath = path.join(dir, 'cert.pem')
+  execFileSync('openssl', [
+    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+    '-keyout', keyPath, '-out', certPath,
+    '-days', '1', '-subj', '/CN=test-only',
+  ])
+  return { key: readFileSync(keyPath), cert: readFileSync(certPath), dir }
+}
 
 test('a publish is retained, so a later connection is replayed it', async () => {
   const broker = await startBroker()
