@@ -63,15 +63,6 @@ telemetry would name the fault in the log instead of leaving it to a probe
 sketch. A scratch write to `RegOokFix` and a `RegVersion` check would settle
 the bus question in the same pass.
 
-## `src_filter` excludes `probe` by name, not by shape
-
-`platformio.ini:24` is `src_filter = +<*> -<test> -<probe>`, so any other
-directory under `receiver/` is compiled into the firmware, including the `.pio`
-tree a sibling PlatformIO project leaves behind. A scratch `probe2/` broke the
-receiver build until it was removed, and the error pointed at a RadioLib example
-rather than at the real cause. `-<probe*>` plus an exclusion for `.pio` would
-make it stop depending on the directory being named exactly `probe`.
-
 ## The library dependency is pinned to a branch, not a commit
 
 `platformio.ini:13` points at `jbroll/rtl_433_ESP#sx1231-support`. PlatformIO
