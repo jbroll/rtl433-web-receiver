@@ -452,9 +452,6 @@ static void monitorRadioHealth() {
   if (action == radio_health::HealthAction::softReinit) {
     reinitRadio();
     recordRecoveryEvent();
-  } else if (action == radio_health::HealthAction::reboot) {
-    Log.error(F("radio health: reboot" CR));
-    esp_restart();
   }
 }
 
