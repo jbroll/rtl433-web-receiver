@@ -17,6 +17,12 @@ static WebServer _server(80);
 
 #define PROVISIONING_SCAN_MAX 16
 
+// Populated once by run(), before _server.begin(); handleRoot() renders from
+// this cache instead of scanning on every request (see scanSorted()).
+static String  _scanSsid[PROVISIONING_SCAN_MAX];
+static int32_t _scanRssi[PROVISIONING_SCAN_MAX];
+static int     _scanCount = 0;
+
 static void apName(char* out, size_t outSize) {
   uint8_t mac[6];
   WiFi.macAddress(mac);
@@ -80,10 +86,6 @@ static int scanSorted(String outSsid[], int32_t outRssi[], int maxOut) {
 }
 
 static void handleRoot() {
-  String   ssids[PROVISIONING_SCAN_MAX];
-  int32_t  rssis[PROVISIONING_SCAN_MAX];
-  int      count = scanSorted(ssids, rssis, PROVISIONING_SCAN_MAX);
-
   String page =
       "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
       "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -92,12 +94,12 @@ static void handleRoot() {
       "<form method=\"POST\" action=\"/save\">"
       "<label>Network<br><select name=\"ssid\">"
       "<option value=\"\">(choose or type below)</option>";
-  for (int i = 0; i < count; i++) {
+  for (int i = 0; i < _scanCount; i++) {
     page += "<option value=\"";
-    writeHtmlEscaped(page, ssids[i].c_str());
+    writeHtmlEscaped(page, _scanSsid[i].c_str());
     page += "\">";
-    writeHtmlEscaped(page, ssids[i].c_str());
-    page += " (" + String(rssis[i]) + " dBm)</option>";
+    writeHtmlEscaped(page, _scanSsid[i].c_str());
+    page += " (" + String(_scanRssi[i]) + " dBm)</option>";
   }
   page +=
       "</select></label><br><br>"
@@ -117,7 +119,7 @@ static void handleSave() {
   String pass   = _server.arg("pass");
 
   if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX ||
-      pass.length() >= WIFI_STORE_PASS_MAX) {
+      pass.length() == 0 || pass.length() >= WIFI_STORE_PASS_MAX) {
     _server.send(400, "text/plain", "Choose a network and a password that fits.");
     return;
   }
@@ -142,6 +144,8 @@ void run() {
   WiFi.softAP(ap, nullptr);
   IPAddress apIP = WiFi.softAPIP();
   Log.notice(F("provisioning: AP \"%s\" up at %s" CR), ap, apIP.toString().c_str());
+
+  _scanCount = scanSorted(_scanSsid, _scanRssi, PROVISIONING_SCAN_MAX);
 
   _dns.start(53, "*", apIP);
 

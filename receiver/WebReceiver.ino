@@ -501,7 +501,7 @@ void setup() {
   if (wifi_store::hasCredentials()) {
     connectWiFi(wifi_store::ssid(), wifi_store::password());
   }
-#ifdef WIFI_SSID
+#if defined(WIFI_SSID) && defined(WIFI_PASSWORD)
   else {
     connectWiFi(WIFI_SSID, WIFI_PASSWORD);
     if (wifiReady()) {

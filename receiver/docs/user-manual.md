@@ -6,14 +6,18 @@ The mDNS name is `MDNS_PREFIX` plus the low three bytes of the MAC, so two
 boards on one network do not collide. It is printed at startup along with the
 IP address: `mDNS started: rtl433-a1b2c3.local`.
 
-WiFi is not required to decode. If it is unavailable the sketch keeps decoding
-and logging to serial, and retries every 30 seconds, though the first connect
-attempt times out after 20 seconds before the receiver starts.
+At boot the device tries to connect WiFi (stored credentials, or the `.env`
+macros if there are none) for up to 20 seconds. If that fails — no
+credentials, bad `.env` macros, or a network that doesn't come up in time —
+it opens a `rtl433-receiver-XXXX` SoftAP with a captive-portal setup page
+instead of decoding, so the device stays reachable over HTTP rather than
+sitting on a dead connection. Holding the BOOT button ~3 seconds at boot
+clears stored credentials and returns to this state. See `docs/install.md`
+for the full flow.
 
-A device with no stored WiFi credentials opens a `rtl433-receiver-XXXX`
-SoftAP with a captive-portal setup page instead of decoding. Holding the
-BOOT button ~3 seconds at boot clears stored credentials and returns to this
-state. See `docs/install.md` for the full flow.
+Once connected, WiFi is not required to keep decoding: if the connection
+later drops, the sketch keeps decoding and logging to serial, and retries
+reconnecting every 30 seconds without touching stored credentials.
 
 ## Routes
 

@@ -59,6 +59,11 @@ runtime equivalent yet, so a device provisioned entirely through the portal
 uses the `rtl433` default. `.env` is bash syntax, gitignored, and read by
 `load_env.py`, which turns each entry into a `-D` build flag.
 
+A build with `.env` present reconnects with its compiled-in credentials on
+every boot, including after a BOOT-button credential clear (see below) — to
+verify the portal path itself, build with no `.env` present, or one with
+deliberately wrong credentials.
+
 The radio pin map and OOK settings are in `platformio.ini`.
 
 ## Build and flash
@@ -69,8 +74,10 @@ The radio pin map and OOK settings are in `platformio.ini`.
 ## Verifying WiFi provisioning on hardware
 
 The SoftAP/DNS/captive-portal path needs a real WiFi radio and isn't
-host-testable. After flashing a board with no stored credentials (or after a
-long BOOT-button press):
+host-testable. Build with no `.env` present (see the note under Configure —
+otherwise step 5 just reconnects with compiled-in credentials and never
+reaches the portal). After flashing a board with no stored credentials (or
+after a BOOT-button credential clear, step 5):
 
 1. Join the `rtl433-receiver-XXXX` AP from a phone or laptop.
 2. Confirm the captive portal opens automatically, or browse to
@@ -79,5 +86,10 @@ long BOOT-button press):
    password. Confirm the device reboots.
 4. Confirm the device joins the target network — check `monitor.py` for
    `WiFi connected: ...` or look it up on the router.
-5. Hold the BOOT button for ~3 seconds, then release. Confirm the device
-   reboots into provisioning mode again (re-check step 1).
+5. `bootButtonHeld()` samples GPIO0 about one second after reset and returns
+   immediately if it isn't already held low at that moment, so reset the
+   board (power cycle or the reset button), then press and hold BOOT within
+   about a second of the reset — not before, since holding BOOT through
+   power-on/reset instead puts the S3 into its ROM download mode — and keep
+   holding for the full ~3 seconds. Confirm the device reboots into
+   provisioning mode again (re-check step 1).

@@ -113,6 +113,12 @@ serialised blob, but not `Preferences::putString()` actually landing in NVS
 and surviving a power cycle — that needs hardware, like the self-test gap
 above.
 
+## `MDNS_PREFIX` has no runtime equivalent
+
+`.env`'s `MDNS_PREFIX` only takes effect at build time. The captive portal has
+no field for it, so a device provisioned entirely through SoftAP always uses
+the `rtl433` mDNS prefix default.
+
 ## Smaller items
 
 - `signal_store` and `alias_store` each have a `FAKE_SIGNALS` self-test that

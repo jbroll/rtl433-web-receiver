@@ -97,23 +97,33 @@ bool selfTest() {
   bool ok = true;
 
   // Suppress NVS traffic across the checks below, same as alias_store::selfTest().
+  // _open stays false for the whole test: this module's real NVS handle may
+  // already hold the user's stored credentials by the time this runs, and
+  // set()/clear() write straight through it once _open is true.
   bool saved_open = _open;
   _open           = false;
+  char saved_ssid[WIFI_STORE_SSID_MAX];
+  char saved_pass[WIFI_STORE_PASS_MAX];
+  copyTruncated(saved_ssid, sizeof(saved_ssid), _ssid);
+  copyTruncated(saved_pass, sizeof(saved_pass), _pass);
 
   _ssid[0] = '\0';
   _pass[0] = '\0';
   ok &= check("a cleared store reports no credentials", !hasCredentials());
   ok &= check("set fails while NVS is closed", !set("TestNet", "TestPass1"));
 
-  _open = true;
-  ok &= check("set stores ssid and password",
-              set("TestNet", "TestPass1") && hasCredentials());
+  // set() can't be exercised end-to-end with NVS closed, so simulate a
+  // loaded value by assigning the internal statics directly.
+  copyTruncated(_ssid, sizeof(_ssid), "TestNet");
+  copyTruncated(_pass, sizeof(_pass), "TestPass1");
+  ok &= check("a loaded value reports credentials present", hasCredentials());
   ok &= check("ssid round-trips", strcmp(ssid(), "TestNet") == 0);
   ok &= check("password round-trips", strcmp(password(), "TestPass1") == 0);
 
-  clear();
-  ok &= check("clear removes credentials", !hasCredentials());
-  ok &= check("ssid reads empty after clear", ssid()[0] == '\0');
+  _ssid[0] = '\0';
+  _pass[0] = '\0';
+  ok &= check("clearing the internal state removes credentials", !hasCredentials());
+  ok &= check("ssid reads empty after clearing", ssid()[0] == '\0');
 
   ok &= check("set rejects an empty ssid", !set("", "TestPass1"));
 
@@ -129,9 +139,9 @@ bool selfTest() {
 
   ok &= check("a rejected set leaves prior credentials in place", !hasCredentials());
 
-  _ssid[0] = '\0';
-  _pass[0] = '\0';
-  _open    = saved_open;
+  copyTruncated(_ssid, sizeof(_ssid), saved_ssid);
+  copyTruncated(_pass, sizeof(_pass), saved_pass);
+  _open = saved_open;
   Log.notice(F("wifi_store selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
 }
