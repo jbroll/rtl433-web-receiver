@@ -13,20 +13,36 @@ export function brokerLabel(url) {
   }
 }
 
-export function readConfig(env) {
-  // Number('') and Number('  ') are both 0, which would otherwise pass
-  // validation and silently bind an ephemeral port.
-  const blank = typeof env.PORT === 'string' && env.PORT.trim() === ''
-  const port = env.PORT === undefined ? 8080 : Number(env.PORT)
-  if (blank || !Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error(`PORT must be a port number, got ${JSON.stringify(env.PORT)}`)
+// Number('') and Number('  ') are both 0, which would otherwise pass
+// validation and silently bind an ephemeral port. Shared by PORT,
+// MQTT_PORT, and MQTTS_PORT, which all take the same kind of value.
+function parsePort(name, raw, defaultValue) {
+  const blank = typeof raw === 'string' && raw.trim() === ''
+  const value = raw === undefined ? defaultValue : Number(raw)
+  if (blank || !Number.isInteger(value) || value < 0 || value > 65535) {
+    throw new Error(`${name} must be a port number, got ${JSON.stringify(raw)}`)
   }
+  return value
+}
+
+export function readConfig(env, cli = {}) {
+  const port = parsePort('PORT', env.PORT, 8080)
+  const mqttPort = parsePort('MQTT_PORT', cli.mqttPort ?? env.MQTT_PORT, 1883)
+  const mqttsPort = parsePort('MQTTS_PORT', cli.mqttsPort ?? env.MQTTS_PORT, 8883)
+
+  const embedBroker = cli.noEmbedBroker ? false : env.EMBED_BROKER === 'false' ? false : true
 
   return {
-    mqttUrl: env.MQTT_URL ?? 'mqtt://localhost:1883',
+    mqttUrl: cli.brokerUrl ?? env.MQTT_URL ?? 'mqtt://localhost:1883',
     port,
     host: env.HOST ?? '0.0.0.0',
     username: env.MQTT_USERNAME,
     password: env.MQTT_PASSWORD,
+    embedBroker,
+    mqttPort,
+    mqttsPort,
+    tlsCert: cli.tlsCert ?? env.TLS_CERT,
+    tlsKey: cli.tlsKey ?? env.TLS_KEY,
+    authToken: cli.authToken ?? env.AUTH_TOKEN,
   }
 }
