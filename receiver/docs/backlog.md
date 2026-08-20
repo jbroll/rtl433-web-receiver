@@ -63,14 +63,6 @@ telemetry would name the fault in the log instead of leaving it to a probe
 sketch. A scratch write to `RegOokFix` and a `RegVersion` check would settle
 the bus question in the same pass.
 
-## The library dependency is pinned to a branch, not a commit
-
-`platformio.ini:13` points at `jbroll/rtl_433_ESP#sx1231-support`. PlatformIO
-resolves that once and caches it, so a build here and a build on another
-machine can silently differ, and a new fork commit changes the firmware without
-anything in this repo changing. Pinning the commit sha fixes it at the cost of
-an edit per library update.
-
 ## The decode path still allocates
 
 Beyond the `JsonDocument` and `String` noted below: ArduinoJson 7.4.3's default
