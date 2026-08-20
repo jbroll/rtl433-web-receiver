@@ -1,7 +1,9 @@
 /*
  rtl_433_ESP receiver with a live web page.
 
- Copy .env.example to .env and fill it in before building.
+ First boot (or after a long BOOT-button press) opens a SoftAP captive
+ portal to collect WiFi credentials; see receiver/docs/install.md. Copying
+ .env.example to .env is an optional dev/CI shortcut instead.
 */
 
 #include <stdarg.h>
@@ -20,16 +22,14 @@
 #include "alias_store.h"
 #include "device_hooks.h"
 #include "health_store.h"
+#include "provisioning.h"
 #include "radio_health.h"
 #include "signal_store.h"
 #include "tz_store.h"
 #include "web_ui.h"
+#include "wifi_store.h"
 #include "esp_core_dump.h"  // esp_core_dump_image_check()
 #include "esp_system.h"     // esp_reset_reason()
-
-#if !defined(WIFI_SSID) || !defined(WIFI_PASSWORD)
-#  error ".env is missing or incomplete - copy .env.example to .env and fill it in"
-#endif
 
 #ifndef MDNS_PREFIX
 #  define MDNS_PREFIX "rtl433"
@@ -141,10 +141,20 @@ static void startMDNS() {
   }
 }
 
-static void connectWiFi() {
-  Log.notice(F("WiFi connecting to %s" CR), WIFI_SSID);
+// Set by connectWiFi() and re-used by serviceWiFi()'s reconnect loop, since
+// the active credentials can come from wifi_store or the .env macros.
+static char _activeSsid[WIFI_STORE_SSID_MAX] = "";
+static char _activePass[WIFI_STORE_PASS_MAX] = "";
+
+static void connectWiFi(const char* ssid, const char* pass) {
+  strncpy(_activeSsid, ssid, sizeof(_activeSsid) - 1);
+  _activeSsid[sizeof(_activeSsid) - 1] = '\0';
+  strncpy(_activePass, pass, sizeof(_activePass) - 1);
+  _activePass[sizeof(_activePass) - 1] = '\0';
+
+  Log.notice(F("WiFi connecting to %s" CR), _activeSsid);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(_activeSsid, _activePass);
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_MS) {
     delay(200);
@@ -156,7 +166,7 @@ static void connectWiFi() {
     signal_store::setSource(mdnsHostname());
     wifiWasConnected = true;
   } else {
-    Log.warning(F("WiFi connect failed, decoding continues" CR));
+    Log.warning(F("WiFi connect failed" CR));
   }
 }
 
@@ -181,7 +191,29 @@ static void serviceWiFi() {
   }
   lastAttempt = millis();
   WiFi.disconnect();
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(_activeSsid, _activePass);
+}
+
+#define BOOT_BUTTON_GPIO 0
+#define BOOT_HOLD_MS     3000
+
+// GPIO0 is the Freenove ESP32-S3 board's BOOT button, pulled up on-board.
+// Held low continuously for BOOT_HOLD_MS at boot clears stored WiFi
+// credentials so the device re-enters provisioning. Returns immediately
+// (no delay) if the button is not held at boot.
+static bool bootButtonHeld() {
+  pinMode(BOOT_BUTTON_GPIO, INPUT_PULLUP);
+  if (digitalRead(BOOT_BUTTON_GPIO) != LOW) {
+    return false;
+  }
+  unsigned long start = millis();
+  while (digitalRead(BOOT_BUTTON_GPIO) == LOW) {
+    if (millis() - start >= BOOT_HOLD_MS) {
+      return true;
+    }
+    delay(20);
+  }
+  return false;
 }
 
 void rtl_433_Callback(char* message) {
@@ -445,6 +477,12 @@ void setup() {
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
 
+  wifi_store::begin();
+  if (bootButtonHeld()) {
+    Log.notice(F("BOOT button held: clearing stored WiFi credentials" CR));
+    wifi_store::clear();
+  }
+
   Wire.begin(47, 21);
   if (bmp280.begin(0x76) || bmp280.begin(0x77)) {
     bmp280_ok = true;
@@ -460,7 +498,20 @@ void setup() {
              BUILD_ID, (int)health_store::resetReason(),
              (unsigned long)health_store::bootCount(),
              (unsigned long)ESP.getFreeHeap(), bootCoredumpPending ? 1 : 0);
-  connectWiFi();
+  if (wifi_store::hasCredentials()) {
+    connectWiFi(wifi_store::ssid(), wifi_store::password());
+  }
+#ifdef WIFI_SSID
+  else {
+    connectWiFi(WIFI_SSID, WIFI_PASSWORD);
+    if (wifiReady()) {
+      wifi_store::set(WIFI_SSID, WIFI_PASSWORD);
+    }
+  }
+#endif
+  if (!wifiReady()) {
+    provisioning::run(); // blocks; ends in ESP.restart() once configured
+  }
   signal_store::setSource(mdnsHostname());
   tz_store::begin();
   device_hooks::begin();
@@ -474,6 +525,7 @@ void setup() {
 #ifdef FAKE_SIGNALS
   signal_store::selfTest();
   alias_store::selfTest();
+  wifi_store::selfTest();
 #endif
   recordReceiver();
   Log.notice(F("****** setup complete ******" CR));
