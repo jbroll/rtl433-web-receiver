@@ -99,7 +99,10 @@ exactly one `$layout` per receiver, so the blob is stored and served
 verbatim rather than parsed and reserialized — the receiver never inspects
 its contents, only the dashboard does. Its `FAKE_SIGNALS` `selfTest()` is
 host-tested by `test/host/run.sh` against the same `arduino_shim/` fakes as
-`alias_store` and `tz_store`.
+`alias_store` and `tz_store`. `layout_store::set()` still accepts a write
+when NVS never opened, so a viewer can save a layout for the running
+session even on a receiver whose flash is unavailable — that write is lost
+on reboot.
 
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`, and
 `/$update` are the only registered routes; every topic is an arbitrary path,
@@ -163,7 +166,10 @@ per `MQTT_RECONNECT_BACKOFF_MS`. Each phase of a connect attempt — TCP
 connect, TLS handshake, CONNACK wait — is bounded to 5 s, so an unreachable
 broker cannot stall `loop()` — and with it `rf.loop()` draining the decode
 queue — indefinitely, though the phases are sequential and a worst case on
-the TLS path adds up to roughly 15 s. `onRecord()`, registered as a second
+the TLS path adds up to roughly 15 s. `MQTT_MAX_PACKET_SIZE` (2200, up from
+PubSubClient's 768 default, to fit a full `$layout` blob) is a permanently
+allocated buffer, not just a per-message cap, so it costs roughly 1.4 KB of
+RAM for the process lifetime. `onRecord()`, registered as a second
 `signal_store` record hook, publishes the hook's `JsonDocument` unmodified
 to the topic `key` already is — `<mdnsHostname()>/<model>/<id>`, since
 `signal_store::setSource(mdnsHostname())` is what built that key in the

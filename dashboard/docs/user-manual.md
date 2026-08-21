@@ -103,12 +103,13 @@ A receiver can also hold one site-default layout, at `$layout`, keyed by
 device model rather than by individual device. **Save as default layout**
 (next to Forget layouts, visible only when the served receiver is one of
 the dashboard's connected sources) posts the current arrangement there.
-**Load default layout** (visible once one has been read from a connected
-source) replaces the current arrangement with it, after a confirmation
-prompt. A genuinely fresh browser — nothing in localStorage yet — applies a
-connected receiver's `$layout` automatically on first load, so a new user
-does not start from a blank grid if the receiver already has a saved
-default.
+**Load default layout** (visible once one has been read from the receiver
+serving this page) replaces the current arrangement with it, after a
+confirmation prompt. A genuinely fresh browser — nothing in localStorage
+yet — applies the serving receiver's `$layout` automatically on first load,
+so a new user does not start from a blank grid if the receiver already has
+a saved default. Auto-apply also un-hides any device card whose model is
+covered by the template and was not hidden when the template was saved.
 
 A card the user showed or renamed is kept even after its device goes quiet, so
 a sensor that returns finds its card as it left it. A card that was never
