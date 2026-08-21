@@ -2,7 +2,7 @@ import { signal } from '@preact/signals'
 import { upsert, devices } from '../devices.js'
 import { makeKey, FEED_BASE } from '../alias.js'
 import { ensureCard, saveCardState } from '../store.js'
-import { settings, hasLocation, activeZone } from '../settings.js'
+import { hasLocation, activeZone, resolvedLocation } from '../settings.js'
 import { loadFeedCache, cacheGet, cacheSet, cacheClear } from './cache.js'
 
 // Retry ladder for a feed whose fetch failed, in minutes. A feed that reports
@@ -38,7 +38,7 @@ function setState(id, patch) {
 }
 
 function placeOf() {
-  const l = settings.value.location
+  const l = resolvedLocation()
   return hasLocation() ? `${l.lat},${l.lon}` : ''
 }
 
@@ -108,7 +108,7 @@ export function pump(now = Date.now()) {
     feedState.value = new Map()
   }
 
-  const l = settings.value.location
+  const l = resolvedLocation()
   const ctx = { lat: l.lat, lon: l.lon, zone: activeZone(), place }
 
   for (const feed of FEEDS) {

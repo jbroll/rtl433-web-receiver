@@ -89,7 +89,7 @@ export function locationForSources(locationsMap, srcs) {
 // directly by Intl -- $tz's own network value is a raw UTC-offset in
 // minutes, which Intl's timeZone option cannot consume, so it does not
 // feed this resolution; tzOffsets exists for the receiver's own round trip.
-function resolvedLocation() {
+export function resolvedLocation() {
   const l = settings.value.location
   if (l.lat !== null && l.lon !== null) return l
   return locationForSources(locations.value, sources.value) || blankLocation()
