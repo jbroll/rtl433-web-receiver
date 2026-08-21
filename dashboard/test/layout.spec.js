@@ -6,9 +6,9 @@ const ACURITE_KEY = topicOf(ACURITE);
 
 const TEMPLATE = {
   grid: { cols: 8, rows: 5 },
-  order: ["Acurite-5n1"],
+  order: ["Acurite-5n1/396"],
   models: {
-    "Acurite-5n1": {
+    "Acurite-5n1/396": {
       w: 2, h: 2,
       valueOrder: ["humidity", "temperature_C"],
       hiddenValues: [],
@@ -103,7 +103,81 @@ test("Save as default layout posts the derived template to the source", async ({
   const res = await server.get(server.source + "/$layout");
   const posted = JSON.parse(res.body);
   expect(posted.grid).toEqual({ cols: Number(cols), rows: Number(rows) });
-  expect(posted.order).toContain("Acurite-5n1");
+  expect(posted.order).toContain("Acurite-5n1/396");
+});
+
+test("multiple sensors of the same model each keep their own saved size", async ({ page }) => {
+  const ACURITE2 = { ...ACURITE, id: 500 };
+  const KEY2 = topicOf(ACURITE2);
+  const server = await open(page, [ACURITE, ACURITE2]);
+  const base = server.url.replace(/\/$/, "");
+
+  await page.click("#tab-devices");
+  for (const k of [ACURITE_KEY, KEY2]) {
+    await page.locator(`#devices tr[data-key$="${k}"] input[type=checkbox]`).check();
+  }
+  await page.click("#tab-cards");
+
+  await page.evaluate(([k1, k2]) => {
+    window.setCardSize(k1, 3, 1);
+    window.setCardSize(k2, 1, 2);
+  }, [`${base} ${ACURITE_KEY}`, `${base} ${KEY2}`]);
+  await page.waitForTimeout(200);
+
+  await page.click("#edit-cards");
+  await page.click("#save-layout");
+  await page.waitForTimeout(300);
+
+  page.once("dialog", d => d.accept());
+  await page.click("#load-layout");
+  await page.waitForTimeout(300);
+
+  const state = await page.evaluate(() => window.cardState);
+  expect(state.cards[`${base} ${ACURITE_KEY}`]).toMatchObject({ w: 3, h: 1 });
+  expect(state.cards[`${base} ${KEY2}`]).toMatchObject({ w: 1, h: 2 });
+});
+
+test("same-model slots key on the reading's own id, not connection order", async ({ page }) => {
+  const ACURITE2 = { ...ACURITE, id: 500 };
+  const KEY2 = topicOf(ACURITE2);
+
+  const server1 = await open(page, [ACURITE, ACURITE2]);
+  const base1 = server1.url.replace(/\/$/, "");
+  await page.click("#tab-devices");
+  for (const k of [ACURITE_KEY, KEY2]) {
+    await page.locator(`#devices tr[data-key$="${k}"] input[type=checkbox]`).check();
+  }
+  await page.click("#tab-cards");
+  await page.evaluate(([k1, k2]) => {
+    window.setCardSize(k1, 3, 1);
+    window.setCardSize(k2, 1, 2);
+  }, [`${base1} ${ACURITE_KEY}`, `${base1} ${KEY2}`]);
+  await page.waitForTimeout(200);
+  await page.click("#edit-cards");
+  await page.click("#save-layout");
+  await page.waitForTimeout(300);
+  const posted = JSON.parse((await server1.get(server1.source + "/$layout")).body);
+
+  // A different session hears the same two sensors in the opposite order.
+  const server2 = await startServer({ devices: [ACURITE2, ACURITE] });
+  servers.push(server2);
+  await page.goto(server2.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  server2.emitLayout(posted);
+  await page.click("#tab-devices");
+  for (const k of [ACURITE_KEY, KEY2]) {
+    await page.locator(`#devices tr[data-key$="${k}"] input[type=checkbox]`).check();
+  }
+  await page.click("#tab-cards");
+  await page.click("#edit-cards");
+  page.once("dialog", d => d.accept());
+  await page.click("#load-layout");
+  await page.waitForTimeout(300);
+
+  const base2 = server2.url.replace(/\/$/, "");
+  const state2 = await page.evaluate(() => window.cardState);
+  expect(state2.cards[`${base2} ${ACURITE_KEY}`]).toMatchObject({ w: 3, h: 1 });
+  expect(state2.cards[`${base2} ${KEY2}`]).toMatchObject({ w: 1, h: 2 });
 });
 
 test("Save as default layout is absent when the serving origin isn't a connected source", async ({ page }) => {

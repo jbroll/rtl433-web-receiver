@@ -14,23 +14,40 @@ export function disableAutoApply() {
   autoApplyEligible = false
 }
 
-function modelOf(key) {
+// model/id, using the same id/channel/0 tie-break signal_store::buildKey uses
+// to key a topic -- a real field the reading itself carries, not something
+// the browser made up, and applied uniformly: even the Receiver's own
+// pseudo-device, which always reports id 0, gets the slot "Receiver/0".
+function slotOf(key) {
   const rec = devices.value.get(key)
   const obj = rec && rec.obj.value
-  return obj && typeof obj.model === 'string' && obj.model ? obj.model : null
+  if (!obj || typeof obj.model !== 'string' || !obj.model) return null
+  const id = obj.id !== undefined ? obj.id : (obj.channel !== undefined ? obj.channel : 0)
+  return `${obj.model}/${id}`
+}
+
+function modelSlots() {
+  const slots = new Map()
+  for (const rec of devices.value.values()) {
+    if (isFeed(rec.key)) continue
+    const slot = slotOf(rec.key)
+    if (slot) slots.set(rec.key, slot)
+  }
+  return slots
 }
 
 export function deriveTemplate() {
   const s = cardState.value
+  const slotOf = modelSlots()
   const models = Object.create(null)
   const order = []
   for (const key of s.order) {
     if (isFeed(key)) continue
-    const model = modelOf(key)
-    if (!model || models[model]) continue
+    const slot = slotOf.get(key)
+    if (!slot) continue
     const c = s.cards[key]
     if (!c) continue
-    models[model] = {
+    models[slot] = {
       w: c.w,
       h: c.h,
       valueOrder: c.valueOrder.slice(),
@@ -38,7 +55,7 @@ export function deriveTemplate() {
       bottomValues: (c.bottomValues || []).slice(),
       hidden: cardHidden(key),
     }
-    order.push(model)
+    order.push(slot)
   }
   return { grid: { cols: s.grid.cols, rows: s.grid.rows }, order, models }
 }
@@ -55,36 +72,31 @@ export function applyTemplate(template) {
   const nextGrid = { cols: gridNum(g.cols, s.grid.cols), rows: gridNum(g.rows, s.grid.rows) }
   const nextCards = Object.assign(Object.create(null), s.cards)
 
-  const deviceModel = new Map()
-  for (const rec of devices.value.values()) {
-    if (isFeed(rec.key)) continue
-    const model = modelOf(rec.key)
-    if (model) deviceModel.set(rec.key, model)
-  }
+  const keyForSlot = new Map()
+  for (const [key, slot] of modelSlots()) keyForSlot.set(slot, key)
 
   const matched = []
   const seenKeys = new Set()
   const hiddenByKey = new Map()
-  for (const model of modelOrder) {
-    const spec = modelsIn[model]
+  for (const slot of modelOrder) {
+    const spec = modelsIn[slot]
     if (!spec || typeof spec !== 'object') continue
-    for (const [key, m] of deviceModel) {
-      if (m !== model || seenKeys.has(key)) continue
-      seenKeys.add(key)
-      matched.push(key)
-      const existing = nextCards[key]
-      nextCards[key] = {
-        w: gridNum(spec.w, (existing && existing.w) || 1),
-        h: gridNum(spec.h, (existing && existing.h) || 1),
-        valueOrder: Array.isArray(spec.valueOrder)
-          ? spec.valueOrder.filter(f => typeof f === 'string') : [],
-        hiddenValues: Array.isArray(spec.hiddenValues)
-          ? spec.hiddenValues.filter(f => typeof f === 'string') : [],
-        bottomValues: Array.isArray(spec.bottomValues)
-          ? spec.bottomValues.filter(f => typeof f === 'string') : [],
-      }
-      hiddenByKey.set(key, spec.hidden === true)
+    const key = keyForSlot.get(slot)
+    if (!key || seenKeys.has(key)) continue
+    seenKeys.add(key)
+    matched.push(key)
+    const existing = nextCards[key]
+    nextCards[key] = {
+      w: gridNum(spec.w, (existing && existing.w) || 1),
+      h: gridNum(spec.h, (existing && existing.h) || 1),
+      valueOrder: Array.isArray(spec.valueOrder)
+        ? spec.valueOrder.filter(f => typeof f === 'string') : [],
+      hiddenValues: Array.isArray(spec.hiddenValues)
+        ? spec.hiddenValues.filter(f => typeof f === 'string') : [],
+      bottomValues: Array.isArray(spec.bottomValues)
+        ? spec.bottomValues.filter(f => typeof f === 'string') : [],
     }
+    hiddenByKey.set(key, spec.hidden === true)
   }
   const unmatched = s.order.filter(k => !seenKeys.has(k))
 

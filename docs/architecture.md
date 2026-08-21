@@ -54,6 +54,15 @@ sources publishing the same topic stay two devices with two cards. A card's stor
 uses the same key, so moving a device between bridges gives it a new card rather than
 inheriting one.
 
+## The saved default layout is keyed by model/id, not by source+topic
+
+`$layout` (`dashboard/src/layout_template.js`) is a second, separate notion of layout from
+the per-browser `cardState` above. Each slot is `model/id`, using the same id/channel/0
+tie-break `signal_store::buildKey` uses to key a topic — applied uniformly, so even the
+Receiver's own pseudo-device (always id 0) gets the slot `Receiver/0`. This is what lets two
+sensors sharing a model (two `Acurite-5n1` units) keep independent saved layouts instead of
+colliding on one shared `Acurite-5n1` slot.
+
 ## From dashboard build to mobile app
 
 `dashboard/build.js` emits one self-contained `index.html`. The `app/` sub-project is a
