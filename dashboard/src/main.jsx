@@ -53,7 +53,6 @@ let autoAppliedLayout = false
 function onLayout(base, topic, payload) {
   applyLayoutFrame(base, payload)
   if (autoAppliedLayout) return
-  if (base !== location.origin) return
   if (!autoApplyEligible) return
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
   autoAppliedLayout = true

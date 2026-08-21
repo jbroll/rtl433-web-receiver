@@ -101,6 +101,17 @@ export function applyTemplate(template) {
   saveCardState()
 }
 
+// Load has no write, so it carries none of Save's same-origin trust boundary --
+// any connected source's stored template is fair game. Picks the first
+// configured source (in sources.value order) that has one.
+export function layoutForSources(layoutsMap, srcs) {
+  for (const base of srcs) {
+    const t = layoutsMap.get(base)
+    if (t) return t
+  }
+  return null
+}
+
 export function applyLayoutFrame(base, payload) {
   const next = new Map(layouts.value)
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) next.set(base, payload)

@@ -7,7 +7,7 @@ import { DevicesView } from './devices-table.jsx'
 import { SettingsView } from './settings.jsx'
 import { CardsView } from './cards.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
-import { layouts, postLayout, applyTemplate, disableAutoApply } from './layout_template.js'
+import { layouts, postLayout, applyTemplate, disableAutoApply, layoutForSources } from './layout_template.js'
 
 export const tab = signal('cards')
 
@@ -70,13 +70,13 @@ export function App() {
             Save as default layout
           </button>
         )}
-        {layouts.value.has(location.origin) && (
+        {layoutForSources(layouts.value, sources.value) && (
           <button
             id="load-layout"
             title="Load the site default layout"
             onClick={() => {
               if (confirm('Replace the current card arrangement with the site default layout?')) {
-                applyTemplate(layouts.value.get(location.origin))
+                applyTemplate(layoutForSources(layouts.value, sources.value))
               }
             }}
           >
