@@ -2,6 +2,7 @@ const http = require("http");
 
 const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
+const LAYOUT_SUFFIX = "/$layout";
 
 function validTopic(topic) {
   if (!topic) return false;
@@ -163,6 +164,23 @@ function startServer(opts = {}) {
       return;
     }
     if (req.method === "POST") {
+      const isLayout = topic.endsWith(LAYOUT_SUFFIX) || topic === "$layout";
+      if (isLayout) {
+        if (!topic.startsWith(source + "/") && topic !== "$layout") {
+          res.writeHead(405).end("not allowed");
+          return;
+        }
+        const body = await readBody(req);
+        let value;
+        try { value = JSON.parse(body); } catch (e) { value = undefined; }
+        if (value === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+          res.writeHead(400).end("body must be a JSON object");
+          return;
+        }
+        publish(source + LAYOUT_SUFFIX, JSON.stringify(value));
+        res.writeHead(204).end();
+        return;
+      }
       const isTz = topic.endsWith("/$tz") || topic === "$tz";
       if (isTz) {
         if (!topic.startsWith(source + "/") && topic !== "$tz") {
@@ -245,6 +263,7 @@ function startServer(opts = {}) {
         source: source,
         emit(payload, meta) { return put(payload, meta); },
         emitAlias(deviceTopic, name) { publish(deviceTopic + ALIAS_SUFFIX, JSON.stringify(name)); },
+        emitLayout(template) { publish(source + LAYOUT_SUFFIX, JSON.stringify(template)); },
         get(topic) { return request("GET", topic); },
         post(topic, body) { return request("POST", topic, body === undefined ? "" : body); },
         options(topic) { return request("OPTIONS", topic); },
