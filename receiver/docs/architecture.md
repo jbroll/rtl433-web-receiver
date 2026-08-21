@@ -97,6 +97,14 @@ prior credentials untouched. An empty password clears the stored `pass` key
 rather than leaving a stale one paired with a new ssid. Boot order tries
 these stored credentials first; see "Boot order" below.
 
+**`ota_token_store.h` / `ota_token_store.cpp`** — persists the `/$update`
+bearer token to `Preferences` namespace `"ota"`, in a fixed 33-byte buffer
+(`OTA_TOKEN_STORE_MAX`). Mirrors `wifi_store`'s fixed-buffer/NVS shape.
+`token()` returns the stored value if one exists, else the `.env`-supplied
+`OTA_TOKEN` build flag, else an empty string — `hasToken()` is false only in
+that last case, which is what makes `/$update` answer `404` instead of `401`
+when OTA has never been configured.
+
 **`provisioning.h` / `provisioning.cpp`** — the SoftAP captive portal used
 when no stored or `.env` credentials connect. It runs its own `WebServer` on
 port 80, separate from `web_ui.cpp`'s: `provisioning::run()` always ends in a

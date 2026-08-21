@@ -22,6 +22,7 @@
 #include "alias_store.h"
 #include "device_hooks.h"
 #include "health_store.h"
+#include "ota_token_store.h"
 #include "provisioning.h"
 #include "radio_health.h"
 #include "signal_store.h"
@@ -478,6 +479,7 @@ void setup() {
   Log.notice(F("****** setup ******" CR));
 
   wifi_store::begin();
+  ota_token_store::begin();
   if (bootButtonHeld()) {
     Log.notice(F("BOOT button held: clearing stored WiFi credentials" CR));
     wifi_store::clear();
@@ -526,6 +528,7 @@ void setup() {
   signal_store::selfTest();
   alias_store::selfTest();
   wifi_store::selfTest();
+  ota_token_store::selfTest();
 #endif
   recordReceiver();
   Log.notice(F("****** setup complete ******" CR));

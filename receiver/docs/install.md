@@ -52,12 +52,15 @@ captive-portal page at `192.168.4.1`: join it, pick or type a network,
 enter its password, and the device reboots onto that network.
 
 `.env` is an optional dev/CI shortcut: `cp .env.example .env`, fill in
-`WIFI_SSID`, `WIFI_PASSWORD`, and `MDNS_PREFIX`, and a build with `.env`
-present connects with those credentials on first boot, then stores them so
-later boots skip straight to connecting (no portal). `MDNS_PREFIX` has no
-runtime equivalent yet, so a device provisioned entirely through the portal
-uses the `rtl433` default. `.env` is bash syntax, gitignored, and read by
-`load_env.py`, which turns each entry into a `-D` build flag.
+`WIFI_SSID`, `WIFI_PASSWORD`, `MDNS_PREFIX`, and optionally `OTA_TOKEN`, and a
+build with `.env` present connects with those credentials on first boot, then
+stores them so later boots skip straight to connecting (no portal).
+`MDNS_PREFIX` has no runtime equivalent yet, so a device provisioned entirely
+through the portal uses the `rtl433` default. `OTA_TOKEN` seeds the bearer
+token `/$update` checks (see `docs/user-manual.md`) if the portal has never
+been used to set one; it's overridden the moment a token is saved through the
+portal. `.env` is bash syntax, gitignored, and read by `load_env.py`, which
+turns each entry into a `-D` build flag.
 
 A build with `.env` present reconnects with its compiled-in credentials on
 every boot, including after a BOOT-button credential clear (see below) — to
