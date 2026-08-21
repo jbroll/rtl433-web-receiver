@@ -6,6 +6,7 @@
 #include <WiFi.h>
 #include <esp_random.h>
 
+#include "mqtt_publish_store.h"
 #include "ota_token_store.h"
 #include "wifi_store.h"
 
@@ -134,6 +135,11 @@ static void handleRoot() {
   page += token;
   page +=
       "\"><button type=\"button\" onclick=\"copyToken()\">Copy</button></label><br><br>"
+      "<label>MQTT broker URL (optional)<br>"
+      "<input type=\"text\" name=\"mqtt_url\" maxlength=\"127\" "
+      "placeholder=\"mqtts://weather.rkroll.com:8883\"></label><br><br>"
+      "<label>MQTT broker token (optional)<br>"
+      "<input type=\"text\" name=\"mqtt_token\" maxlength=\"64\"></label><br><br>"
       "<button type=\"submit\">Save and connect</button>"
       "</form>"
       "<script>"
@@ -157,6 +163,10 @@ static void handleSave() {
   String pass = _server.arg("pass");
   String token = _server.arg("token");
   token.trim();
+  String mqttUrl = _server.arg("mqtt_url");
+  mqttUrl.trim();
+  String mqttToken = _server.arg("mqtt_token");
+  mqttToken.trim();
 
   if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX) {
     _server.send(400, "text/plain", "Choose a network and a password that fits.");
@@ -174,6 +184,14 @@ static void handleSave() {
     _server.send(400, "text/plain", "Update token is too long.");
     return;
   }
+  if (mqttUrl.length() >= MQTT_PUBLISH_STORE_URL_MAX) {
+    _server.send(400, "text/plain", "MQTT broker URL is too long.");
+    return;
+  }
+  if (mqttToken.length() >= MQTT_PUBLISH_STORE_TOKEN_MAX) {
+    _server.send(400, "text/plain", "MQTT broker token is too long.");
+    return;
+  }
 
   if (!wifi_store::set(ssid.c_str(), pass.c_str())) {
     _server.send(500, "text/plain", "Could not save credentials, try again.");
@@ -185,6 +203,12 @@ static void handleSave() {
     // save just leaves OTA on its prior token (stored, or .env), same as
     // leaving the field blank.
     Log.warning(F("provisioning: could not store update token" CR));
+  }
+
+  if (mqttUrl.length() > 0 &&
+      !mqtt_publish_store::set(mqttUrl.c_str(), mqttToken.c_str())) {
+    // Non-fatal for the same reason as the OTA token above.
+    Log.warning(F("provisioning: could not store MQTT broker settings" CR));
   }
 
   _server.send(200, "text/html",
