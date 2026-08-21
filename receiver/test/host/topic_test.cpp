@@ -76,6 +76,11 @@ int main(int argc, char** argv) {
   check("isTz rejects a non-$tz topic", !topic::isTz("src/Acurite-5n1/396"));
   check("isTz rejects NULL", !topic::isTz(NULL));
 
+  check("isLayout identifies a $layout topic", topic::isLayout("rtl433-a1b2c3/$layout"));
+  check("a bare $layout is a layout topic", topic::isLayout("$layout"));
+  check("isLayout rejects a non-$layout topic", !topic::isLayout("rtl433-a1b2c3/Acurite-5n1/1234"));
+  check("isLayout rejects NULL", !topic::isLayout(NULL));
+
   printf("%s\n", failures == 0 ? "topic: PASS" : "topic: FAIL");
   return failures == 0 ? 0 : 1;
 }

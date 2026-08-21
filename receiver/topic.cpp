@@ -101,4 +101,10 @@ bool isTz(const char* t) {
   return strcmp(last != NULL ? last + 1 : t, "$tz") == 0;
 }
 
+bool isLayout(const char* t) {
+  if (t == NULL) return false;
+  const char* last = strrchr(t, '/');
+  return strcmp(last != NULL ? last + 1 : t, "$layout") == 0;
+}
+
 } // namespace topic
