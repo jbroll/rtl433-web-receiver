@@ -11,6 +11,7 @@
 #include "alias_store.h"
 #include "dashboard_html.h"
 #include "layout_store.h"
+#include "location_store.h"
 #include "mqtt_publish.h"
 #include "ota_token_store.h"
 #include "signal_store.h"
@@ -373,6 +374,34 @@ static void handleLayoutPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
+static void handleLocationPost(const char* path) {
+  // Same same-origin-or-bare gating as $layout and $tz: the dashboard POSTs a
+  // bare /$location to its own origin, the source-prefixed form is the
+  // documented curl-able equivalent.
+  const char* src = signal_store::source();
+  size_t      srcLen = strlen(src);
+  bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
+  if (strcmp(path, "$location") != 0 && !ownSource) {
+    sendStatus(405, "not allowed");
+    return;
+  }
+  String body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>()) {
+    sendStatus(400, "body must be a JSON object");
+    return;
+  }
+  if (!location_store::set(body.c_str())) {
+    sendStatus(503, "location store full");
+    return;
+  }
+  web_ui::broadcastLocation(location_store::get());
+  mqtt_publish::publishLocation(location_store::get());
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(204, "text/plain", "");
+}
+
 static void handleTzPost(const char* path) {
   // The dashboard POSTs a bare /$tz to its own origin; the source-prefixed
   // form is the documented curl-able equivalent.
@@ -390,6 +419,8 @@ static void handleTzPost(const char* path) {
     return;
   }
   tz_store::set((int16_t)doc.as<long>());
+  web_ui::broadcastTz(tz_store::offsetMinutes());
+  mqtt_publish::publishTz(tz_store::offsetMinutes());
   sendCors();
   _server.sendHeader("Cache-Control", "no-store");
   _server.send(204, "text/plain", "");
@@ -482,6 +513,10 @@ static void handleTopic() {
       handleLayoutPost(path);
       return;
     }
+    if (topic::isLocation(path)) {
+      handleLocationPost(path);
+      return;
+    }
     if (topic::isTz(path)) {
       handleTzPost(path);
       return;
@@ -502,6 +537,29 @@ static void handleTopic() {
     sendCors();
     _server.sendHeader("Cache-Control", "no-store");
     _server.send(200, "application/json", blob);
+    return;
+  }
+  if (topic::isLocation(path)) {
+    const char* blob = location_store::get();
+    if (blob[0] == '\0') {
+      sendStatus(404, "no message");
+      return;
+    }
+    sendCors();
+    _server.sendHeader("Cache-Control", "no-store");
+    _server.send(200, "application/json", blob);
+    return;
+  }
+  if (topic::isTz(path)) {
+    char payload[8];
+    int  n = snprintf(payload, sizeof(payload), "%d", tz_store::offsetMinutes());
+    if (n < 0 || (size_t)n >= sizeof(payload)) {
+      sendStatus(500, "internal error");
+      return;
+    }
+    sendCors();
+    _server.sendHeader("Cache-Control", "no-store");
+    _server.send(200, "application/json", payload);
     return;
   }
   if (topic::isAlias(path)) {
@@ -641,6 +699,37 @@ static void drainReplay(int i, FrameBuffer& frame) {
         continue;
       }
       buildFrame(frame, topic, blob);
+    } else if (at == SIGNAL_SUB_TABLE + ALIAS_SLOTS + 1) {
+      const char* blob = location_store::get();
+      if (blob[0] == '\0') {
+        continue;
+      }
+      static char locationTopic[SIGNAL_KEY_MAX];
+      int n = snprintf(locationTopic, sizeof(locationTopic), "%s/$location", signal_store::source());
+      if (n < 0 || (size_t)n >= sizeof(locationTopic)) {
+        continue;
+      }
+      topic = locationTopic;
+      if (!slotWants(i, topic)) {
+        continue;
+      }
+      buildFrame(frame, topic, blob);
+    } else if (at == SIGNAL_SUB_TABLE + ALIAS_SLOTS + 2) {
+      char tzPayload[8];
+      int  tn = snprintf(tzPayload, sizeof(tzPayload), "%d", tz_store::offsetMinutes());
+      if (tn < 0 || (size_t)tn >= sizeof(tzPayload)) {
+        continue;
+      }
+      static char tzTopic[SIGNAL_KEY_MAX];
+      int n = snprintf(tzTopic, sizeof(tzTopic), "%s/$tz", signal_store::source());
+      if (n < 0 || (size_t)n >= sizeof(tzTopic)) {
+        continue;
+      }
+      topic = tzTopic;
+      if (!slotWants(i, topic)) {
+        continue;
+      }
+      buildFrame(frame, topic, tzPayload);
     } else {
       _replay[i] = -1;
       return;
@@ -763,6 +852,41 @@ void broadcastLayout(const char* blob) {
     return;
   }
   broadcastFrame(topic, SIGNAL_SUB_TABLE + ALIAS_SLOTS, frame);
+}
+
+void broadcastLocation(const char* blob) {
+  char topic[SIGNAL_KEY_MAX];
+  int  n = snprintf(topic, sizeof(topic), "%s/$location", signal_store::source());
+  if (n < 0 || (size_t)n >= sizeof(topic)) {
+    return;
+  }
+  FrameBuffer frame;
+  buildFrame(frame, topic, blob); // raw-embed: blob is a JSON object, not a quoted string
+  if (frame.overflowed()) {
+    Log.warning(F("SSE location frame overflow, dropping frame" CR));
+    return;
+  }
+  broadcastFrame(topic, SIGNAL_SUB_TABLE + ALIAS_SLOTS + 1, frame);
+}
+
+void broadcastTz(int16_t minutes) {
+  char payload[8];
+  int  pn = snprintf(payload, sizeof(payload), "%d", minutes);
+  if (pn < 0 || (size_t)pn >= sizeof(payload)) {
+    return;
+  }
+  char topic[SIGNAL_KEY_MAX];
+  int  n = snprintf(topic, sizeof(topic), "%s/$tz", signal_store::source());
+  if (n < 0 || (size_t)n >= sizeof(topic)) {
+    return;
+  }
+  FrameBuffer frame;
+  buildFrame(frame, topic, payload); // raw-embed: payload is a JSON number
+  if (frame.overflowed()) {
+    Log.warning(F("SSE tz frame overflow, dropping frame" CR));
+    return;
+  }
+  broadcastFrame(topic, SIGNAL_SUB_TABLE + ALIAS_SLOTS + 2, frame);
 }
 
 } // namespace web_ui
