@@ -81,10 +81,14 @@ dashboard POSTs the offset to `/$tz` when the location is set; `tz_store::set`
 persists it and pushes it into `device_hooks` so the rain hook's midnight
 boundary follows the user's timezone.
 
-**`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. Only `/` and
-`/events` are registered routes; every topic is an arbitrary path, so `GET`
-and `POST` of a topic are both dispatched from `WebServer::onNotFound`, which
-does its own topic validation rather than relying on route matching. Four SSE
+**`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`, and
+`/$update` are the only registered routes; every topic is an arbitrary path,
+so `GET` and `POST` of a topic are both dispatched from
+`WebServer::onNotFound`, which does its own topic validation rather than
+relying on route matching. `/$update` is registered directly rather than
+routed through the topic parser, since `$update` isn't a topic, and uses
+`WebServer::on()`'s two-callback form so the ~1.2 MB firmware image streams
+through `Update::write()` in chunks instead of buffering whole. Four SSE
 client slots (`WEB_UI_SSE_CLIENTS`), each a `WiFiClient` plus up to four
 filters and one replay cursor, are fixed arrays sized at compile time — there
 is no dynamic connection list.

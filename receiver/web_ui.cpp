@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 #include <ArduinoLog.h>
+#include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <errno.h>
@@ -9,6 +10,7 @@
 
 #include "alias_store.h"
 #include "dashboard_html.h"
+#include "ota_token_store.h"
 #include "signal_store.h"
 #include "topic.h"
 #include "tz_store.h"
@@ -363,6 +365,68 @@ static void handleTzPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
+// Set at UPLOAD_FILE_START, read by handleUpdateComplete() once the whole
+// multipart body has been parsed — WebServer's two-callback on() only calls
+// the complete handler after the upload handler has seen every chunk.
+static bool _otaDisabled   = false;
+static bool _otaAuthorized = false;
+static bool _otaStarted    = false;
+
+static void handleUpdateUpload() {
+  HTTPUpload& upload = _server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    _otaStarted = false;
+    if (!ota_token_store::hasToken()) {
+      _otaDisabled   = true;
+      _otaAuthorized = false;
+      return;
+    }
+    _otaDisabled = false;
+    String expected = String("Bearer ") + ota_token_store::token();
+    _otaAuthorized  = _server.header("Authorization") == expected;
+    if (!_otaAuthorized) {
+      Log.warning(F("OTA update: rejected, bad or missing token" CR));
+      return;
+    }
+    Log.notice(F("OTA update: starting, filename=%s" CR), upload.filename.c_str());
+    _otaStarted = Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH);
+    if (!_otaStarted) {
+      Log.warning(F("OTA update: Update.begin failed: %s" CR), Update.errorString());
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (_otaStarted && Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      Log.warning(F("OTA update: write failed: %s" CR), Update.errorString());
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (_otaStarted && !Update.end(true)) {
+      Log.warning(F("OTA update: Update.end failed: %s" CR), Update.errorString());
+    }
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    if (_otaStarted) {
+      Update.abort();
+      _otaStarted = false;
+    }
+  }
+}
+
+static void handleUpdateComplete() {
+  if (_otaDisabled) {
+    sendStatus(404, "not found");
+    return;
+  }
+  if (!_otaAuthorized) {
+    sendStatus(401, "unauthorized");
+    return;
+  }
+  if (!_otaStarted || Update.hasError()) {
+    sendStatus(500, Update.errorString());
+    return;
+  }
+  sendStatus(200, "ok");
+  delay(500); // let the response flush before the restart drops the socket
+  ESP.restart();
+}
+
 static void handleTopic() {
   String      uri = _server.uri();
   const char* path = uri.c_str();
@@ -535,6 +599,7 @@ static void drainReplay(int i, FrameBuffer& frame) {
 void begin() {
   _server.on("/", HTTP_GET, handleRoot);
   _server.on("/events", HTTP_GET, handleEvents);
+  _server.on("/$update", HTTP_POST, handleUpdateComplete, handleUpdateUpload);
   // Topics are arbitrary paths, so every other request is dispatched here.
   _server.onNotFound(handleTopic);
   _server.begin();

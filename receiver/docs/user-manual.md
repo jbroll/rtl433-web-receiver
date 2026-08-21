@@ -31,6 +31,7 @@ reconnecting every 30 seconds without touching stored credentials.
 | `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success |
 | `POST /$tz` | Store the GMT offset. Body is a JSON number, signed minutes. `204`; `405` unless the topic is `$tz` or under this receiver's source |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `200`, `text/event-stream` |
+| `POST /$update` | Push a firmware image. `multipart/form-data`, bearer token required. `200` and reboots on success |
 
 `GET` and `POST` share one handler, so a malformed topic is `400` regardless of
 method.
@@ -106,6 +107,35 @@ served from; the source-prefixed `/<source>/$tz` form is equivalent. A body
 that is not a JSON number is `400`, body `body must be a JSON number`. A
 `$tz` topic under another source is `405`. The offset survives a reboot via
 NVS.
+
+### `POST /$update`
+
+Pushes a new firmware image over WiFi — the same shape as `pio run -t
+upload`, without the serial cable. The body must be `multipart/form-data`
+with the image in a field named `firmware`; a raw `--data-binary` body is
+rejected the same as any other malformed request to this route, since the
+firmware only streams the multipart form through incrementally, not a raw
+POST body.
+
+    curl -F firmware=@build/firmware.bin \
+         -H "Authorization: Bearer 0123456789abcdef0123456789abcdef" \
+         'http://rtl433-a1b2c3.local/$update'
+
+    200 ok
+
+The bearer token is set from the SoftAP captive portal's "Update token"
+field (see `docs/install.md`) or from the `.env` `OTA_TOKEN` build flag if
+none has been set through the portal yet. A missing or wrong
+`Authorization` header is `401`; no token configured at all — neither
+stored nor `.env` — is `404`, same as any other unrecognized route. A write
+failure or a failed integrity check on the uploaded image is `500` with the
+underlying error as the body, and the currently-running firmware is left in
+place either way: `otadata` is only updated once the whole image has
+verified, so a rejected or failed push is a no-op, not a bricked device. The
+device reboots on the new firmware only after a `200`.
+
+Quote the URL (or escape the `$`) — an unquoted `/$update` is a shell
+variable expansion, not a literal path.
 
 ### `GET /events`
 
