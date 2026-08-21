@@ -10,14 +10,14 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 
 - **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
-  Open gaps: `rtl_433_ESP` pinned to a branch not a commit, and
-  `signal_store` and `alias_store` self-tests never read on a device.
-- **`bridge/`** — full MQTT to HTTP binding. No auth, no status endpoint, not
-  published to a registry, slow-SSE and unbounded-body gaps.
+  Open gap: `signal_store` and `alias_store` self-tests never read on a
+  device.
+- **`bridge/`** — full MQTT to HTTP binding. Has a bearer-token auth path; no
+  status endpoint, not published to a registry, slow-SSE and unbounded-body
+  gaps, and the dashboard has no field to store a per-source token yet.
 - **`dashboard/`** — one self-contained `index.html` built from Preact sources
-  by esbuild. Mobile and first-run
-  holes: 360 px viewport overflow, scrollbar jitter, sources not a tab, empty
-  state broken for the Capacitor shell.
+  by esbuild. Mobile and first-run holes: 360 px viewport overflow, scrollbar
+  jitter, empty state broken for the Capacitor shell.
 - **`app/`** — Capacitor 7 shell. Android debug APK builds on the `gpu` CI
   host. iOS builds unsigned on macOS via GitHub Actions. Nothing signed,
   nothing in a store.
@@ -25,21 +25,20 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 `preact-ui-migration` and `capacitor-app` landed on main; the receiver's
 last-hour message-type replay exists only as a design, not an implementation.
 
-Cross-cutting debt: no `quickstart.md` anywhere; no single command runs
-all four test suites; the dashboard suite runs against a fake bridge.
+Cross-cutting debt: the dashboard suite runs against a fake bridge, not the
+real `bridge/`.
 
 ## Goals
 
 1. **Consolidate in-flight work and cross-cutting debt.** Done when the
-   last-hour replay feature is implemented, the topic rules share one case
-   table read by both suites, one command runs all four test suites, and every
-   sub-project has a `quickstart.md` plus the install and development split.
-2. **Firmware 1.0 — trustworthy and portable.** Done when false-decode
-   filtering ships (range checks and a seen-twice rule, not `MY_DEVICES`),
-   WiFi is provisioned at runtime, `rtl_433_ESP` is pinned to a commit, the
-   stores are host-tested, the self-test is observable over USB, OTA updates
-   work, and last-hour replay is implemented.
-3. **Bridge auth and release.** Done when the bridge has an HTTP auth path and
+   last-hour replay feature is implemented and the topic rules share one case
+   table read by both suites.
+2. **Firmware 1.0 — trustworthy and portable.** Done when the stores are
+   host-tested and the self-test is observable over USB (false-decode
+   filtering, runtime WiFi provisioning, the pinned `rtl_433_ESP` commit, and
+   OTA updates are already shipped; last-hour replay is tracked under Goal 1).
+3. **Bridge auth and release.** Done when the dashboard can store and send a
+   per-source token against the bridge's existing auth path, and the bridge
    is published to npm. Moved ahead of mobile because the mobile app reads
    bridges over the internet.
 4. **Mobile app shippable on Android, beta on iOS.** Done when the dashboard
@@ -69,18 +68,9 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 - Extract a shared topic and filter case table read by both
   `receiver/test/host/topic_test.cpp` and `bridge/test/topic.test.js`; add the
   `a//c` divergent case; fix whichever side is wrong.
-- Add a root `Makefile` or `bin/test.sh` running `pio test`,
-  `bash receiver/test/host/run.sh`, `npm test` in `bridge/`, and `npm test` in
-  `dashboard/`, in order, non-zero exit on the first failure.
-- Write `docs/quickstart.md` at the root and one per sub-project.
 
 ### Goal 2 — Firmware 1.0
 
-- Pin `rtl_433_ESP` to a commit sha in `platformio.ini`; document the update
-  procedure.
-- Add range checks in `device_hooks` (humidity 0 to 100, wind_dir 0 to 360,
-  pressure 800 to 1100) and a seen-twice-before-card rule in `signal_store`.
-  Keep all decoders compiled in; do not gate on `MY_DEVICES`.
 - Move `signal_store` and `alias_store` self-tests to a PlatformIO `native`
   environment or extend `test/host/run.sh`.
 - Point `Log.begin()` at USB CDC `Serial`; capture a boot with
@@ -89,21 +79,21 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 
 ### Goal 3 — Bridge auth and release
 
-- Add an HTTP auth path (token or basic) to the bridge; store a per-source
-  credential in dashboard `localStorage`, extending the existing `sources`
-  schema.
+- Store a per-source credential in dashboard `localStorage`, extending the
+  existing `sources` schema, and send it against the bridge's bearer-token
+  auth path.
 - Cap `readBody` and add an SSE reader drop (existing backlog items,
   security-adjacent).
 - Publish the bridge to npm so the `bin` entry has an install path.
 
 ### Goal 4 — Mobile
 
-- Dashboard: sources as a fourth tab with origin auto-probe, closing the
-  Capacitor empty state; fix `measureGrid()` 360 px overflow and scrollbar
-  jitter; drive the suite against the real `bridge/` over an in-process
-  `aedes`.
+- Dashboard: origin auto-probe on the (already-added) sources tab, closing
+  the Capacitor empty state; fix `measureGrid()` 360 px overflow and
+  scrollbar jitter; drive the suite against the real `bridge/` over an
+  in-process `aedes`.
 - App: signed Android release APK (keystore, `--release`); signed iOS
-  TestFlight build via the macOS CI; write `app/docs/quickstart.md`.
+  TestFlight build via the macOS CI.
 - App: upgrade Capacitor 7 to 8 (no deliberate reason to stay on 7, and the
   mDNS plugin below needs 8).
 - Receiver: add an `rtl433=1` TXT record to the existing `_http._tcp` mDNS
