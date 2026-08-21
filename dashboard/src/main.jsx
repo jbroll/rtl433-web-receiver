@@ -4,6 +4,7 @@ import { App, tab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
+import { applyLayoutFrame, applyTemplate, layouts } from './layout_template.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
@@ -47,6 +48,17 @@ function onAlias(base, topic, payload) {
   applyAliasFrame(makeKey(base, topic), payload)
 }
 
+let autoAppliedLayout = false
+
+function onLayout(base, topic, payload) {
+  applyLayoutFrame(base, payload)
+  if (autoAppliedLayout) return
+  if (base !== location.origin) return
+  if (store.cardState.value.order.length !== 0) return
+  autoAppliedLayout = true
+  applyTemplate(payload)
+}
+
 function onState(base, state) {
   setSourceState(base, state)
 }
@@ -64,11 +76,14 @@ function dropSource(base, stream) {
   const nextAliases = new Map(aliases.value)
   for (const key of nextAliases.keys()) if (key.startsWith(`${base} `)) nextAliases.delete(key)
   aliases.value = nextAliases
+  const nextLayouts = new Map(layouts.value)
+  nextLayouts.delete(base)
+  layouts.value = nextLayouts
 }
 
 function probeOrigin() {
   const base = location.origin
-  const stream = openSource(base, { onMessage, onAlias, onState: onProbeState })
+  const stream = openSource(base, { onMessage, onAlias, onLayout, onState: onProbeState })
   open.set(base, stream)
   probe = { base, stream, timer: setTimeout(abortProbe, 1500) }
 }
@@ -100,7 +115,7 @@ function syncSources() {
   const want = sources.value
   for (const base of want) {
     if (open.has(base)) continue
-    open.set(base, openSource(base, { onMessage, onAlias, onState }))
+    open.set(base, openSource(base, { onMessage, onAlias, onLayout, onState }))
   }
   for (const [base, stream] of open) {
     if (want.indexOf(base) >= 0) continue
