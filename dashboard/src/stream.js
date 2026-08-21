@@ -1,4 +1,5 @@
 const ALIAS_SUFFIX = '/$alias'
+const LAYOUT_SUFFIX = '/$layout'
 
 function parse(raw) { try { return JSON.parse(raw) } catch (e) { return null } }
 
@@ -23,6 +24,7 @@ export function openSource(base, handlers) {
       const msg = parse(ev.data)
       if (!msg || typeof msg.topic !== 'string') return
       if (msg.topic.endsWith(ALIAS_SUFFIX)) handlers.onAlias(base, msg.topic, msg.payload)
+      else if (msg.topic.endsWith(LAYOUT_SUFFIX)) handlers.onLayout(base, msg.topic, msg.payload)
       else handlers.onMessage(base, msg.topic, msg.payload)
     }
   }
