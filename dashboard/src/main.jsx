@@ -49,12 +49,18 @@ function onAlias(base, topic, payload) {
 }
 
 let autoAppliedLayout = false
+// Snapshot taken once, right after loadCardState() and before any source
+// connects: a device replayed ahead of $layout on the same connection would
+// otherwise populate cardState.order first and make a live order.length
+// check always non-zero, defeating auto-apply for exactly the receivers
+// that have devices worth a saved layout.
+let cardsWereEmptyAtStart = false
 
 function onLayout(base, topic, payload) {
   applyLayoutFrame(base, payload)
   if (autoAppliedLayout) return
   if (base !== location.origin) return
-  if (store.cardState.value.order.length !== 0) return
+  if (!cardsWereEmptyAtStart) return
   autoAppliedLayout = true
   applyTemplate(payload)
 }
@@ -182,6 +188,7 @@ render(<App />, document.body)
 
 exposeForTests()
 store.loadCardState()
+cardsWereEmptyAtStart = store.cardState.value.order.length === 0
 loadAliases()
 loadSort()
 loadSources()
