@@ -32,9 +32,6 @@ follow-ons), and the topic rules already share one case table
 `bridge/test/topic.test.js`, including the `a//c` divergent case. Goal 1 is
 done.
 
-Cross-cutting debt: the dashboard suite runs against a fake bridge, not the
-real `bridge/`.
-
 ## Goals
 
 1. ~~**Consolidate in-flight work and cross-cutting debt.**~~ Done: the
