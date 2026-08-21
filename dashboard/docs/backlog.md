@@ -38,10 +38,10 @@
   the mutual-exclusion guards. It is testable: the suite already dispatches synthetic
   bubbling events from `page.evaluate`, and Chromium exposes real multi-touch through
   `Input.dispatchTouchEvent` over a CDP session.
-- `main.js` exposes page internals on `window` through `exposeForTests()`, because tests
-  in `test/cards.spec.js` drive the page through the globals the firmware version had at
-  script level. 36 of its 67 tests reach for `window.` or `page.evaluate`. Deliberate and
-  endorsed, since rewriting them would destroy the evidence that the extraction lost
+- `src/main.jsx` exposes page internals on `window` through `exposeForTests()`, because
+  tests in `test/cards.spec.js` drive the page through the globals the firmware version had
+  at script level. 44 of its 122 tests reach for `window.` or `page.evaluate`. Deliberate
+  and endorsed, since rewriting them would destroy the evidence that the extraction lost
   nothing, but it is debt: delete the hook when the suite drives the DOM instead.
   `store.js`'s `getCardState`/`setCardState` exist only to serve it.
 - A sortable column header carries no accessible name for the action it performs. It is a
@@ -49,9 +49,11 @@
   sort state but nothing says the header can be activated to change it. Nesting a
   `<button>` inside the `th` is the usual shape, and it would also drop the hand-wired
   Enter/Space handling in `table.js`.
-- `test/fixtures.js` is a copy of `receiver/test/fixtures.js`, and nothing detects drift
-  between them. If a fixture changes on one side, the receiver's binding tests and the
-  dashboard's card tests silently disagree about what a device looks like.
+- `test/fixtures.js` started as a copy of `receiver/test/fixtures.js` and has already
+  drifted: the receiver's copy moved to CommonJS `module.exports` and gained
+  `ACURITE_WIND`/`ACURITE_RAIN` fixtures the dashboard's ESM `export const` copy lacks.
+  Nothing detects drift between them, so the receiver's binding tests and the dashboard's
+  card tests now silently disagree about what a device looks like.
 - `test/cards.spec.js`'s `[data-key$="…"]` selectors are unanchored tail matches,
   unambiguous only while a spec file runs a single source. A second source added to that
   file would make a suffix match two rows, and the failure would look like a page bug
