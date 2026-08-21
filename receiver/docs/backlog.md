@@ -8,7 +8,7 @@ sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
 The receiver's own card proved the shape: anything recorded through
 `signal_store::record()` becomes a device the page already knows how to draw,
-alias, and lay out. Nothing else uses it. Three directions, none started:
+alias, and lay out. Nothing else uses it. Three directions: egress is implemented (below), ingestion remains:
 
 - A wired sensor on the I2C bus at GPIO 47 (SCL) and GPIO 21 (SDA), recorded
   the same way. The BMP280 driver reads temperature and pressure every 30 s
