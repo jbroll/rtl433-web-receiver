@@ -183,9 +183,9 @@ location is set again.
 Once a location is set, four cards appear alongside the sensor cards. They also
 appear with no location of your own, if one of your sources has published one —
 a dashboard loaded from the bridge gets the receiver's location and time zone
-that way. Your own location always wins once you set it. They are
-ordinary cards: drag them, resize them, rename them, and show, hide or move
-individual values from the Devices tab exactly as with a radio device.
+that way. Your own location always wins once you set it. They are ordinary
+cards: drag them, resize them, rename them, and show, hide or move individual
+values from the Devices tab exactly as with a radio device.
 
 **Weather** shows current conditions and seven forecast days, each day its own
 value so you can keep the three you care about and hide the rest. Readings from
