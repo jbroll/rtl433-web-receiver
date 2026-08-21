@@ -89,6 +89,72 @@
   bridge stalls 5 seconds and fails every time a user sets their location.
   `a/b/$tz`-style source-scoped topics are unaffected; only a topic whose name itself
   starts with `$` is excluded.
+- `rotate()` in `src/token-store.js` assigns `current` before it writes the file, so a
+  failed persist leaves the live token rotated while the caller gets a `500` saying it
+  failed. With `AUTH_TOKEN_PATH` under a directory that does not exist: `POST /auth/rotate`
+  answers `500`, `store.get()` already returns the new token, the old one `401`s, and a
+  restart silently reverts to the value on disk. The operator is locked out of HTTP POST
+  and, in TLS mode, of MQTT CONNECT, believing rotation never happened. Write first, then
+  assign.
+- `writeFileSync` in `src/token-store.js` uses the default mode, so the persisted token
+  lands `0644`. On the `weather.rkroll.com` deploy the process runs as its own user, so
+  any other local account can read the secret that gates HTTP POST and MQTTS CONNECT.
+  `{ mode: 0o600 }` is the fix; neither `docs/install.md` nor `docs/user-manual.md` tells
+  the operator to lock the file down either.
+- `src/token-store.js` trims on read and not on write, so a token with surrounding
+  whitespace changes value across a restart. `{"token":"  tok  "}` passes the length check
+  in `src/server.js`, is persisted verbatim, and every client authenticates with the padded
+  form; after a restart the read path trims it and they all `401`. An all-whitespace token
+  trims to empty, `if (fromFile)` is false, and the store falls back to the `AUTH_TOKEN`
+  env value that was rotated away.
+- `/auth/rotate` dereferences `parsed.token` without checking that `parsed` is an object
+  (`src/server.js`), so a body of literal `null` throws and reaches the generic `500`
+  handler, where `123`, `"str"`, `[]` and `{"token":{}}` all correctly answer `400`.
+- The embedded broker reads its cert and key once at startup (`src/embedded-broker.js`)
+  and never calls `setSecureContext` or watches the files. `deploy.conf` includes
+  `letsencrypt`, so certbot rewrites them every 60 days and the MQTTS listener keeps
+  presenting the old certificate until handshakes start failing at day 90. HTTPS through
+  Apache is unaffected, so the symptom is external MQTT clients only, with nothing tying it
+  to the renewal.
+- `EMBED_BROKER` is tested as `=== 'false'` in `src/config.js`, so `0`, `no` and `FALSE`
+  all start aedes anyway, bind `MQTT_PORT`, overwrite `brokerUrl`, and serve an empty local
+  broker while `MQTT_URL` is ignored. `parsePort` rejects garbage loudly; this does not.
+  Same family as the `PORT=0x1F90` entry above.
+- The shutdown chain in `bin/mqtt-http-bridge.js` has no `.catch`, so a rejection from
+  `broker.end()` or `embedded.close()` becomes an unhandled rejection, `process.exit(0)` is
+  never reached, and the aedes listener on 8883 is never closed — the supervisor sees a
+  crash rather than a clean stop. `httpServer.close()` is fired in the same block but never
+  awaited.
+- `connected()` in `src/broker.js` reflects CONNACK only, never whether the `#`
+  subscription landed, which is at odds with what `docs/architecture.md` says the check is
+  for. It does not manifest against aedes, which drops the connection rather than returning
+  a failed SUBACK, so it could not be reproduced with the brokers in this repo. Against a
+  broker that answers `0x80` and stays connected, `GET /events` would return `200` and
+  stream nothing, topic `GET`s would `404` forever, and every `POST` would wait the full
+  echo timeout.
+- Nothing caps the number of concurrent SSE streams. Each `GET /events` adds a client with
+  no authentication and no `maxConnections`, plus a 15 s `setInterval` of its own. The
+  unbounded-`res.write` entry above covers one slow reader, not the count of readers.
+- Replay filters twice: `cache.match(filter)` has already established that the topic
+  matches, and then `client.send()` re-runs `filters.some(matchFilter)` over the whole list
+  for the same topic. Only the `replayed` Set in that second pass does real work.
+  Separately, `matchFilter` splits both filter and topic on every call and nothing caches
+  the split, even though a stream's filters are fixed for its lifetime, so each broadcast
+  costs `clients × filters` splits of the same strings.
+- `bin/mqtt-http-bridge.js` has no test at all. Untested: `parseArgs` wiring, the shared
+  `tokenStore` handoff to both `createBridge` and `startEmbeddedBroker`, `AUTH_TOKEN_PATH`
+  end to end, the TLS-mode `brokerUsername = 'bridge'` self-connection, the dashboard
+  `readFileSync`, and the signal-handler shutdown order `docs/architecture.md` documents.
+  `test/token-store.test.js` covers only the happy path, so neither the rotate-before-persist
+  nor the file-mode defect above would be caught; `src/sse.js`'s keepalive timer is never
+  exercised, so nothing would notice it stop emitting and let an idle proxy drop every
+  stream; and `test/rotate.test.js` covers wrong, missing, non-JSON and empty-string tokens
+  but not a non-object body or a whitespace one.
+- `scripts/build-dashboard.js` imports `../../dashboard/build.js`, which imports `esbuild`,
+  and `esbuild` is in neither `dependencies` nor `devDependencies`. `npm ci && npm run build`
+  fails with `ERR_MODULE_NOT_FOUND` anywhere `dashboard/node_modules` was not installed
+  separately, and from an npm-installed copy the relative path does not exist at all. The
+  package also declares a `bin` with no `files` field.
 - Clearing an alias does not clear it. `dashboard/src/alias.js` clears an alias by
   posting an empty string (2 JSON bytes, `""`), expecting the bridge to treat it as a
   delete. The bridge instead caches it as an ordinary non-empty retained message, so a

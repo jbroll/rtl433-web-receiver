@@ -4,6 +4,104 @@ Known gaps in the receiver, in rough priority order. None break it as it stands;
 found during review or hardware testing and deliberately left. Anything spanning
 sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
+## `reinitRadio()` reconfigures the SPI bus under the running receiver task
+
+The comment above `reinitRadio()` (`WebReceiver.ino:313-315`) says "the SPI bus mutex
+serializes the re-init against RSSI sampling." There is no such mutex: grepping
+`rtl_433_ESP` for `semaphore` or `mutex` returns nothing. `rf.initReceiver()` calls
+`radio.reset()` and `newSPI.begin(SCK, MISO, MOSI, CS)` from `loop()` while
+`rtl_433_ReceiverTask` is still driving the same bus in a tight `_getRSSI()` loop, gated
+only on `_enabledReceiver`, which `reinitRadio()` never clears. `radioTemperature()`
+gets this right: it calls `rf.disableReceiver()` and `delay(5)` first. `initReceiver()`
+also contains `delay(50)` retry paths, which guarantee the receiver task is scheduled
+mid-reconfiguration. When the health monitor fires a soft re-init (`WebReceiver.ino:471`)
+the radio can come back mis-registered — the deaf state the recovery exists to clear,
+now latched until a power cycle. The DIO2 interrupt stays attached across `radio.reset()`
+as well, so `interruptHandler` records garbage edges into `_pulseTrains` during it.
+Disabling the receiver around the re-init, as `radioTemperature()` does, is the fix; the
+comment goes either way.
+
+## A single failed boot-time connect strands the device in the portal
+
+`connectWiFi()` waits `WIFI_CONNECT_MS` (20 s) once (`WebReceiver.ino:526-528`), and on
+expiry enters `provisioning::run()`, whose `for(;;)` (`provisioning.cpp:246`) only exits
+through `ESP.restart()` from `handleSave()`. Mains power returns after an outage, the
+ESP32 boots in about two seconds while the router takes a minute to bring up its radio,
+and the device drops into the SoftAP portal and stays there. `serviceWiFi()`'s 30 s
+reconnect never runs, because `loop()` is never reached. Recovery means reprovisioning
+the board by hand. `architecture.md` documents the fallback as intended but not the
+no-retry consequence. Retrying the stored credentials a few times before falling back, or
+rebooting out of the portal after an idle timeout, would both close it.
+
+## The provisioning portal is an open AP that hands out an OTA token
+
+`WiFi.softAP(ap, nullptr)` (`provisioning.cpp:233`) brings up an unencrypted network, and
+`handleRoot()` (`:108-110`) generates a fresh token with `randomToken()` and renders it
+into the form on every GET; `handleSave()` (`:201`) stores whatever the form returns.
+Anyone in range of a board sitting in the portal — which the entry above makes reachable
+after an ordinary power outage — can join, submit their own SSID and a token they chose,
+and take the board onto their network with an OTA credential they control. `POST /$update`
+then accepts arbitrary firmware. A WPA2 password on the SoftAP, printed on the device or
+derived from the chip ID, is the smallest fix.
+
+## No authentication on the state-changing endpoints
+
+`handleTopic()` routes POST to `handleLayoutPost`, `handleLocationPost`, `handleTzPost`
+and `handleAliasPost` with no credential of any kind (`web_ui.cpp:296-298`), and the
+OPTIONS branch (`:503-509`) answers preflight with `Access-Control-Allow-Origin: *`,
+`Access-Control-Allow-Methods: GET, POST, OPTIONS` and `Access-Control-Allow-Headers:
+Content-Type` — exactly what a cross-origin JSON POST needs. The `ownSource` guard in each
+handler compares the request path against `signal_store::source()`, which the requester
+supplies, so it is not an origin check. Any page the user visits while on the same network
+can overwrite the receiver's layout, location, time zone and aliases, and read back every
+device payload. `web_ui.cpp:294` states the no-authentication design deliberately, but the
+write surface is what makes it more than a read exposure. Same root cause as the bridge's
+CORS entry; a shared token scheme would settle both.
+
+## A layout larger than about 1310 bytes never reaches a browser
+
+`FrameBuffer::_buf` is sized from `SIGNAL_PAYLOAD_MAX` (600) at `web_ui.cpp:208`, giving
+1363 bytes; `buildFrame()` spends roughly 52 on framing plus the `source/$layout` topic.
+`layout_store::set()` accepts anything under `LAYOUT_STORE_MAX` 2048 (`layout_store.cpp:30`)
+and `MQTT_MAX_PACKET_SIZE` 2200 carries it fine. Arrange enough cards and the POST returns
+204, NVS holds the blob, MQTT subscribers get it, but `broadcastLayout()` (`:850`) and the
+replay path in `drainReplay` (`:701`) both hit `frame.overflowed()`, log "SSE layout frame
+overflow", and drop it. Every other tab keeps the stale layout and a reload does not
+recover it. Either the frame buffer sizes to the largest thing that can go through it, or
+`layout_store` refuses what SSE cannot carry.
+
+## A failed sub claim leaves a device slot allocated
+
+`signal_store::record()` runs `claimSlot()` (which increments `_deviceCount`), copies the
+key, and sets `used = true` at `:254-258`, before `claimSub()` can fail at `:266-272`. When
+it does, `record()` does `_dropped++; return false;` and leaves a slot with `lastSeen == 0`,
+`count == 0` and no sub. With 32 subs already allocated and a new device promoted from
+pending, the store reports one more device than exists, `device()` orders a slot whose
+`latestPayload()` is NULL, a `GET` of its key answers 404, and nothing reclaims it until
+`sweepStale()` measures `millis() - 0` past `DEVICE_STALE_HOURS`. Claiming the sub first,
+or releasing the slot on the failure path, fixes it.
+
+## Recovery attempts write NVS without bound
+
+`health_store.h:22` says the recovery counters are "Bounded: once per recovery event," but
+recovery events are themselves unbounded when the radio is permanently deaf.
+`radio_health::decide()` re-arms every `RECOVERY_BACKOFF_MS` (120 s) and
+`monitorRadioHealth()` runs once per 60 s telemetry cycle, so a stuck SX1231 drives a
+`putUInt(recovery_count)` and a `putLong(last_recovery)` every two minutes for as long as
+the board is powered — about 720 entry writes a day. That is under flash endurance at a few
+thousand page erases a year, but it is the case `architecture.md` says the firmware
+deliberately never reboots for, so it runs indefinitely. Either cap the counter writes or
+correct the header.
+
+## Build-time secrets are readable in the firmware image
+
+`load_env.py` passes `WIFI_PASSWORD`, `OTA_TOKEN` and `MQTT_TOKEN` from `.env` to
+`platformio.ini` as `-D` string macros, and `ota_token_store.cpp:35` and
+`mqtt_publish_store.cpp:42,53` return them as fallbacks, so the literals link into
+`.rodata`. `.env` is gitignored and untracked, so nothing is in git history, but a `.bin`
+shared for flashing or an `esptool.py read_flash` on a recovered board yields all three as
+plain strings. Provisioning through the portal avoids it; the build-time path does not.
+
 ## No path in for sensors that are not 433 MHz decodes
 
 The receiver's own card proved the shape: anything recorded through
@@ -55,8 +153,11 @@ the `JsonDocument` constructor) removes it without touching the parse.
 ## Heap allocation on the decode path
 
 `signal_store::record()` builds a `JsonDocument` (`signal_store.cpp:116`) and
-calls `.as<String>()` on `doc["id"]` and `doc["channel"]` (`:64`, `:66`) for
-every decode. ArduinoJson 7
+calls `.as<String>()` on `doc["id"]`, `doc["channel"]` and `doc["message_type"]`
+(`:87`, `:89`, `:263`) for every decode — plus once per BMP280 sample and once
+per telemetry cycle. Each one heap-allocates a `String` only to copy it into a
+fixed buffer, where the underlying value is already an `int` or a
+`const char*`. ArduinoJson 7
 pools and reallocates, and `String` allocates outright, so both run against the
 project's "static allocation only" rule. They are transient and uniformly sized,
 so the footprint stays flat — free heap held steady across a 4 minute sample —
@@ -151,3 +252,34 @@ a gap for anyone who wants to disable OTA after enabling it.
   stopped client is not routed through `releaseSlot()`, so its filters and
   replay cursor stay set. Inert, because every reader gates on `_sse[i]` first
   and `handleEvents()` overwrites both when the slot is reused.
+- The OTA token is compared with Arduino `String::operator==`
+  (`web_ui.cpp:444-445`), which returns on the first differing byte. Over a LAN
+  with a TCP handshake per request, jitter swamps a one-byte delta, so this is
+  not practically exploitable; it is worth a constant-time compare only because
+  it guards the firmware-flash path.
+- `ALIAS_TOPIC_MAX` (96, `alias_store.h:6`) cannot hold a maximum-length device
+  key plus `/$alias`, since a key is capped at `SIGNAL_KEY_MAX` 96 too. A key
+  past 88 characters makes `alias_store::set()` reject the topic
+  (`alias_store.cpp:109`) and `handleAliasPost` report it as 503 "alias store
+  full", which is the wrong reason. Unreachable in practice: rtl_433 model names
+  top out near 30 characters and `mdnsHostname()` yields 13, so keys run to about
+  50. A long `MDNS_PREFIX` or an unusually long model name would reach it.
+- `load_env.py:33` does `shlex.split(value)[0]`, which raises `IndexError` on an
+  empty value — a blanked-out `MQTT_TOKEN=` aborts `pio run` with a traceback out
+  of an extra_script, naming no line — and silently takes only the first token of
+  an unquoted multi-word one, so `WIFI_PASSWORD=my pass` compiles the password as
+  `my` and the board just fails to associate.
+- `tools/fetch_coredump.sh:10` writes `core.bin` into `receiver/tools/`, which
+  `.gitignore` does not cover, so a `git add -A` would commit a flash dump holding
+  the WiFi password and OTA token that `load_env.py` compiled in. The same script
+  (`:8-11`) executes `$HOME/.platformio` paths with no existence check and
+  hardcodes the `0xFF0000 0x10000` offset rather than reading `partitions.csv`, so
+  a re-laid-out partition table reads the wrong 64 KiB and reports a corrupt dump.
+- `tools/flash-ota.js:65` calls `main()` with no `.catch()`, so an unreachable
+  host prints a raw `TypeError: fetch failed` stack instead of a message, and
+  `readEnvToken` (`:20`) does not strip a leading `export ` the way
+  `load_env.py:28-29` does, so a `.env` the firmware build accepts makes
+  flash-ota report "no OTA_TOKEN in the environment or receiver/.env".
+- `monitor.py:80-91` declares `--reset/-r` as `action="store_true",
+  default=True`, so the flag is a no-op and `args.reset` is never read (`:138`
+  tests `args.no_reset`). Harmless today, wrong the moment the default changes.
