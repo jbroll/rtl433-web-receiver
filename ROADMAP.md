@@ -47,9 +47,10 @@ real `bridge/`.
    and `Serial0` carries the boot-mode strap, so retargeting `Log` to
    `Serial` buys little for the risk.
 3. **Bridge auth and release.** Done when the dashboard can store and send a
-   per-source token against the bridge's existing auth path, and the bridge
-   is published to npm. Moved ahead of mobile because the mobile app reads
-   bridges over the internet.
+   per-source token against the bridge's existing auth path. Moved ahead of
+   mobile because the mobile app reads bridges over the internet. Publishing
+   to npm is deferred (see Ordered actions) — this repo's own deploys don't
+   need it.
 4. **Mobile app shippable on Android, beta on iOS.** Done when the dashboard
    mobile and first-run holes are closed, the suite runs against the real
    bridge, Android produces a signed release APK, and iOS produces a signed
@@ -77,7 +78,10 @@ and can run in parallel. Linearly, auth then mobile is simpler.
   auth path.
 - Cap `readBody` and add an SSE reader drop (existing backlog items,
   security-adjacent).
-- Publish the bridge to npm so the `bin` entry has an install path.
+- Publish the bridge to npm so the `bin` entry has an install path
+  (deferred — `deploy.sh`'s `node_app` module deploys from source, not via
+  npm, so this only matters for someone running the bridge standalone
+  outside this repo's own deploys).
 
 ### Goal 4 — Mobile
 
