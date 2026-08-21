@@ -89,6 +89,18 @@ dashboard POSTs the offset to `/$tz` when the location is set; `tz_store::set`
 persists it and pushes it into `device_hooks` so the rain hook's midnight
 boundary follows the user's timezone.
 
+**`layout_store.h` / `layout_store.cpp`** — persists the dashboard's
+site-default `$layout` (grid size, per-model card settings) as one opaque
+JSON blob in `Preferences` namespace `layout`, key `blob`, capped at
+`LAYOUT_STORE_MAX`, 2 KB — the same cap as `alias_store`'s table, for the
+same reason: a realistic layout (a handful of models) lands well under 1 KB
+in practice. Unlike `alias_store`'s table of topic/name pairs, there is
+exactly one `$layout` per receiver, so the blob is stored and served
+verbatim rather than parsed and reserialized — the receiver never inspects
+its contents, only the dashboard does. Its `FAKE_SIGNALS` `selfTest()` is
+host-tested by `test/host/run.sh` against the same `arduino_shim/` fakes as
+`alias_store` and `tz_store`.
+
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`, and
 `/$update` are the only registered routes; every topic is an arbitrary path,
 so `GET` and `POST` of a topic are both dispatched from
@@ -219,7 +231,9 @@ it never gets that far, so only the ROM bootloader's output shows the fault.
 calibration under `phy/cal_data` is the largest entry at ~1,950 bytes; the
 WiFi driver's own credentials in `nvs.net80211` are a few hundred; the
 `wifi_store` module's copy of those same credentials (namespace `wifi`) is
-under 100 bytes; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB.
+under 100 bytes; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB; the
+layout blob is capped at `LAYOUT_STORE_MAX`, another 2 KB. Worst-case usage
+across every store is still under 7 KB against the 20 KB partition.
 
 ## Data flow
 
@@ -253,7 +267,8 @@ carries a replay cursor and `web_ui::loop()` drains at most `REPLAY_PER_LOOP`
 write rather than losing it.
 
 The cursor walks flat indices — the sub table (0 through 31,
-`SIGNAL_SUB_TABLE`), then the alias table (32 through 63) — rather than
+`SIGNAL_SUB_TABLE`), then the alias table (32 through 63), then one final
+index for `$layout` (64) — rather than
 `signal_store::device(i)`'s recency order. `device(i)` re-sorts on every call
 and a device's position in it changes the moment it is heard from again, so a
 cursor stepping through that order could skip a device that has just moved
@@ -272,6 +287,16 @@ revisited, so its live frame is delivered immediately instead.
 `broadcast()` sends the device's newest sub, the one with the highest `seq`.
 A device updated after its sub was already sent is therefore never lost, and
 a device updated before the cursor reaches it is sent once, not twice.
+
+`FrameBuffer` (in `web_ui.cpp`) is sized for one device payload
+(`SIGNAL_PAYLOAD_MAX`, 600 bytes) doubled for the worst case of an escaped
+alias string, not for a `$layout` blob up to `LAYOUT_STORE_MAX` (2 KB). A
+`$layout` broadcast or replay frame that overflows it is dropped and logged
+(`web_ui.cpp`'s existing fail-safe, not a crash) rather than sent truncated;
+`GET /$layout` is unaffected, since it serves the stored blob directly, not
+through `FrameBuffer`. In practice a real `$layout` (a handful of models)
+stays well under the buffer's ~1.2 KB payload ceiling, the same margin the
+NVS budget above relies on.
 
 A sub swept before the cursor reaches it is simply not delivered: `subAt()`
 returns `NULL` for a swept sub, `slotAt()` for a slot already freed with it,
