@@ -64,7 +64,7 @@ test("a local location always wins over a source's network location", async ({ p
   }, [base(src)]);
   await page.goto(host.url);
   await page.click("#tab-devices");
-  await page.locator("#settings summary").click();
+  await page.locator("#subtab-settings").click();
   await expect(page.locator("#settings-lat")).toHaveValue("0");
 });
 
@@ -74,7 +74,7 @@ test("Save posts both $tz and $location when the serving origin is a configured 
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
   await page.click("#tab-devices");
-  await page.locator("#settings summary").click();
+  await page.locator("#subtab-settings").click();
   // setLocation is location.jsx's own commit path -- what a map click, a
   // geocode pick, or "Use my location" all funnel through to move lat/lon
   // together. A half-set coordinate resets to blank (settings.js's

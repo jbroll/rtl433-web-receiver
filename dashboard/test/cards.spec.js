@@ -80,7 +80,8 @@ test("a message with no time still renders, ages from arrival, and reaches the l
   const cardAge = page.locator(`.card[data-key$="${OREGON_KEY}"] .age`);
   await expect(cardAge).toHaveText(/^\d+[hms]/);
 
-  await page.click("#tab-log");
+  await page.click("#tab-devices");
+  await page.click("#subtab-log");
   const logTime = page.locator("#logrows tr").first().locator("td").first();
   await expect(logTime).not.toContainText("NaN");
   await expect(logTime).not.toContainText("Invalid");
@@ -161,7 +162,8 @@ test("the receiver's own card is shown without checking a box", async ({ page })
   await expect(card.locator('.val[data-f="heap_kB"] .u')).toHaveText("kB");
   await expect(card.locator('.val[data-f="radio_C"] .u')).toHaveText("°C");
 
-  await page.click("#tab-log");
+  await page.click("#tab-devices");
+  await page.click("#subtab-log");
   await expect(page.locator("#logrows tr")).toHaveCount(1);
   await expect(page.locator("#logrows")).not.toContainText("Receiver");
 });

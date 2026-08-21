@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { tab } from './app.jsx'
+import { tab, settingsTab } from './app.jsx'
 import { devices } from './devices.js'
 import { cardFields, cardHidden, setCardHidden, valueMode, setValueMode } from './store.js'
 import { aliasOf, postAlias, shortKey } from './alias.js'
@@ -141,7 +141,7 @@ export function DevicesView() {
   // open list across the re-render its own change triggers. Rendering an
   // empty tbody to "preserve" the rows instead removed every one of them.
   // Skipped entirely while another tab is up, which is most of the time.
-  const rows = tab.value === 'devices' ? <Rows /> : null
+  const rows = tab.value === 'devices' && settingsTab.value === 'devices' ? <Rows /> : null
 
   return (
     <>

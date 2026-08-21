@@ -1,5 +1,4 @@
 import { signal } from '@preact/signals'
-import { tab } from './app.jsx'
 
 const LOG_MAX = 200
 export const log = signal([])
@@ -12,7 +11,7 @@ export function addLog(at, raw) {
 
 export function LogView() {
   return (
-    <section id="view-log" hidden={tab.value !== 'log'}>
+    <section id="view-log">
       <table id="log">
         <tbody id="logrows">
           {log.value.map(entry => (

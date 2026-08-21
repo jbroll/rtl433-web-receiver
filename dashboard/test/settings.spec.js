@@ -28,13 +28,13 @@ async function showCards(page) {
 }
 
 async function openSettings(page) {
-  await page.locator("#settings summary").click();
-  await expect(page.locator("#settings")).toHaveJSProperty("open", true);
+  await page.click("#subtab-settings");
+  await expect(page.locator("#pane-settings")).toBeVisible();
 }
 
-test("the settings section is collapsed on load and holds the controls", async ({ page }) => {
+test("the Settings tab is reached from the Devices tab and holds the controls", async ({ page }) => {
   await open(page, [ACURITE]);
-  await expect(page.locator("#settings")).toHaveJSProperty("open", false);
+  await expect(page.locator("#pane-settings")).not.toBeVisible();
   await openSettings(page);
   await expect(page.locator("#settings-decimals")).toHaveValue("1");
   await expect(page.locator("#settings-units")).toHaveValue("metric");
@@ -49,6 +49,7 @@ test("changing decimals re-renders the card and the devices table", async ({ pag
   await page.click("#tab-devices");
   await openSettings(page);
   await page.locator("#settings-decimals").selectOption("3");
+  await page.click("#subtab-devices");
   const row = page.locator(`#devices tr:not(.vrow)[data-key$="${LONG_KEY}"]`);
   await expect(row).toContainText("21.797");
   await showCards(page);

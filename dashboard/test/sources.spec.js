@@ -20,7 +20,7 @@ function storedSources(page) {
 async function open(page, url) {
   await page.goto(url);
   await page.click("#tab-devices");
-  await page.click("#settings summary");
+  await page.click("#subtab-settings");
 }
 
 test("the scan button is absent outside a native shell", async ({ page }) => {
@@ -95,7 +95,7 @@ test("a binding origin is adopted, listed, and removable", async ({ page }) => {
   await page.click("#tab-devices");
   await expect(page.locator(`#devices tr[data-key="${base(src)} ${topicOf(ACURITE)}"]:not(.vrow)`))
     .toHaveCount(1);
-  await page.click("#settings summary");
+  await page.click("#subtab-settings");
   await expect(page.locator("#source-list li")).toHaveCount(1);
   await expect(page.locator("#source-list li .url")).toHaveText(base(src));
   await expect(page.locator("#source-list li .dot")).toHaveAttribute("data-state", "live");
@@ -110,7 +110,7 @@ test("removing the last source and reloading stays on Devices", async ({ page })
   await page.goto(src.url);
   await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
   await page.click("#tab-devices");
-  await page.click("#settings summary");
+  await page.click("#subtab-settings");
   await page.click("#source-list li button.rm");
   await expect(page.locator("#source-list li")).toHaveCount(0);
   expect(await storedSources(page)).toEqual([]);
@@ -131,12 +131,13 @@ test("a second source added from a device-served page keeps both", async ({ page
   await page.goto(a.url);
   await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
   await page.click("#tab-devices");
-  await page.click("#settings summary");
+  await page.click("#subtab-settings");
   await page.fill("#source-url", base(b));
   await page.click("#source-add");
   await expect(page.locator("#source-list li")).toHaveCount(2);
   expect(await storedSources(page)).toEqual([base(a), base(b)]);
   await expect(page.locator("#source-list li .dot[data-state=live]")).toHaveCount(2);
+  await page.click("#subtab-devices");
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(2);
   await expect(page.locator(`#devices tr[data-key="${base(a)} ${topicOf(ACURITE, "srcA")}"]:not(.vrow)`))
     .toHaveCount(1);

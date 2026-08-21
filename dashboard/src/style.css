@@ -183,8 +183,10 @@ section[hidden] { display:none; }
              box-shadow:0 4px 12px #0003; }
 
 #git-hash { display:block; font-size:.7rem; opacity:.5; padding:.4rem 1rem 0; }
-#settings { padding:.6rem 1rem; border-bottom:1px solid var(--line); }
-#settings summary { cursor:pointer; font-weight:600; }
+#view-devices nav.subnav { padding:.6rem 1rem 0; border-bottom:1px solid var(--line); gap:.4rem; display:flex; }
+#view-devices nav.subnav button { padding:.3rem .7rem; margin-bottom:-1px; }
+#pane-settings, #pane-devices, #pane-log { padding-top:.2rem; }
+#settings { padding:.6rem 1rem; }
 #settings label { margin-right:1rem; white-space:nowrap; }
 #settings select { font:inherit; background:Canvas; color:inherit; border:1px solid var(--line); }
 /* A rich value draws its own cell. container-type:size makes the cell the

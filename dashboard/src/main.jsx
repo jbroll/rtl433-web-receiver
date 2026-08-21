@@ -1,6 +1,6 @@
 import { render } from 'preact'
 import { effect } from '@preact/signals'
-import { App, tab } from './app.jsx'
+import { App, tab, settingsTab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
@@ -119,6 +119,7 @@ function abortProbe() {
   probe = null
   dropSource(base, stream)
   tab.value = 'devices'
+  settingsTab.value = 'settings'
 }
 
 function syncSources() {
@@ -207,6 +208,7 @@ effect(() => { tick.value; settings.value; pump() })
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()
-else tab.value = stored === 'empty' ? 'devices' : 'cards'
+else if (stored === 'empty') { tab.value = 'devices'; settingsTab.value = 'settings' }
+else tab.value = 'cards'
 
 syncSources()

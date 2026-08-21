@@ -10,8 +10,10 @@ import { setGrid, forgetLayouts, grid } from './store.js'
 import { layouts, postLayout, applyTemplate, disableAutoApply, layoutForSources } from './layout_template.js'
 
 export const tab = signal('cards')
+export const settingsTab = signal('devices')
 
-const TABS = ['cards', 'log']
+const TABS = ['cards']
+const SETTINGS_TABS = ['settings', 'devices', 'log']
 
 function Status() {
   const states = [...sourceState.value.values()]
@@ -119,10 +121,28 @@ export function App() {
         <CardsView />
       </section>
       <section id="view-devices" hidden={tab.value !== 'devices'}>
-        <SettingsView />
-        <DevicesView />
+        <nav class="subnav">
+          {SETTINGS_TABS.map((n) => (
+            <button
+              key={n}
+              id={`subtab-${n}`}
+              aria-selected={settingsTab.value === n}
+              onClick={() => { settingsTab.value = n }}
+            >
+              {n[0].toUpperCase() + n.slice(1)}
+            </button>
+          ))}
+        </nav>
+        <div id="pane-settings" hidden={settingsTab.value !== 'settings'}>
+          <SettingsView />
+        </div>
+        <div id="pane-devices" hidden={settingsTab.value !== 'devices'}>
+          <DevicesView />
+        </div>
+        <div id="pane-log" hidden={settingsTab.value !== 'log'}>
+          <LogView />
+        </div>
       </section>
-      <LogView />
     </>
   )
 }

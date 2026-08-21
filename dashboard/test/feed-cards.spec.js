@@ -66,9 +66,11 @@ test("a feed card keeps its size across a reload", async ({ page }) => {
   expect(span).toBe("span 3 / span 2");
 });
 
-test("the tabs read Cards, Log, with Devices behind the header gear", async ({ page }) => {
+test("the main bar reads just Cards, with Devices/Settings/Log behind the header gear", async ({ page }) => {
   server = await startPage();
   await page.goto(server.url);
-  await expect(page.locator("nav button")).toHaveText(["Cards", "Log"]);
+  await expect(page.locator("header nav button")).toHaveText(["Cards"]);
   await expect(page.locator("#tab-devices")).toBeVisible();
+  await page.click("#tab-devices");
+  await expect(page.locator("#view-devices nav.subnav button")).toHaveText(["Settings", "Devices", "Log"]);
 });

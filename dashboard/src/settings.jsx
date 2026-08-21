@@ -15,8 +15,7 @@ export function SettingsView() {
   const s = settings.value
 
   return (
-    <details id="settings">
-      <summary>Settings</summary>
+    <div id="settings">
       <div>
         <label>
           Decimals
@@ -52,6 +51,6 @@ export function SettingsView() {
       <div id="settings-sources">
         <SourcesView />
       </div>
-    </details>
+    </div>
   )
 }

@@ -87,7 +87,7 @@ test("observations arrive as readings the unit setting converts", async ({ page 
   await expect(c.locator(".fn .u")).toHaveText("°C");
 
   await page.locator("#tab-devices").click();
-  await page.locator("#settings summary").click();
+  await page.locator("#subtab-settings").click();
   await page.locator("#settings-units").selectOption("imperial");
   await page.locator("#tab-cards").click();
 

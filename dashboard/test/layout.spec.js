@@ -115,7 +115,7 @@ test("Save as default layout is absent when the serving origin isn't a connected
   servers.push(host, src);
   await page.goto(host.url);
   await page.click("#tab-devices");
-  await page.click("#settings summary");
+  await page.click("#subtab-settings");
   await page.fill("#source-url", src.url.replace(/\/$/, ""));
   await page.click("#source-add");
   await expect(page.locator("#source-list li .dot")).toHaveAttribute("data-state", "live");
