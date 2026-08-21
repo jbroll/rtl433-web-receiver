@@ -7,6 +7,8 @@ import { DevicesView } from './devices-table.jsx'
 import { SettingsView } from './settings.jsx'
 import { CardsView } from './cards.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
+import { sources } from './sources.js'
+import { layouts, postLayout, applyTemplate } from './layout_template.js'
 
 export const tab = signal('cards')
 
@@ -59,6 +61,28 @@ export function App() {
         >
           Forget layouts
         </button>
+        {sources.value.includes(location.origin) && (
+          <button
+            id="save-layout"
+            title="Save this arrangement as the site default"
+            onClick={() => { postLayout() }}
+          >
+            Save as default layout
+          </button>
+        )}
+        {layouts.value.has(location.origin) && (
+          <button
+            id="load-layout"
+            title="Load the site default layout"
+            onClick={() => {
+              if (confirm('Replace the current card arrangement with the site default layout?')) {
+                applyTemplate(layouts.value.get(location.origin))
+              }
+            }}
+          >
+            Load default layout
+          </button>
+        )}
         <span id="grid-size" title="Grid columns and rows">
           <input
             id="grid-cols"
