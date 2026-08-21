@@ -23,6 +23,7 @@
 #include "device_hooks.h"
 #include "health_store.h"
 #include "layout_store.h"
+#include "location_store.h"
 #include "mqtt_publish.h"
 #include "mqtt_publish_store.h"
 #include "ota_token_store.h"
@@ -533,6 +534,7 @@ void setup() {
   signal_store::addRecordHook(mqtt_publish::onRecord);
   alias_store::begin();
   layout_store::begin();
+  location_store::begin();
   web_ui::begin();
   rtl433Queue = xQueueCreate(RTL433_QUEUE_LEN, sizeof(SignalQueueItem));
   rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
@@ -542,6 +544,7 @@ void setup() {
   signal_store::selfTest();
   alias_store::selfTest();
   layout_store::selfTest();
+  location_store::selfTest();
   wifi_store::selfTest();
   ota_token_store::selfTest();
   mqtt_publish_store::selfTest();
