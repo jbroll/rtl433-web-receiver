@@ -57,7 +57,10 @@ static bool check(const char* what, bool ok) {
 bool selfTest() {
   bool ok = true;
 
+  // Suppress NVS traffic across the set() calls below; set() checks the
+  // size cap before its _open check, so the cap tests still work.
   bool saved_open = _open;
+  _open           = false;
 
   _blob[0] = '\0';
   ok &= check("nothing stored reads as empty", strcmp(get(), "") == 0);
