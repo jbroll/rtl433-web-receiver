@@ -195,6 +195,16 @@ test('setLocation POSTs both /$tz and /$location when the origin is a configured
   globalThis.fetch = async () => ({})
 })
 
+test('setLocation does not POST a blanked location when only the fallback has one', async () => {
+  const posted = []
+  globalThis.fetch = async (url) => { posted.push(url); return {} }
+  sources.value = ['http://receiver.test']
+  onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'Europe/Berlin', zoom: 11 })
+  setLocation({ lat: 40.015 })
+  assert.deepEqual(posted, [])
+  globalThis.fetch = async () => ({})
+})
+
 test('onLocationFrame stores a valid object and clears on a non-object payload', () => {
   onLocationFrame('http://a', { lat: 10, lon: 20, label: '', zone: '', zoom: 5 })
   assert.equal(locations.value.get('http://a').lat, 10)
@@ -214,6 +224,12 @@ test('locationForSources picks the first source in order that published one', ()
   assert.equal(locationForSources(map, ['http://a', 'http://b']).lat, 2)
   assert.equal(locationForSources(map, ['http://c', 'http://b']).lat, 1)
   assert.equal(locationForSources(map, ['http://c']), null)
+})
+
+test('locationForSources skips a coordinate-less entry', () => {
+  const map = new Map([['http://a', { lat: null, lon: null }], ['http://b', { lat: 2, lon: 2 }]])
+  assert.equal(locationForSources(map, ['http://a', 'http://b']).lat, 2)
+  assert.equal(locationForSources(map, ['http://a']), null)
 })
 
 test('hasLocation falls back to a configured source with no local location set', () => {

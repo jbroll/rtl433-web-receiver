@@ -36,6 +36,20 @@ test("a $location retained before connect makes feed cards appear with no local 
   await expect(page.locator(SUN_CARD)).toBeVisible();
 });
 
+test("a $location arriving mid-session makes feed cards appear without a reload", async ({ page }) => {
+  const host = await startPage();
+  const src = await startServer({ devices: [ACURITE], source: "srcA" });
+  servers.push(host, src);
+  await withSources(page, host, [base(src)]);
+  // A live stream makes the missing Clock card a real absence rather than a
+  // page that has not connected yet.
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.click("#tab-cards");
+  await expect(page.locator(CLOCK_CARD)).toHaveCount(0);
+  await src.emitLocation(BOULDER);
+  await expect(page.locator(CLOCK_CARD)).toBeVisible();
+});
+
 test("a local location always wins over a source's network location", async ({ page }) => {
   const host = await startPage();
   const src = await startServer({ devices: [ACURITE], source: "srcA" });

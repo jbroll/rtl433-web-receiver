@@ -80,7 +80,9 @@ export function onTzFrame(base, payload) {
 export function locationForSources(locationsMap, srcs) {
   for (const base of srcs) {
     const l = locationsMap.get(base)
-    if (l) return l
+    // A coordinate-less entry is not a candidate: taking it would shadow a
+    // later source that has a real one.
+    if (l && l.lat !== null && l.lon !== null) return l
   }
   return null
 }
@@ -152,9 +154,12 @@ export function setLocation(next) {
   settings.value = { ...settings.value, location: clean }
   saveSettings()
   // Gated the same way the $layout Save button is: publishing to a source is
-  // only meaningful when this page is served by that source.
-  if (hasLocation() && sources.value.includes(location.origin)) {
-    const offset = offsetMinutes(new Date(), activeZone())
+  // only meaningful when this page is served by that source. The value gate is
+  // `clean` itself, never hasLocation() -- that resolves through the network
+  // fallback, so a blank local edit would publish over the receiver's own
+  // stored location.
+  if (clean.lat !== null && clean.lon !== null && sources.value.includes(location.origin)) {
+    const offset = offsetMinutes(new Date(), clean.zone || localZone())
     fetch(`${location.origin}/$tz`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

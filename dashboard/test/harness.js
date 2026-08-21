@@ -86,6 +86,10 @@ export async function startServer(opts = {}) {
     await fixture.publish(source + LOCATION_SUFFIX, JSON.stringify(loc));
   }
 
+  // The receiver's $tz is never unset -- it defaults to -240 and replays on
+  // every connect, so the model retains one from the start too.
+  await fixture.publish(source + "/$tz", JSON.stringify(tzOffsetValue));
+
   for (const p of opts.devices || []) await emit(p);
 
   const body = page();
