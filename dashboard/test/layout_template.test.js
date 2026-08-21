@@ -52,7 +52,20 @@ test('deriveTemplate groups cards by model, skipping feeds and modelless devices
   assert.deepEqual(t.order, ['Acurite-5n1'])
   assert.ok(t.models['Acurite-5n1'])
   assert.equal(t.models['Acurite-5n1'].valueOrder.includes('temperature_C'), true)
+  // ensureCard hides a newly created card by default (hideNewCards), so a
+  // freshly-created card's model entry records hidden: true.
+  assert.equal(t.models['Acurite-5n1'].hidden, true)
   assert.equal(Object.keys(t.models).includes(undefined), false)
+})
+
+test('deriveTemplate records a shown device as hidden: false', () => {
+  addDevice(KEY, 'Acurite-5n1')
+  ensureCard(KEY, { temperature_C: 21 })
+  cardState.value = { ...cardState.value, hidden: cardState.value.hidden.filter(k => k !== KEY) }
+  saveCardState()
+
+  const t = deriveTemplate()
+  assert.equal(t.models['Acurite-5n1'].hidden, false)
 })
 
 test('deriveTemplate keeps grid dimensions', () => {
@@ -121,10 +134,71 @@ test('applyTemplate clamps grid dimensions and rejects malformed arrays', () => 
     },
   }
   applyTemplate(template)
-  assert.equal(cardState.value.grid.cols, cardState.value.grid.cols <= 24 ? cardState.value.grid.cols : 0)
-  assert.ok(cardState.value.grid.cols <= 24)
+  assert.equal(cardState.value.grid.cols, 6)
+  assert.equal(cardState.value.grid.rows, 4)
   assert.deepEqual(cardState.value.cards[KEY].valueOrder, ['a'])
   assert.deepEqual(cardState.value.cards[KEY].hiddenValues, [])
+})
+
+test('applyTemplate un-hides a matched device whose template entry says hidden: false', () => {
+  addDevice(KEY, 'Acurite-5n1')
+  cardState.value = { ...cardState.value, hidden: [KEY] }
+  const template = {
+    grid: { cols: 6, rows: 4 },
+    order: ['Acurite-5n1'],
+    models: {
+      'Acurite-5n1': {
+        w: 1, h: 1, valueOrder: [], hiddenValues: [], bottomValues: [], hidden: false,
+      },
+    },
+  }
+  applyTemplate(template)
+  assert.equal(cardState.value.hidden.includes(KEY), false)
+})
+
+test('applyTemplate hides a matched device whose template entry says hidden: true', () => {
+  addDevice(KEY, 'Acurite-5n1')
+  const template = {
+    grid: { cols: 6, rows: 4 },
+    order: ['Acurite-5n1'],
+    models: {
+      'Acurite-5n1': {
+        w: 1, h: 1, valueOrder: [], hiddenValues: [], bottomValues: [], hidden: true,
+      },
+    },
+  }
+  applyTemplate(template)
+  assert.equal(cardState.value.hidden.includes(KEY), true)
+})
+
+test('applyTemplate leaves an unmatched device\'s hidden state untouched', () => {
+  const UNMATCHED_KEY = `${BASE} src/Other/9`
+  addDevice(KEY, 'Acurite-5n1')
+  addDevice(UNMATCHED_KEY, 'SomeOtherModel')
+  cardState.value = {
+    ...cardState.value,
+    order: [UNMATCHED_KEY, KEY],
+    hidden: [UNMATCHED_KEY],
+  }
+  const template = {
+    grid: { cols: 6, rows: 4 },
+    order: ['Acurite-5n1'],
+    models: { 'Acurite-5n1': { w: 1, h: 1, valueOrder: [], hiddenValues: [], bottomValues: [] } },
+  }
+  applyTemplate(template)
+  assert.equal(cardState.value.hidden.includes(UNMATCHED_KEY), true)
+})
+
+test('applyTemplate treats a missing hidden field as shown, for backward compatibility', () => {
+  addDevice(KEY, 'Acurite-5n1')
+  cardState.value = { ...cardState.value, hidden: [KEY] }
+  const template = {
+    grid: { cols: 6, rows: 4 },
+    order: ['Acurite-5n1'],
+    models: { 'Acurite-5n1': { w: 1, h: 1, valueOrder: [], hiddenValues: [], bottomValues: [] } },
+  }
+  applyTemplate(template)
+  assert.equal(cardState.value.hidden.includes(KEY), false)
 })
 
 test('applyTemplate on a malformed (non-object) template is a no-op', () => {

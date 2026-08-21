@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { startServer, startPage } from "./harness.js";
-import { ACURITE } from "./fixtures.js";
+import { ACURITE, topicOf } from "./fixtures.js";
+
+const ACURITE_KEY = topicOf(ACURITE);
 
 const TEMPLATE = {
   grid: { cols: 8, rows: 5 },
@@ -38,6 +40,9 @@ test("a $layout retained before connect auto-applies when nothing is stored loca
   await expect(page.locator("#status")).toHaveText(/^live/);
   await expect(page.locator("#grid-cols")).toHaveValue("8");
   await expect(page.locator("#grid-rows")).toHaveValue("5");
+  // hideNewCards hides a fresh device's card by default; auto-apply must
+  // un-hide it since the template's model entry carries no hidden: true.
+  await expect(page.locator(`.card[data-key$="${ACURITE_KEY}"]`)).toBeVisible();
 });
 
 test("a $layout frame does not auto-apply once a local layout already exists", async ({ page }) => {
@@ -76,6 +81,7 @@ test("Load default layout is offered once a $layout frame arrives, and applies o
   const server = await open(page, [ACURITE]);
   await expect(page.locator("#load-layout")).toHaveCount(0);
   server.emitLayout(TEMPLATE);
+  await page.click("#edit-cards");
   await expect(page.locator("#load-layout")).toBeVisible();
   page.once("dialog", d => d.accept());
   await page.click("#load-layout");

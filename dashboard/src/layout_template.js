@@ -1,11 +1,12 @@
 import { signal } from '@preact/signals'
-import { cardState, gridNum, saveCardState } from './store.js'
+import { cardState, gridNum, saveCardState, cardHidden } from './store.js'
 import { devices } from './devices.js'
 import { isFeed } from './alias.js'
 
 export const LAYOUT_SUFFIX = '/$layout'
 export const layouts = signal(new Map())
 
+// One-way latch for the lifetime of the page load -- never re-enabled once disabled.
 export let autoApplyEligible = true
 
 export function disableAutoApply() {
@@ -34,6 +35,7 @@ export function deriveTemplate() {
       valueOrder: c.valueOrder.slice(),
       hiddenValues: c.hiddenValues.slice(),
       bottomValues: (c.bottomValues || []).slice(),
+      hidden: cardHidden(key),
     }
     order.push(model)
   }
@@ -61,6 +63,7 @@ export function applyTemplate(template) {
 
   const matched = []
   const seenKeys = new Set()
+  const hiddenByKey = new Map()
   for (const model of modelOrder) {
     const spec = modelsIn[model]
     if (!spec || typeof spec !== 'object') continue
@@ -79,14 +82,20 @@ export function applyTemplate(template) {
         bottomValues: Array.isArray(spec.bottomValues)
           ? spec.bottomValues.filter(f => typeof f === 'string') : [],
       }
+      hiddenByKey.set(key, spec.hidden === true)
     }
   }
   const unmatched = s.order.filter(k => !seenKeys.has(k))
 
+  const nextHidden = s.hidden.filter(k => !hiddenByKey.has(k))
+  for (const [key, hidden] of hiddenByKey) {
+    if (hidden) nextHidden.push(key)
+  }
+
   cardState.value = {
     grid: nextGrid,
     order: matched.concat(unmatched),
-    hidden: s.hidden.slice(),
+    hidden: nextHidden,
     cards: nextCards,
   }
   saveCardState()
