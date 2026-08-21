@@ -113,6 +113,29 @@ saved. The shape of the object itself (`grid`/`order`/`models`) is a
 dashboard convention, not part of this binding — a bridge or a receiver
 never inspects it, only stores and forwards it.
 
+## Location
+
+`<source>/$location` holds one JSON object: the receiver's configured
+location and timezone name, the same shape `settings.value.location` uses on
+the dashboard. It round-trips through `GET`, `POST`, and a `#` subscription
+like any other topic — there is nothing binding-specific about it, it is
+simply a topic whose payload happens to be a location rather than a sensor
+reading or a name.
+
+    rtl433-a1b2c3/$location   {"lat":40.015,"lon":-105.2705,"label":"Boulder","zone":"America/Denver","zoom":12}
+
+A missing `$location` is not an error; it means no location has been saved.
+The shape of the object itself is a dashboard convention, not part of this
+binding — a bridge or a receiver never inspects it, only stores and forwards
+it.
+
+`<source>/$tz` holds the receiver's UTC offset in whole minutes, as a JSON
+number, used to set the receiver's own clock. It round-trips the same way;
+unlike `$location` and `$layout`, it is never unset — a fresh receiver's
+`$tz` defaults to `-240`.
+
+    rtl433-a1b2c3/$tz   -420
+
 ## Errors
 
 | Status | When |
@@ -130,7 +153,7 @@ accepting it, so a client can tell what will actually happen.
 of this binding has to gate writes behind a token, and a client should not assume
 one that doesn't answers `401` to anything. The receiver's own source-only subset
 keeps its existing `405` answer for a `POST` to anything other than `$alias`,
-`$tz`, or `$layout` regardless.
+`$tz`, `$layout`, or `$location` regardless.
 
 Every response carries `Access-Control-Allow-Origin: *`, so a dashboard on any
 origin can read any source.
@@ -145,7 +168,8 @@ topic space. Retained messages come from the broker's own retain. Publishing to
 
 **The receiver's source-only subset** serves `GET` and `/events` for topics
 under its own `source`, and accepts `POST` only to its own `$alias`, `$tz`,
-and `$layout` topics, each persisted to NVS. Every other `POST` is `405`.
+`$layout`, and `$location` topics, each persisted to NVS. Every other `POST`
+is `405`.
 Its `source` is the existing mDNS name, `rtl433-a1b2c3`.
 
 What the binding deliberately does not have: QoS, an addressable retain flag,
@@ -168,9 +192,12 @@ The spec is the test list. Both implementations run the same cases:
 - A subscriber receives retained messages on connect before any live one.
 - `$alias` round-trips through `GET`, `POST`, and a `#` subscription, and a
   device with no alias omits the topic rather than returning an empty string.
+- `$location` and `$tz` round-trip through `GET`, `POST`, and a `#`
+  subscription the same way `$layout` does; `$tz`'s `GET` never `404`s, since
+  a receiver always has some offset.
 - The receiver returns `405` for a `POST` to a topic that is not `$alias`,
-  `$tz`, or `$layout`, and a value written to any of the three survives a
-  reboot.
+  `$tz`, `$layout`, or `$location`, and a value written to any of the four
+  survives a reboot.
 
 ## What this unblocked
 
