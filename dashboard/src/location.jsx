@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { settings, setLocation, clearLocation, hasLocation, localZone } from './settings.js'
+import { settings, setLocation, clearLocation, localZone } from './settings.js'
 import { geocode, reverseGeocode } from './geocode.js'
 import { Map, Marker } from 'pigeon-maps'
 
@@ -28,6 +28,7 @@ function num(v) {
 
 export function LocationView() {
   const loc = settings.value.location
+  const hasLocal = loc.lat !== null && loc.lon !== null
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [status, setStatus] = useState('')
@@ -119,7 +120,7 @@ export function LocationView() {
             {TZ.map(z => <option key={z} value={z}>{z}</option>)}
           </select>
         </label>
-        {hasLocation() && <button id="settings-location-clear" onClick={clearLocation}>Clear</button>}
+        {hasLocal && <button id="settings-location-clear" onClick={clearLocation}>Clear</button>}
       </div>
 
       <div id="settings-map">
@@ -143,7 +144,7 @@ export function LocationView() {
       </div>
 
       <div id="settings-location-status">
-        {status || (hasLocation() ? loc.label || `${loc.lat}, ${loc.lon}` : 'No location set')}
+        {status || (hasLocal ? loc.label || `${loc.lat}, ${loc.lon}` : 'No location set')}
       </div>
     </div>
   )
