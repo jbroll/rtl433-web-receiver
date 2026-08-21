@@ -18,8 +18,9 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
   status endpoint, not published to a registry, slow-SSE and unbounded-body
   gaps, and the dashboard has no field to store a per-source token yet.
 - **`dashboard/`** — one self-contained `index.html` built from Preact sources
-  by esbuild. Mobile and first-run holes: 360 px viewport overflow, scrollbar
-  jitter, empty state broken for the Capacitor shell.
+  by esbuild. The Capacitor empty state and the 360 px viewport
+  overflow/scrollbar jitter are fixed; the suite still runs against a fake
+  bridge, not the real one.
 - **`app/`** — Capacitor 8 shell. Android debug APK builds on the `gpu` CI
   host. iOS builds unsigned on macOS via GitHub Actions. Nothing signed,
   nothing in a store.
@@ -85,10 +86,9 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 
 ### Goal 4 — Mobile
 
-- Dashboard: origin auto-probe on the (already-added) sources tab, closing
-  the Capacitor empty state; fix `measureGrid()` 360 px overflow and
-  scrollbar jitter; drive the suite against the real `bridge/` over an
-  in-process `aedes`.
+- Dashboard: drive the suite against the real `bridge/` over an in-process
+  `aedes` (origin auto-probe/empty-state and the `measureGrid()` overflow and
+  scrollbar jitter are done).
 - App: signed Android release APK (keystore, `--release`); signed iOS
   TestFlight build via the macOS CI; write `app/docs/quickstart.md`.
 

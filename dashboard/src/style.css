@@ -1,4 +1,4 @@
-:root { color-scheme: light dark; --line:#8883; }
+:root { color-scheme: light dark; --line:#8883; scrollbar-gutter: stable; }
 body { margin:0; font:14px/1.4 system-ui,sans-serif; }
 header { display:flex; gap:1rem; align-items:baseline; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
 h1 { font-size:1rem; margin:0; font-weight:600; }

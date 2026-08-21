@@ -400,6 +400,23 @@ test("the cell side is the smaller of the two divisions and re-measures on resiz
   }
 });
 
+test("the 20px floor never overflows the viewport width", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await setGrid(page, 24, 4);
+  await page.waitForTimeout(120);
+
+  const m = await page.evaluate(() => {
+    const g = document.getElementById("cards");
+    const cs = getComputedStyle(g);
+    return {
+      cell: cellSide,
+      width: g.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+    };
+  });
+  expect(m.cell * 24).toBeLessThanOrEqual(m.width + 0.5);
+});
+
 test("an entry with no stored size is sized from its value count", async ({ page }) => {
   await open(page, [LONGNAME]);
   await page.evaluate(k => localStorage.setItem("rtl433.dashboard.v1", JSON.stringify({

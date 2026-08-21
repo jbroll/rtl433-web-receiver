@@ -3,28 +3,9 @@
 - The suite runs against `receiver/test/binding-server.js`, a JS model of the binding,
   not against the real `bridge/`. Running it over an in-process `aedes` would test what
   ships. See [`../../docs/backlog.md`](../../docs/backlog.md).
-- Adding a source to the firmware-served page evicts the device serving it. `sources()`
-  falls back to `[location.origin]` only while the stored list is empty, so the first
-  `addSource()` makes the fallback stop applying: `syncSources()` closes the origin's
-  stream and `clearSource()` drops its devices, cards, and aliases. The panel never listed
-  that origin, so nothing on screen says where they went. Promoting the implicit origin
-  into the stored list before the first add would fix both, at the cost of storing an
-  address DHCP can change.
-- The sources panel should be a fourth tab, and with nothing stored the page should probe
-  its own origin and adopt it as the first source if a binding answers, instead of
-  `sources()` falling back to it at read time. The landing tab is then Sources when the
-  list is empty and Cards when it is not, which is the empty state the Capacitor shell
-  needs and which a page served by a device or a bridge never reaches. Filed in
-  [`../../docs/backlog.md`](../../docs/backlog.md).
 - A device seen through two bridges is two cards. Nothing merges them.
 - No authentication to a source. The bridge has none, and a dashboard reaching one over
   anything but localhost inherits that. Filed in the bridge's backlog.
-- `measureGrid()` floors the cell side at 20px, which breaks letterboxing: at 24 columns
-  on a 360px viewport the grid comes out 480px wide and the page scrolls sideways.
-- Cards overflowing the row count grow a scrollbar, which shrinks `#cards`'s
-  `clientWidth` and so the next cell size. It settles rather than looping, but the grid
-  visibly jitters between two sizes. Fixing it means measuring against
-  `documentElement.clientWidth` or reserving the scrollbar gutter.
 - `setValueMode`, `setCardHidden`, `setGrid`, and a rename committed with Enter all save
   layout, and all are reachable with a second finger while a resize is in flight, which
   the project's rules say must not write. No corruption results today: the in-flight

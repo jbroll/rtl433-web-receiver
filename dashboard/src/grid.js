@@ -20,7 +20,10 @@ export function measureGrid() {
   const top = grid.getBoundingClientRect().top + window.scrollY
   const height = window.innerHeight - top
                  - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
-  cell = Math.max(20, Math.min(width / g.cols, height / g.rows))
+  // The 20px floor is a legibility minimum, not a guarantee: honoring it when
+  // the viewport can't fit g.cols at 20px would overflow the page sideways.
+  const fit = Math.min(width / g.cols, height / g.rows)
+  cell = width / g.cols >= 20 ? Math.max(20, fit) : fit
   cellSignal.value = cell
   grid.style.setProperty("--cell", cell + "px")
   grid.style.gridTemplateColumns = "repeat(" + g.cols + ",var(--cell))"
