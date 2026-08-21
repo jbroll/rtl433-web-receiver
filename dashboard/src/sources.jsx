@@ -29,9 +29,17 @@ function ScanButton() {
 
   async function scan() {
     setState({ status: 'scanning', found: [] })
-    const result = await mDNS.discover({ type: '_http._tcp.', timeout: 4000 })
-    const found = (result.services || []).filter(s => s.name && s.name.startsWith(MDNS_NAME_PREFIX))
-    setState({ status: 'done', found })
+    try {
+      const result = await mDNS.discover({ type: '_http._tcp.', timeout: 4000 })
+      if (result.error) {
+        setState({ status: 'error', found: [], message: result.errorMessage || 'Scan failed.' })
+        return
+      }
+      const found = (result.services || []).filter(s => s.name && s.name.startsWith(MDNS_NAME_PREFIX))
+      setState({ status: 'done', found })
+    } catch (err) {
+      setState({ status: 'error', found: [], message: (err && err.message) || 'Scan failed.' })
+    }
   }
 
   return (
@@ -39,6 +47,9 @@ function ScanButton() {
       <button type="button" onClick={scan} disabled={state.status === 'scanning'}>
         {state.status === 'scanning' ? 'Scanning…' : 'Scan for receivers'}
       </button>
+      {state.status === 'error' && (
+        <p class="hint" role="alert">{state.message}</p>
+      )}
       {state.status === 'done' && state.found.length === 0 && (
         <p class="hint">No receivers found.</p>
       )}
