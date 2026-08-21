@@ -110,6 +110,7 @@ static radio_health::HealthState healthState;
 static bool                      bootCoredumpPending = false;
 static bool                      bootUtcStamped = false;
 static bool                      bmp280_ok = false;
+static uint8_t                   bmp280_addr = 0;
 static Adafruit_BMP280           bmp280;
 
 bool wifiReady() {
@@ -367,9 +368,9 @@ static void recordBMP280() {
 
   char buf[JSON_MSG_BUFFER];
   snprintf(buf, sizeof(buf),
-           "{\"model\":\"BMP280\",\"id\":\"%s-bmp280\",\"channel\":1,"
+           "{\"model\":\"BMP280\",\"id\":\"%#04x\",\"channel\":1,"
            "\"temperature_C\":%.2f,\"pressure_hPa\":%.2f}",
-           mdnsHostname(), t, p);
+           bmp280_addr, t, p);
   Log.notice(F("BMP280: %s" CR), buf);
 
   if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0)) {
@@ -490,9 +491,15 @@ void setup() {
   }
 
   Wire.begin(21, 47);
-  if (bmp280.begin(0x76) || bmp280.begin(0x77)) {
+  if (bmp280.begin(0x76)) {
     bmp280_ok = true;
-    Log.notice(F("BMP280 initialized" CR));
+    bmp280_addr = 0x76;
+  } else if (bmp280.begin(0x77)) {
+    bmp280_ok = true;
+    bmp280_addr = 0x77;
+  }
+  if (bmp280_ok) {
+    Log.notice(F("BMP280 initialized at 0x%02x" CR), bmp280_addr);
   } else {
     Log.warning(F("BMP280 not found on I2C" CR));
   }
