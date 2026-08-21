@@ -392,8 +392,8 @@ I2C is on GPIO 21/47 for a BMP280/AHT20 sensor bus:
 
 | Signal | GPIO | Freenove header |
 |---|---|---|
-| SCL | 21 | right 17 |
-| SDA | 47 | right 16 |
+| SDA | 21 | right 17 |
+| SCL | 47 | right 16 |
 
 The SDMMC pins (38–40) are repurposed for the radio, so the Freenove microSD
 socket is not usable.
