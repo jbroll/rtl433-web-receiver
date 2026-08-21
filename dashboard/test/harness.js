@@ -10,6 +10,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(HERE, "..", "dist", "index.html");
 const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
+const LAYOUT_SUFFIX = "/$layout";
 
 // Built once per run: every test loads the same artifact the firmware embeds.
 let html = null;
@@ -76,6 +77,10 @@ export async function startServer(opts = {}) {
     await fixture.publish(deviceTopic + ALIAS_SUFFIX, JSON.stringify(name));
   }
 
+  async function emitLayout(template) {
+    await fixture.publish(source + LAYOUT_SUFFIX, JSON.stringify(template));
+  }
+
   for (const p of opts.devices || []) await emit(p);
 
   const body = page();
@@ -95,7 +100,7 @@ export async function startServer(opts = {}) {
         return;
       }
       const last = topic.split("/").pop();
-      if (last === "$tz" || last === "$alias") {
+      if (last === "$tz" || last === "$alias" || last === "$layout") {
         try {
           await postToReceiver(req, res, topic, last);
         } catch (err) {
@@ -112,12 +117,16 @@ export async function startServer(opts = {}) {
     proxyToFixture(req, res, fixture.httpPort);
   });
 
-  // Two POST paths the firmware's own binding owns, which the bridge does not
-  // implement: MQTT reserves a leading '$', so a "$tz" publish never comes
-  // back on the bridge's '#' subscription and its POST answers 503; and an
-  // empty alias means delete the retained message, which the bridge stores as
-  // the string it is. Both are kept here rather than in the bridge because
-  // both are what receiver/test/binding-server.js did.
+  // Three POST paths the firmware's own binding owns, which the bridge does
+  // not implement: MQTT reserves a leading '$', so a bare "$tz" or "$layout"
+  // publish never comes back on the bridge's '#' subscription and its POST
+  // answers 503 — the real receiver sidesteps this by always canonicalizing
+  // to <source>/$tz or <source>/$layout before broadcasting, regardless of
+  // what path was POSTed, so this does the same before handing off to the
+  // bridge; and an empty alias means delete the retained message, which the
+  // bridge stores as the string it is. All three are kept here rather than
+  // in the bridge because all three are what receiver/test/binding-server.js
+  // did.
   async function postToReceiver(req, res, topic, last) {
     const raw = await readBody(req);
     let value;
@@ -132,6 +141,15 @@ export async function startServer(opts = {}) {
         return;
       }
       tzOffsetValue = Math.round(value);
+      res.writeHead(204).end();
+      return;
+    }
+    if (last === "$layout") {
+      if (value === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+        res.writeHead(400).end("body must be a JSON object");
+        return;
+      }
+      await fixture.publish(source + LAYOUT_SUFFIX, JSON.stringify(value));
       res.writeHead(204).end();
       return;
     }
@@ -156,6 +174,7 @@ export async function startServer(opts = {}) {
     source: source,
     emit(payload, meta) { return emit(payload, meta); },
     emitAlias(deviceTopic, name) { return emitAlias(deviceTopic, name); },
+    emitLayout(template) { return emitLayout(template); },
     get(topic) { return fixture.get(topic); },
     setBuild(id) { build = id; },
     tzOffset() { return tzOffsetValue; },
