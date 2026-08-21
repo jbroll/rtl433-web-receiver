@@ -11,10 +11,10 @@ test.afterEach(async () => { if (server) await server.close(); server = null; })
 // startPage serves the bundle with no binding behind it, so the page has no
 // source and the device cap is zero. That is the case a feed has to survive.
 // startPage serves no binding, so the origin probe fails and the app settles
-// on the sources tab. Wait that out before switching to cards, or the abort
-// lands after the click and puts the tab back.
+// on the Devices/Settings tab. Wait that out before switching to cards, or
+// the abort lands after the click and puts the tab back.
 async function openCards(page) {
-  await expect(page.locator("#tab-sources")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#tab-devices")).toHaveAttribute("aria-selected", "true");
   await page.locator("#tab-cards").click();
   await expect(page.locator("#cards")).toBeVisible();
 }
@@ -66,8 +66,9 @@ test("a feed card keeps its size across a reload", async ({ page }) => {
   expect(span).toBe("span 3 / span 2");
 });
 
-test("the tabs read Cards, Devices, Sources, Log", async ({ page }) => {
+test("the tabs read Cards, Log, with Devices behind the header gear", async ({ page }) => {
   server = await startPage();
   await page.goto(server.url);
-  await expect(page.locator("nav button")).toHaveText(["Cards", "Devices", "Sources", "Log"]);
+  await expect(page.locator("nav button")).toHaveText(["Cards", "Log"]);
+  await expect(page.locator("#tab-devices")).toBeVisible();
 });

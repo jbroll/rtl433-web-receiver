@@ -1,10 +1,23 @@
 :root { color-scheme: light dark; --line:#8883; scrollbar-gutter: stable; }
 body { margin:0; font:14px/1.4 system-ui,sans-serif; }
-header { display:flex; gap:1rem; align-items:baseline; padding:.6rem 1rem; border-bottom:1px solid var(--line); }
+header { display:flex; gap:1rem; align-items:baseline; padding:.6rem 1rem; border-bottom:1px solid var(--line);
+         position:sticky; top:0; z-index:10; background:Canvas; }
 h1 { font-size:1rem; margin:0; font-weight:600; }
 #status { font-size:.8rem; opacity:.7; margin-left:auto; }
 nav button { font:inherit; padding:.3rem .8rem; border:1px solid var(--line); background:none; color:inherit; cursor:pointer; }
 nav button[aria-selected=true] { background:#8882; font-weight:600; }
+header .gear { font-size:1.05rem; line-height:1; padding:.3rem .55rem; border:1px solid var(--line);
+               background:none; color:inherit; cursor:pointer; border-radius:50%; }
+header .gear[aria-selected=true] { background:#8882; }
+button:not(:disabled) { transition:filter .12s ease, transform .05s ease; }
+button:not(:disabled):hover { filter:brightness(1.18); }
+button:not(:disabled):focus-visible { outline:2px solid Highlight; outline-offset:1px; }
+button:not(:disabled):active { filter:brightness(.85); transform:scale(.96); }
+#toast { position:fixed; left:50%; bottom:1.2rem; transform:translateX(-50%); z-index:20;
+         background:Canvas; border:1px solid var(--line); border-radius:.6rem;
+         padding:.5rem 1rem; font-size:.85rem; box-shadow:0 4px 12px #0004;
+         animation:toast-in .15s ease-out; }
+@keyframes toast-in { from { opacity:0; transform:translate(-50%, .4rem); } to { opacity:1; transform:translate(-50%, 0); } }
 table { border-collapse:collapse; width:100%; }
 th,td { text-align:left; padding:.35rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
 th { font-weight:600; font-size:.8rem; opacity:.7; }
@@ -114,8 +127,8 @@ section[hidden] { display:none; }
 #view-cards.editing .card .rz { display:block; }
 #view-cards.editing .card .age { right:1.4rem; }
 .card .lbl input { font-size:.75rem; width:9rem; }
-#view-sources { padding:.7rem; border:1px solid var(--line); border-radius:.7rem;
-                min-width:18rem; }
+#settings-sources { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);
+                     min-width:18rem; }
 #source-list { list-style:none; margin:0 0 .5rem; padding:0; }
 #source-list li { display:flex; align-items:center; gap:.5rem; padding:.15rem 0;
                   font-size:.8rem; }
@@ -169,6 +182,7 @@ section[hidden] { display:none; }
              border:1px solid var(--line); border-radius:.7rem; background:Canvas;
              box-shadow:0 4px 12px #0003; }
 
+#git-hash { display:block; font-size:.7rem; opacity:.5; padding:.4rem 1rem 0; }
 #settings { padding:.6rem 1rem; border-bottom:1px solid var(--line); }
 #settings summary { cursor:pointer; font-weight:600; }
 #settings label { margin-right:1rem; white-space:nowrap; }

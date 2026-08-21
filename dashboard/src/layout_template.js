@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { cardState, gridNum, saveCardState, cardHidden } from './store.js'
 import { devices } from './devices.js'
 import { isFeed } from './alias.js'
+import { showToast } from './toast.js'
 
 export const LAYOUT_SUFFIX = '/$layout'
 export const layouts = signal(new Map())
@@ -127,7 +128,8 @@ export function postLayout() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(template),
   }).then(res => {
-    if (!res.ok) console.error(`POST ${url} failed: ${res.status}`)
+    if (!res.ok) { console.error(`POST ${url} failed: ${res.status}`); return }
+    showToast('Saved as default layout')
   }).catch(err => {
     console.error(`POST ${url} failed: ${err.message || err}`)
   })

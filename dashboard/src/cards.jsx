@@ -272,6 +272,9 @@ function Age({ rec }) {
   // seenAt 0 marks a record with no arrival time: a feed computed from the
   // system clock is never stale, so an age would be noise.
   if (!rec.seenAt.value) return null
+  // Read to subscribe: only seenAt changing re-rendered this before, so the
+  // text was frozen at whatever it read on arrival until the next message.
+  tick.value
 
   return (
     <div class="age">

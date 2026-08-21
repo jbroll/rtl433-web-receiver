@@ -1,17 +1,17 @@
 import { signal } from '@preact/signals'
 import { editing, setEditing } from './grid.js'
 import { sourceState, sources } from './sources.js'
-import { SourcesView } from './sources.jsx'
 import { LogView } from './log.jsx'
 import { DevicesView } from './devices-table.jsx'
 import { SettingsView } from './settings.jsx'
 import { CardsView } from './cards.jsx'
+import { Toast } from './toast.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
 import { layouts, postLayout, applyTemplate, disableAutoApply, layoutForSources } from './layout_template.js'
 
 export const tab = signal('cards')
 
-const TABS = ['cards', 'devices', 'sources', 'log']
+const TABS = ['cards', 'log']
 
 function Status() {
   const states = [...sourceState.value.values()]
@@ -19,7 +19,7 @@ function Status() {
   const text = live === states.length ? 'live'
              : live === 0 ? 'reconnecting'
              : `${live}/${states.length} live`
-  return <span id="status">{text} <span id="git-hash" style={{fontSize:'.7rem',opacity:'.5',marginLeft:'.5rem'}}>{GIT_HASH}</span></span>
+  return <span id="status">{text}</span>
 }
 
 export function App() {
@@ -40,7 +40,17 @@ export function App() {
           ))}
         </nav>
         <Status />
+        <button
+          id="tab-devices"
+          class="gear"
+          title="Devices &amp; settings"
+          aria-selected={tab.value === 'devices'}
+          onClick={() => { tab.value = 'devices' }}
+        >
+          &#9881;
+        </button>
       </header>
+      <Toast />
       <section id="view-cards" class={editing.value ? 'editing' : ''} hidden={tab.value !== 'cards'}>
         <button
           id="edit-cards"
@@ -111,9 +121,6 @@ export function App() {
       <section id="view-devices" hidden={tab.value !== 'devices'}>
         <SettingsView />
         <DevicesView />
-      </section>
-      <section id="view-sources" hidden={tab.value !== 'sources'}>
-        <SourcesView />
       </section>
       <LogView />
     </>

@@ -144,6 +144,8 @@ export function DevicesView() {
   const rows = tab.value === 'devices' ? <Rows /> : null
 
   return (
+    <>
+    <span id="git-hash">{GIT_HASH}</span>
     <table>
       <thead>
         <tr>
@@ -159,5 +161,6 @@ export function DevicesView() {
       </thead>
       <tbody id="devices">{rows}</tbody>
     </table>
+    </>
   )
 }

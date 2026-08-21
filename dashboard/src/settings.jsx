@@ -1,5 +1,6 @@
 import { settings, setUnits, setDecimals, setCustomField } from './settings.js'
 import { LocationView } from './location.jsx'
+import { SourcesView } from './sources.jsx'
 
 const DECIMALS = [0, 1, 2, 3, 4, 5]
 
@@ -48,6 +49,9 @@ export function SettingsView() {
         </div>
       )}
       <LocationView />
+      <div id="settings-sources">
+        <SourcesView />
+      </div>
     </details>
   )
 }

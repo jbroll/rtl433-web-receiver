@@ -118,7 +118,7 @@ function abortProbe() {
   clearTimeout(probe.timer)
   probe = null
   dropSource(base, stream)
-  tab.value = 'sources'
+  tab.value = 'devices'
 }
 
 function syncSources() {
@@ -207,6 +207,6 @@ effect(() => { tick.value; settings.value; pump() })
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()
-else tab.value = stored === 'empty' ? 'sources' : 'cards'
+else tab.value = stored === 'empty' ? 'devices' : 'cards'
 
 syncSources()

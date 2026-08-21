@@ -29,8 +29,9 @@ try {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  // The app should land on the Sources tab with no sources configured.
-  await page.waitForSelector("#tab-sources[aria-selected='true']", { timeout: 15000 });
+  // The app should land on the Devices/Settings tab with no sources configured.
+  await page.waitForSelector("#tab-devices[aria-selected='true']", { timeout: 15000 });
+  await page.click("#settings summary");
   await page.waitForSelector("#source-list li", { state: "detached", timeout: 5000 });
 
   // Add the mock source.
