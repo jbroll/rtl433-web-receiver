@@ -74,6 +74,12 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 - Store a per-source credential in dashboard `localStorage`, extending the
   existing `sources` schema, and send it against the bridge's bearer-token
   auth path.
+- ~~Runtime token rotation.~~ Done: `POST /auth/rotate`, gated by the
+  current token, updates the shared token used by both the HTTP bearer
+  check and the embedded broker's MQTT `CONNECT` check, and persists it to
+  `AUTH_TOKEN_PATH` when configured (see `bridge/docs/user-manual.md`).
+  Rotation only gates new connections; clients already past `CONNECT` are
+  left alone.
 - Cap `readBody` and add an SSE reader drop (existing backlog items,
   security-adjacent).
 - Publish the bridge to npm so the `bin` entry has an install path

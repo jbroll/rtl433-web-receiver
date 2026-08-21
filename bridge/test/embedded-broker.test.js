@@ -10,6 +10,7 @@ import mqtt from 'mqtt'
 import { connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
 import { startEmbeddedBroker } from '../src/embedded-broker.js'
+import { createTokenStore } from '../src/token-store.js'
 import { waitFor } from './helpers/bridge.js'
 
 test('no TLS: aedes listens on loopback, and connectBroker reaches it', async () => {
@@ -155,6 +156,50 @@ test('TLS: the bridge itself can reach its own embedded broker over loopback', a
       } finally {
         await client.end()
       }
+    } finally {
+      await embedded.close()
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('TLS: passing a tokenStore, rotating it gates new CONNECTs by the new token', async () => {
+  const { certPath, keyPath, dir } = selfSignedCertFiles()
+  try {
+    const tokenStore = createTokenStore('s3cr3t')
+    const embedded = await startEmbeddedBroker({
+      mqttPort: 0,
+      mqttsPort: 0,
+      tlsCert: certPath,
+      tlsKey: keyPath,
+      tokenStore,
+    })
+    try {
+      const withOld = await mqtt.connectAsync(embedded.url, {
+        username: 'anyone',
+        password: 's3cr3t',
+        rejectUnauthorized: false,
+      })
+      await withOld.endAsync()
+
+      tokenStore.rotate('rotated')
+
+      await assert.rejects(() =>
+        mqtt.connectAsync(embedded.url, {
+          username: 'anyone',
+          password: 's3cr3t',
+          rejectUnauthorized: false,
+          connectTimeout: 2000,
+        }),
+      )
+
+      const withNew = await mqtt.connectAsync(embedded.url, {
+        username: 'anyone',
+        password: 'rotated',
+        rejectUnauthorized: false,
+      })
+      await withNew.endAsync()
     } finally {
       await embedded.close()
     }

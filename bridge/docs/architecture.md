@@ -148,6 +148,25 @@ an optional `tls` option (`{ rejectUnauthorized: false }` in this one case)
 to skip hostname verification for that self-connection specifically. Every
 other caller leaves it unset and keeps today's behavior exactly.
 
+## One token store shared by HTTP and MQTT
+
+`src/token-store.js`'s `createTokenStore` is the only mutable piece of
+config: everything else in `src/config.js` is read once at startup and
+never changes. `bin/mqtt-http-bridge.js` builds one store and passes it to
+both `createBridge` (the HTTP bearer check and `POST /auth/rotate`) and
+`startEmbeddedBroker` (the MQTT `authenticate` hook), so a rotation through
+either path is visible to both immediately — there is exactly one current
+token, not two copies that can drift. `authenticate` calls `tokens.get()`
+inside the hook itself rather than closing over a value captured at start,
+which is what makes a rotation take effect for the very next `CONNECT`
+without restarting the embedded broker.
+
+With `AUTH_TOKEN_PATH` set, `rotate()` also writes the new token to that
+file (write-to-`.tmp`-then-`rename`, so a crash mid-write can't leave a
+truncated file that locks an operator out at the next boot), and the store
+reads it back at construction, ahead of `AUTH_TOKEN`. Without a path, a
+rotated token is memory-only and does not survive a restart.
+
 ## Filters are fixed per connection
 
 An SSE client's filters are set once, from the `f` query parameters at

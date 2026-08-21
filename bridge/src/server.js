@@ -3,13 +3,15 @@ import http from 'node:http'
 import { tokenMatches } from './auth.js'
 import { openStream } from './sse.js'
 import { validFilter, validTopic } from './topic.js'
+import { createTokenStore } from './token-store.js'
 
-export function createBridge({ broker, cache, authToken, dashboardHtml }) {
+export function createBridge({ broker, cache, authToken, tokenStore, dashboardHtml }) {
   const clients = new Set()
+  const tokens = tokenStore ?? createTokenStore(authToken)
 
   const bridge = {
     httpServer: http.createServer((req, res) => {
-      handle(req, res, { broker, cache, clients, authToken, dashboardHtml }).catch(() => {
+      handle(req, res, { broker, cache, clients, tokens, dashboardHtml }).catch(() => {
         try {
           if (res.headersSent) res.end()
           else send(res, 500, 'internal error')
@@ -26,7 +28,7 @@ export function createBridge({ broker, cache, authToken, dashboardHtml }) {
   return bridge
 }
 
-async function handle(req, res, { broker, cache, clients, authToken, dashboardHtml }) {
+async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml }) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
   // The dashboard is served from a different origin than any bridge it reads.
@@ -58,6 +60,36 @@ async function handle(req, res, { broker, cache, clients, authToken, dashboardHt
     return subscribe(req, res, { cache, clients, url })
   }
 
+  // Reserved the same way '/events' is: never a topic a source publishes to
+  // in practice, and gated ahead of topic parsing so it can't collide with one.
+  if (url.pathname === '/auth/rotate') {
+    if (req.method !== 'POST') return send(res, 405, 'method not allowed')
+    const currentToken = tokens.get()
+    // Nothing to rotate: a deployment with no AUTH_TOKEN has no auth surface
+    // to expose here either, so this is "not found," not "not authorized."
+    if (!currentToken) return send(res, 404, 'not found')
+    if (!authorized(req, currentToken)) return send(res, 401, 'unauthorized')
+
+    let body
+    try {
+      body = await readBody(req)
+    } catch {
+      return
+    }
+    let parsed
+    try {
+      parsed = JSON.parse(body.toString('utf8'))
+    } catch {
+      return send(res, 400, 'body is not JSON')
+    }
+    if (typeof parsed.token !== 'string' || parsed.token.length === 0) {
+      return send(res, 400, 'token must be a non-empty string')
+    }
+    tokens.rotate(parsed.token)
+    res.writeHead(204)
+    return res.end()
+  }
+
   let topic
   try {
     topic = decodeURIComponent(url.pathname.slice(1))
@@ -80,6 +112,7 @@ async function handle(req, res, { broker, cache, clients, authToken, dashboardHt
   }
 
   if (req.method === 'POST') {
+    const authToken = tokens.get()
     if (authToken && !authorized(req, authToken)) return send(res, 401, 'unauthorized')
 
     let body

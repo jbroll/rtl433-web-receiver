@@ -16,6 +16,7 @@ test('an empty environment gives the local defaults', () => {
     tlsCert: undefined,
     tlsKey: undefined,
     authToken: undefined,
+    authTokenPath: undefined,
     dashboardHtmlPath: undefined,
   })
 })
@@ -33,6 +34,7 @@ test('the environment overrides every field', () => {
     TLS_CERT: '/etc/cert.pem',
     TLS_KEY: '/etc/key.pem',
     AUTH_TOKEN: 'tok',
+    AUTH_TOKEN_PATH: '/var/lib/bridge/auth-token',
     DASHBOARD_HTML: '/opt/bridge/public/index.html',
   })
   assert.deepEqual(config, {
@@ -47,8 +49,17 @@ test('the environment overrides every field', () => {
     tlsCert: '/etc/cert.pem',
     tlsKey: '/etc/key.pem',
     authToken: 'tok',
+    authTokenPath: '/var/lib/bridge/auth-token',
     dashboardHtmlPath: '/opt/bridge/public/index.html',
   })
+})
+
+test('--auth-token-path overrides AUTH_TOKEN_PATH', () => {
+  const config = readConfig(
+    { AUTH_TOKEN_PATH: '/env/auth-token' },
+    { authTokenPath: '/cli/auth-token' },
+  )
+  assert.equal(config.authTokenPath, '/cli/auth-token')
 })
 
 test('a PORT that is not a number is rejected rather than defaulted', () => {

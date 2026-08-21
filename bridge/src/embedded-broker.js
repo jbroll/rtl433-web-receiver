@@ -5,16 +5,18 @@ import fs from 'node:fs'
 import Aedes from 'aedes'
 
 import { tokenMatches } from './auth.js'
+import { createTokenStore } from './token-store.js'
 
 // Only one of these ever runs: a public broker without an authenticate hook
 // is not a state this can start into silently, and a loopback debug port
 // alongside the public one is a future decision, not a default.
-export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, tlsCert, tlsKey, authToken }) {
+export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, tlsCert, tlsKey, authToken, tokenStore }) {
   if (Boolean(tlsCert) !== Boolean(tlsKey)) {
     throw new Error('TLS_CERT and TLS_KEY must both be set, or neither')
   }
   const tlsEnabled = Boolean(tlsCert && tlsKey)
-  if (tlsEnabled && !authToken) {
+  const tokens = tokenStore ?? createTokenStore(authToken)
+  if (tlsEnabled && !tokens.get()) {
     throw new Error('AUTH_TOKEN must be set when TLS is configured for the embedded broker')
   }
 
@@ -23,8 +25,10 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
     // CONNECT is the only gate: once authenticated, a client has full
     // read+write over '#', the same as the bridge's own internal
     // connection. Public read access is intentionally the HTTP side's job.
+    // tokens.get() is read per-CONNECT, not captured once, so a rotation
+    // gates new connections immediately without restarting the broker.
     aedes.authenticate = (client, username, password, callback) => {
-      callback(null, tokenMatches(password, authToken))
+      callback(null, tokenMatches(password, tokens.get()))
     }
   }
 

@@ -7,6 +7,7 @@ import { createCache } from '../src/cache.js'
 import { brokerLabel, readConfig } from '../src/config.js'
 import { startEmbeddedBroker } from '../src/embedded-broker.js'
 import { createBridge } from '../src/server.js'
+import { createTokenStore } from '../src/token-store.js'
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
@@ -18,6 +19,7 @@ const { values } = parseArgs({
     'tls-cert': { type: 'string' },
     'tls-key': { type: 'string' },
     'auth-token': { type: 'string' },
+    'auth-token-path': { type: 'string' },
     'dashboard-html': { type: 'string' },
   },
   strict: true,
@@ -31,8 +33,14 @@ const config = readConfig(process.env, {
   tlsCert: values['tls-cert'],
   tlsKey: values['tls-key'],
   authToken: values['auth-token'],
+  authTokenPath: values['auth-token-path'],
   dashboardHtml: values['dashboard-html'],
 })
+
+// One store shared by the embedded broker's MQTT CONNECT check and the
+// HTTP bridge's bearer check, so a POST /auth/rotate through the HTTP side
+// takes effect for MQTT immediately, with no restart.
+const tokenStore = createTokenStore(config.authToken, { path: config.authTokenPath })
 
 // When embedding, this is the only place a public, unauthenticated broker
 // could start silently — startEmbeddedBroker throws before listening if
@@ -49,19 +57,22 @@ if (config.embedBroker) {
     mqttsPort: config.mqttsPort,
     tlsCert: config.tlsCert,
     tlsKey: config.tlsKey,
-    authToken: config.authToken,
+    tokenStore,
   })
   brokerUrl = embedded.url
   brokerTls = embedded.tlsOptions
   if (embedded.tlsOptions) {
     // TLS mode: the embedded aedes's authenticate hook (src/embedded-broker.js)
-    // accepts any username and checks only the password against AUTH_TOKEN.
-    // MQTT_USERNAME/MQTT_PASSWORD are for dialing an external broker
+    // accepts any username and checks only the password against the current
+    // token. MQTT_USERNAME/MQTT_PASSWORD are for dialing an external broker
     // (EMBED_BROKER=false) and are not relevant to this self-connection.
     // A username has to be sent regardless of its value: mqtt.js's
     // mqtt-packet encoder refuses to send a password with no username.
+    // This CONNECT happens once at boot, so a later rotation does not
+    // reconnect it — the same "leave existing connections alone" rule
+    // POST /auth/rotate applies to every other MQTT client.
     brokerUsername = 'bridge'
-    brokerPassword = config.authToken
+    brokerPassword = tokenStore.get()
   }
 }
 
@@ -84,7 +95,7 @@ const broker = connectBroker({
   onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
 })
 const dashboardHtml = config.dashboardHtmlPath ? readFileSync(config.dashboardHtmlPath, 'utf8') : undefined
-bridge = createBridge({ broker, cache, authToken: config.authToken, dashboardHtml })
+bridge = createBridge({ broker, cache, tokenStore, dashboardHtml })
 
 bridge.httpServer.listen(config.port, config.host, () => {
   console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${brokerName}`)

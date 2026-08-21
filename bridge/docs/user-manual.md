@@ -21,6 +21,7 @@ defaults):
 | `EMBED_BROKER` | `false` to dial `MQTT_URL` instead of starting an embedded broker (default: embed). |
 | `TLS_CERT` / `TLS_KEY` | Configuring both switches the embedded broker to public MQTTS and requires `AUTH_TOKEN`. |
 | `AUTH_TOKEN` | Shared secret for `POST` (HTTP) and `CONNECT` (MQTT, TLS mode only). Unset disables both checks. |
+| `AUTH_TOKEN_PATH` | File the current token is persisted to; see [Rotating the token](#post-authrotate--rotate-the-token) below. |
 
 ## GET a topic
 
@@ -105,6 +106,35 @@ bridge's own connection to the broker drops and is remade, it is replayed
 every retained message and passes each one on, so an open stream is re-sent
 every topic it matches, unchanged values included. Nothing marks these as a
 replay; a client that acts on each event should be able to act on a repeat.
+
+## POST /auth/rotate — rotate the token
+
+Replaces the current `AUTH_TOKEN` with a new one, in place, with no restart.
+
+```
+curl -i -X POST localhost:8080/auth/rotate \
+  -H 'Authorization: Bearer <current-token>' \
+  -d '{"token":"<new-token>"}'
+```
+
+- `204` on success. From that point, `POST` to any topic and (in TLS mode)
+  new MQTT `CONNECT`s require the new token; the old one is rejected.
+- `400` if the body is not JSON, or `token` is missing or empty.
+- `401` if the `Authorization` header is missing or does not match the
+  *current* token.
+- `404` if no `AUTH_TOKEN` is configured — there is nothing to rotate.
+- `405` for any method other than `POST`.
+
+Rotation only gates new connections. An MQTT client already past `CONNECT`
+under the old token keeps working until it disconnects on its own — nothing
+force-disconnects it. The bridge's own internal connection to its embedded
+broker is unaffected either way: it authenticates once at startup and never
+reconnects because of a rotation.
+
+Without `AUTH_TOKEN_PATH` configured, a rotated token lives only in the
+running process's memory and is lost on restart, reverting to `AUTH_TOKEN`.
+With it set, rotation also overwrites that file, and it is read back at the
+next startup in place of `AUTH_TOKEN`.
 
 ## Other status codes
 
