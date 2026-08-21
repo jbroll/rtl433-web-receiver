@@ -33,6 +33,9 @@ async function bundle(entry, loader, define) {
     bundle: true,
     write: false,
     minify: true,
+    // Otherwise esbuild keeps /*! ... */ license banners (e.g. @capacitor/core's)
+    // inline, and the built page is meant to carry no such text.
+    legalComments: 'none',
     format: 'iife',
     target: 'es2022',
     loader,

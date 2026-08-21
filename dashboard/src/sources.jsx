@@ -1,4 +1,9 @@
-import { sources, sourceState, addSource, removeSource } from './sources.js'
+import { useState } from 'preact/hooks'
+import { Capacitor } from '@capacitor/core'
+import { mDNS } from '@devioarts/capacitor-mdns'
+import { sources, sourceState, addSource, removeSource, normalizeBase } from './sources.js'
+
+const MDNS_NAME_PREFIX = 'rtl433-'
 
 export function SourcesView() {
   return (
@@ -12,8 +17,57 @@ export function SourcesView() {
           </li>
         ))}
       </ul>
+      <ScanButton />
       <SourceForm />
     </>
+  )
+}
+
+function ScanButton() {
+  if (!Capacitor.isNativePlatform()) return null
+  const [state, setState] = useState({ status: 'idle', found: [] })
+
+  async function scan() {
+    setState({ status: 'scanning', found: [] })
+    const result = await mDNS.discover({ type: '_http._tcp.', timeout: 4000 })
+    const found = (result.services || []).filter(s => s.name && s.name.startsWith(MDNS_NAME_PREFIX))
+    setState({ status: 'done', found })
+  }
+
+  return (
+    <div id="mdns-scan">
+      <button type="button" onClick={scan} disabled={state.status === 'scanning'}>
+        {state.status === 'scanning' ? 'Scanning…' : 'Scan for receivers'}
+      </button>
+      {state.status === 'done' && state.found.length === 0 && (
+        <p class="hint">No receivers found.</p>
+      )}
+      {state.status === 'done' && state.found.length > 0 && (
+        <ul id="mdns-results">
+          {state.found.map(svc => <ScanResult key={svc.name} svc={svc} />)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function candidateBase(svc) {
+  const host = (svc.hosts || [])[0]
+  if (!host) return null
+  const hostPart = host.includes(':') ? `[${host}]` : host
+  return normalizeBase(`http://${hostPart}:${svc.port}`)
+}
+
+function ScanResult({ svc }) {
+  const base = candidateBase(svc)
+  const already = base && sources.value.indexOf(base) >= 0
+  return (
+    <li>
+      <span class="url">{svc.name}{base ? ` — ${base}` : ' (no address)'}</span>
+      <button type="button" disabled={!base || already} onClick={() => base && addSource(base)}>
+        {already ? 'Added' : 'Add'}
+      </button>
+    </li>
   )
 }
 

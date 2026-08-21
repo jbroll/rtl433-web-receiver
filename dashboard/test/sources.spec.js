@@ -20,6 +20,14 @@ async function open(page, url) {
   await page.click("#tab-sources");
 }
 
+test("the scan button is absent outside a native shell", async ({ page }) => {
+  const host = await startPage();
+  servers.push(host);
+  await open(page, host.url);
+  await expect(page.locator("#mdns-scan")).toHaveCount(0);
+  await expect(page.locator("#source-form")).toBeVisible();
+});
+
 test("the sources tab lists nothing until a source is added", async ({ page }) => {
   const host = await startPage();
   servers.push(host);

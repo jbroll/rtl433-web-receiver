@@ -30,9 +30,15 @@ const REACHABLE = new Set([
 // off with attributionPrefix={false} but which stays a literal in the bundle.
 const LINKED = new Set(['https://www.openstreetmap.org', 'https://pigeon-maps.js.org'])
 
-// An XML namespace name and the example text in a placeholder attribute.
-// Neither is ever fetched.
-const NOT_A_REQUEST = new Set(['http://www.w3.org', 'http://bridge.local:8080'])
+// An XML namespace name, the example text in a placeholder attribute, and the
+// minified source of candidateBase()'s own template literal (matched as text
+// since it isn't valid on its own — the closing backtick rides along with it).
+// None of these are ever fetched.
+const NOT_A_REQUEST = new Set([
+  'http://www.w3.org',
+  'http://bridge.local:8080',
+  'http://${n}:${e.port}`',
+])
 
 test('the bundle names no origin beyond the ones the feeds reach', async () => {
   const html = await buildHtml()

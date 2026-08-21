@@ -127,6 +127,21 @@ section[hidden] { display:none; }
 #source-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
               color:inherit; border:1px solid var(--line); cursor:pointer; }
 
+#mdns-scan { margin:0 0 .5rem; }
+#mdns-scan button[type=button] { font:inherit; font-size:.8rem; padding:.2rem .6rem;
+                                 background:Canvas; color:inherit; border:1px solid var(--line);
+                                 border-radius:.3rem; cursor:pointer; }
+#mdns-scan .hint { font-size:.75rem; opacity:.7; margin:.3rem 0; }
+#mdns-results { list-style:none; margin:0 0 .5rem; padding:0; }
+#mdns-results li { display:flex; align-items:center; gap:.5rem; padding:.15rem 0;
+                   font-size:.8rem; }
+#mdns-results li .url { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis;
+                        white-space:nowrap; }
+#mdns-results li button { font:inherit; font-size:.75rem; padding:.1rem .5rem;
+                          background:Canvas; color:inherit; border:1px solid var(--line);
+                          border-radius:.3rem; cursor:pointer; }
+#mdns-results li button:disabled { opacity:.5; cursor:default; }
+
 .drop-layer { position:fixed; left:0; top:0; right:0; bottom:0; pointer-events:none; z-index:4; }
 .drop-zone { opacity:0; transition:opacity .1s; }
 .drop-zone.active { opacity:1; }
