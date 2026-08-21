@@ -155,6 +155,8 @@ static void handleSave() {
   manual.trim();
   String ssid = manual.length() > 0 ? manual : _server.arg("ssid");
   String pass = _server.arg("pass");
+  String token = _server.arg("token");
+  token.trim();
 
   if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX) {
     _server.send(400, "text/plain", "Choose a network and a password that fits.");
@@ -168,14 +170,16 @@ static void handleSave() {
     _server.send(400, "text/plain", "Choose a network and a password that fits.");
     return;
   }
+  if (token.length() >= OTA_TOKEN_STORE_MAX) {
+    _server.send(400, "text/plain", "Update token is too long.");
+    return;
+  }
 
   if (!wifi_store::set(ssid.c_str(), pass.c_str())) {
     _server.send(500, "text/plain", "Could not save credentials, try again.");
     return;
   }
 
-  String token = _server.arg("token");
-  token.trim();
   if (token.length() > 0 && !ota_token_store::set(token.c_str())) {
     // Non-fatal: WiFi is the essential part of this form. A failed token
     // save just leaves OTA on its prior token (stored, or .env), same as

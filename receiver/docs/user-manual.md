@@ -118,7 +118,7 @@ firmware only streams the multipart form through incrementally, not a raw
 POST body.
 
     curl -F firmware=@build/firmware.bin \
-         -H "Authorization: Bearer 0123456789abcdef0123456789abcdef" \
+         -H "Authorization: Bearer generate-your-own-32-hex-chars" \
          'http://rtl433-a1b2c3.local/$update'
 
     200 ok
@@ -128,11 +128,11 @@ field (see `docs/install.md`) or from the `.env` `OTA_TOKEN` build flag if
 none has been set through the portal yet. A missing or wrong
 `Authorization` header is `401`; no token configured at all — neither
 stored nor `.env` — is `404`, same as any other unrecognized route. A write
-failure or a failed integrity check on the uploaded image is `500` with the
-underlying error as the body, and the currently-running firmware is left in
-place either way: `otadata` is only updated once the whole image has
-verified, so a rejected or failed push is a no-op, not a bricked device. The
-device reboots on the new firmware only after a `200`.
+failure is `500`; a truncated transfer (connection dropped mid-upload) is
+caught because the abort path never finalizes the write, and a file that
+isn't a valid firmware image is caught by a magic-byte check. In every case
+`otadata` is never updated, so a rejected or failed push is a no-op, not a
+bricked device. The device reboots on the new firmware only after a `200`.
 
 Quote the URL (or escape the `$`) — an unquoted `/$update` is a shell
 variable expansion, not a literal path.

@@ -81,12 +81,6 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 - Add range checks in `device_hooks` (humidity 0 to 100, wind_dir 0 to 360,
   pressure 800 to 1100) and a seen-twice-before-card rule in `signal_store`.
   Keep all decoders compiled in; do not gate on `MY_DEVICES`.
-- Add an OTA update module. The partition table already has `app0`, `app1`,
-  and `otadata` slots. The module fetches a version manifest, compares
-  versions, pulls the binary, writes it to the next app slot, updates
-  `otadata`, and reboots. Trigger (periodic, `POST /$update`, or both) and
-  manifest host (a GitHub release URL or self-hosted) are spec-time
-  decisions.
 - Move `signal_store` and `alias_store` self-tests to a PlatformIO `native`
   environment or extend `test/host/run.sh`.
 - Point `Log.begin()` at USB CDC `Serial`; capture a boot with

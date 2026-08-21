@@ -119,6 +119,25 @@ above.
 no field for it, so a device provisioned entirely through SoftAP always uses
 the `rtl433` mDNS prefix default.
 
+## A `POST /$update` upload blocks `loop()` for the whole transfer
+
+`handleUpdateUpload()` runs synchronously inside `_server.handleClient()`
+for every chunk of the multipart body, so `loop()` — and with it `rf.loop()`
+— doesn't run until the upload finishes. The rtl_433 library's pulse-train
+ring is only two deep (see the slow-HTTP-client entry above), so signals
+arriving during the transfer can be dropped, and SSE keepalives stall for
+the duration. Worse than the `CHUNK_BUDGET_MS` 1.5 s stall above, which is
+about a slow *reader*; this is about a slow or large *upload*, likely
+several seconds for a ~1.2 MB image over WiFi.
+
+## No way to clear or disable a set OTA token
+
+`ota_token_store` has no `clear()`, and the SoftAP portal always overwrites
+the stored token with a freshly generated one on every provisioning pass
+(`provisioning.cpp`). Once a token has been set there's no path back to the
+"OTA disabled" (`404`) state short of erasing NVS entirely. Not a bug, just
+a gap for anyone who wants to disable OTA after enabling it.
+
 ## Smaller items
 
 - `signal_store` and `alias_store` each have a `FAKE_SIGNALS` self-test that

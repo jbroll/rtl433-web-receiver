@@ -59,8 +59,10 @@ stores them so later boots skip straight to connecting (no portal).
 through the portal uses the `rtl433` default. `OTA_TOKEN` seeds the bearer
 token `/$update` checks (see `docs/user-manual.md`) if the portal has never
 been used to set one; it's overridden the moment a token is saved through the
-portal. `.env` is bash syntax, gitignored, and read by `load_env.py`, which
-turns each entry into a `-D` build flag.
+portal. Generate a random value yourself (e.g. `openssl rand -hex 16`) rather
+than leaving the `.env.example` placeholder in place. `.env` is bash syntax,
+gitignored, and read by `load_env.py`, which turns each entry into a `-D`
+build flag.
 
 A build with `.env` present reconnects with its compiled-in credentials on
 every boot, including after a BOOT-button credential clear (see below) — to

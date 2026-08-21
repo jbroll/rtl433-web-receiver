@@ -365,10 +365,10 @@ static void handleTzPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
-// Set at UPLOAD_FILE_START, read by handleUpdateComplete() once the whole
-// multipart body has been parsed — WebServer's two-callback on() only calls
-// the complete handler after the upload handler has seen every chunk.
-static bool _otaDisabled   = false;
+// Set at UPLOAD_FILE_START, read once by handleUpdateComplete() and reset
+// there — WebServer only invokes the upload callback for a multipart part
+// carrying a filename, so any other POST /$update (e.g. no file part) skips
+// straight to handleUpdateComplete() and must not see a stale prior result.
 static bool _otaAuthorized = false;
 static bool _otaStarted    = false;
 
@@ -377,11 +377,9 @@ static void handleUpdateUpload() {
   if (upload.status == UPLOAD_FILE_START) {
     _otaStarted = false;
     if (!ota_token_store::hasToken()) {
-      _otaDisabled   = true;
       _otaAuthorized = false;
       return;
     }
-    _otaDisabled = false;
     String expected = String("Bearer ") + ota_token_store::token();
     _otaAuthorized  = _server.header("Authorization") == expected;
     if (!_otaAuthorized) {
@@ -410,15 +408,19 @@ static void handleUpdateUpload() {
 }
 
 static void handleUpdateComplete() {
-  if (_otaDisabled) {
+  bool authorized = _otaAuthorized;
+  bool started    = _otaStarted;
+  _otaAuthorized = false;
+  _otaStarted    = false;
+  if (!ota_token_store::hasToken()) {
     sendStatus(404, "not found");
     return;
   }
-  if (!_otaAuthorized) {
+  if (!authorized) {
     sendStatus(401, "unauthorized");
     return;
   }
-  if (!_otaStarted || Update.hasError()) {
+  if (!started || Update.hasError()) {
     sendStatus(500, Update.errorString());
     return;
   }
