@@ -12,6 +12,7 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .flash { animation:flash 1s ease-out; }
 @keyframes flash { from { background:rgba(255,215,0,.16); } to { background:transparent; } }
 #devices input, #devices select, #grid-size input, #edit-cards, #forget-cards,
+#save-layout, #load-layout,
 .card .lbl input, .card .cx { font:inherit; background:Canvas; color:inherit;
                               border:1px solid var(--line); }
 #devices input[type=text] { font-size:.85rem; width:8rem; padding:.1rem .3rem; }
@@ -87,7 +88,7 @@ section[hidden] { display:none; }
 #view-cards.editing #forget-cards { display:block; }
 #grid-size { right:12rem; font-size:.75rem; display:none; align-items:center;
              gap:.25rem; }
-#save-layout { right:20rem; font-size:.75rem; padding:.4rem .7rem;
+#save-layout { right:22rem; font-size:.75rem; padding:.4rem .7rem;
                border-radius:1.2rem; display:none; }
 #view-cards.editing #save-layout { display:block; }
 #load-layout { right:33rem; font-size:.75rem; padding:.4rem .7rem;
