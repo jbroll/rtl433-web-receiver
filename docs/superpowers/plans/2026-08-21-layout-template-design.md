@@ -575,14 +575,14 @@ below, so its storage must outlive the branch — `alias_store::topicAt()`
 and `slot->key` both already point at storage that outlives the branch the
 same way, this is the one case here building a topic string fresh.)
 
-- [ ] **Step 8: Build to confirm it compiles**
+- [ ] **Step 8: Do not run a full firmware build yet**
 
-Run: `cd receiver && pio run`
-Expected: build succeeds. (This will only fully succeed once Task 4's
-`mqtt_publish::publishLayout` declaration exists — if running this task
-before Task 4, expect a linker or "not declared" error on that one call
-and treat it as expected until Task 4 lands; do not work around it by
-removing the call.)
+`handleLayoutPost` calls `mqtt_publish::publishLayout(...)`, which Task 4
+adds — `pio run` will fail on that one undeclared call until Task 4 lands
+right after this task. Do not add a stub or work around it; Task 4's own
+Step 6 runs `pio run` and is where the whole firmware first builds clean
+with this task's code in place. Confirm this task's own code is
+self-consistent by reading it back rather than compiling it standalone.
 
 - [ ] **Step 9: Commit**
 
