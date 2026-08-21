@@ -10,6 +10,8 @@
 
 #include "alias_store.h"
 #include "dashboard_html.h"
+#include "layout_store.h"
+#include "mqtt_publish.h"
 #include "ota_token_store.h"
 #include "signal_store.h"
 #include "topic.h"
@@ -343,6 +345,34 @@ static void handleAliasPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
+static void handleLayoutPost(const char* path) {
+  // Same same-origin-or-bare gating as $tz: the dashboard POSTs a bare
+  // /$layout to its own origin, the source-prefixed form is the documented
+  // curl-able equivalent.
+  const char* src = signal_store::source();
+  size_t      srcLen = strlen(src);
+  bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
+  if (strcmp(path, "$layout") != 0 && !ownSource) {
+    sendStatus(405, "not allowed");
+    return;
+  }
+  String body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>()) {
+    sendStatus(400, "body must be a JSON object");
+    return;
+  }
+  if (!layout_store::set(body.c_str())) {
+    sendStatus(503, "layout store full");
+    return;
+  }
+  web_ui::broadcastLayout(layout_store::get());
+  mqtt_publish::publishLayout(layout_store::get());
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(204, "text/plain", "");
+}
+
 static void handleTzPost(const char* path) {
   // The dashboard POSTs a bare /$tz to its own origin; the source-prefixed
   // form is the documented curl-able equivalent.
@@ -448,6 +478,10 @@ static void handleTopic() {
     return;
   }
   if (_server.method() == HTTP_POST) {
+    if (topic::isLayout(path)) {
+      handleLayoutPost(path);
+      return;
+    }
     if (topic::isTz(path)) {
       handleTzPost(path);
       return;
@@ -457,6 +491,17 @@ static void handleTopic() {
   }
   if (_server.method() != HTTP_GET) {
     sendStatus(405, "not allowed");
+    return;
+  }
+  if (topic::isLayout(path)) {
+    const char* blob = layout_store::get();
+    if (blob[0] == '\0') {
+      sendStatus(404, "no message");
+      return;
+    }
+    sendCors();
+    _server.sendHeader("Cache-Control", "no-store");
+    _server.send(200, "application/json", blob);
     return;
   }
   if (topic::isAlias(path)) {
@@ -581,6 +626,21 @@ static void drainReplay(int i, FrameBuffer& frame) {
         continue;
       }
       buildAliasFrame(frame, topic, alias_store::nameAt((uint8_t)(at - SIGNAL_SUB_TABLE)));
+    } else if (at == SIGNAL_SUB_TABLE + ALIAS_SLOTS) {
+      const char* blob = layout_store::get();
+      if (blob[0] == '\0') {
+        continue;
+      }
+      static char layoutTopic[SIGNAL_KEY_MAX];
+      int n = snprintf(layoutTopic, sizeof(layoutTopic), "%s/$layout", signal_store::source());
+      if (n < 0 || (size_t)n >= sizeof(layoutTopic)) {
+        continue;
+      }
+      topic = layoutTopic;
+      if (!slotWants(i, topic)) {
+        continue;
+      }
+      buildFrame(frame, topic, blob);
     } else {
       _replay[i] = -1;
       return;
@@ -688,6 +748,21 @@ void broadcastAlias(const char* topic, const char* name) {
   }
   int aliasIndex = alias_store::indexOf(topic);
   broadcastFrame(topic, aliasIndex < 0 ? -1 : SIGNAL_SUB_TABLE + aliasIndex, frame);
+}
+
+void broadcastLayout(const char* blob) {
+  char topic[SIGNAL_KEY_MAX];
+  int  n = snprintf(topic, sizeof(topic), "%s/$layout", signal_store::source());
+  if (n < 0 || (size_t)n >= sizeof(topic)) {
+    return;
+  }
+  FrameBuffer frame;
+  buildFrame(frame, topic, blob); // raw-embed: blob is a JSON object, not a quoted string
+  if (frame.overflowed()) {
+    Log.warning(F("SSE layout frame overflow, dropping frame" CR));
+    return;
+  }
+  broadcastFrame(topic, SIGNAL_SUB_TABLE + ALIAS_SLOTS, frame);
 }
 
 } // namespace web_ui
