@@ -87,7 +87,11 @@ rain restarts from 0.
 to `Preferences` namespace `"tz"`. Defaults to -240 (EDT) at first boot. The
 dashboard POSTs the offset to `/$tz` when the location is set; `tz_store::set`
 persists it and pushes it into `device_hooks` so the rain hook's midnight
-boundary follows the user's timezone.
+boundary follows the user's timezone. The offset reads back the same way it is
+written — `GET /$tz`, a retained `<source>/$tz` MQTT publish, and an SSE frame
+— so a dashboard on another origin can pick it up. Unlike `$layout` and
+`$location` it is never unset, so its `GET` never `404`s and it always
+replays.
 
 **`layout_store.h` / `layout_store.cpp`** — persists the dashboard's
 site-default `$layout` (grid size, per-model card settings) as one opaque
@@ -103,6 +107,13 @@ host-tested by `test/host/run.sh` against the same `arduino_shim/` fakes as
 when NVS never opened, so a viewer can save a layout for the running
 session even on a receiver whose flash is unavailable — that write is lost
 on reboot.
+
+**`location_store.h` / `location_store.cpp`** — persists the dashboard's
+`$location` (`{lat, lon, label, zone, zoom}`) as one opaque JSON blob in
+`Preferences` namespace `location`, key `blob`, capped at
+`LOCATION_STORE_MAX`, 512 bytes. Same shape as `layout_store` in every other
+respect: one entry per receiver, stored and served verbatim, host-tested
+`selfTest()`, and a write accepted even when NVS never opened.
 
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`, and
 `/$update` are the only registered routes; every topic is an arbitrary path,
@@ -273,8 +284,8 @@ carries a replay cursor and `web_ui::loop()` drains at most `REPLAY_PER_LOOP`
 write rather than losing it.
 
 The cursor walks flat indices — the sub table (0 through 31,
-`SIGNAL_SUB_TABLE`), then the alias table (32 through 63), then one final
-index for `$layout` (64) — rather than
+`SIGNAL_SUB_TABLE`), then the alias table (32 through 63), then one index each
+for `$layout` (64), `$location` (65), and `$tz` (66) — rather than
 `signal_store::device(i)`'s recency order. `device(i)` re-sorts on every call
 and a device's position in it changes the moment it is heard from again, so a
 cursor stepping through that order could skip a device that has just moved

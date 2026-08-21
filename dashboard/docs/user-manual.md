@@ -172,13 +172,18 @@ The time zone defaults to this device's. Choosing another moves the clock, the
 sunrise and sunset times, and the forecast day names with it.
 
 Setting the weather location pushes the local GMT offset to the receiver so
-its daily rain counter resets at your midnight, not UTC midnight. The offset
-is sent only when the location changes; a DST transition leaves the reset
-boundary off by an hour until the location is set again.
+its daily rain counter resets at your midnight, not UTC midnight, and
+publishes the location itself so other dashboards can pick it up. Both are
+sent only when the location changes, and only from a page the receiver itself
+serves; a DST transition leaves the reset boundary off by an hour until the
+location is set again.
 
 ## Feed cards
 
-Once a location is set, four cards appear alongside the sensor cards. They are
+Once a location is set, four cards appear alongside the sensor cards. They also
+appear with no location of your own, if one of your sources has published one —
+a dashboard loaded from the bridge gets the receiver's location and time zone
+that way. Your own location always wins once you set it. They are
 ordinary cards: drag them, resize them, rename them, and show, hide or move
 individual values from the Devices tab exactly as with a radio device.
 

@@ -12,7 +12,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `alias.js` | keys, the alias map, name resolution, the alias POST, `isFeed()` |
 | `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
 | `store.js` | card layout in `localStorage`, and `forgetLayouts()` |
-| `settings.js` | units, decimals, and the location, in `localStorage` |
+| `settings.js` | units, decimals, and the location, in `localStorage`, with a source-published location as fallback |
 | `sources.js` | the source list and its storage |
 | `stream.js` | one source's SSE connection and its reconnect |
 | `grid.js` | cell arithmetic, the resize and drag gestures, and value fitting |
@@ -117,6 +117,13 @@ result is `{ name, num, unit }`.
 The presets are Metric (°C, mm, km/h, hPa) and Imperial (°F, in, mi/h, hPa).
 Choosing a preset overwrites all four custom fields; in Custom mode the four
 fields are stored independently and changed one at a time.
+
+The signal also carries the location. Behind it sits a network fallback: the
+`$location` and `$tz` a source publishes, kept in a per-source map and
+consulted by `resolvedLocation()` only when nothing is set locally. The
+fallback is never written into `localStorage`, so a location set locally takes
+over the moment it exists. Setting a location also POSTs `$location` and `$tz`
+back, but only to an origin that is itself a configured source.
 
 `cards.jsx` and `devices-table.jsx` both render readings through `displayValue`.
 `CardsView` reads the settings signal as a dependency, so any settings change

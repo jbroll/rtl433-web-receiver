@@ -96,3 +96,7 @@
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.
+- "Clear" clears only the local location. On a page the receiver serves, the
+  receiver's own published `$location` immediately supplies the fallback, so the
+  feed cards stay and the location the user just cleared still resolves. There is
+  no delete for the published value.
