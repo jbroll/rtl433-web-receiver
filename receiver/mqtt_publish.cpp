@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "layout_store.h"
 #include "mqtt_publish_store.h"
 #include "signal_store.h"
 
@@ -108,6 +109,12 @@ static void replayAll() {
     if (payload == nullptr) continue;
     if (_mqtt.publish(slot->key, payload, true)) sent++;
   }
+  const char* layout = layout_store::get();
+  if (layout[0] != '\0') {
+    char topic[80];
+    int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
+    if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, layout, true)) sent++;
+  }
   Log.notice(F("mqtt publish: replayed %d retained record(s) on connect" CR), sent);
 }
 
@@ -180,6 +187,15 @@ void onRecord(const char* key, JsonDocument& doc) {
   size_t n = serializeJson(doc, payload, sizeof(payload));
   if (n == 0 || n >= sizeof(payload)) return;
   _mqtt.publish(key, payload, true);
+}
+
+void publishLayout(const char* blob) {
+  if (!_enabled || !_mqtt.connected()) return;
+  if (blob == nullptr || blob[0] == '\0') return;
+  char topic[80];
+  int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
+  if (n < 0 || (size_t)n >= sizeof(topic)) return;
+  _mqtt.publish(topic, blob, true);
 }
 
 } // namespace mqtt_publish

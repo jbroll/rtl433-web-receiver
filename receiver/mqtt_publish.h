@@ -14,4 +14,7 @@ void loop();
 // Registered as a signal_store::RecordHook. Publishes doc, retained, to
 // topic key. A no-op (fire-and-forget) if not currently connected.
 void onRecord(const char* key, JsonDocument& doc);
+// Publishes the stored $layout, retained, to <clientId>/$layout. A no-op
+// (fire-and-forget) if not currently connected, the same as onRecord.
+void publishLayout(const char* blob);
 } // namespace mqtt_publish
