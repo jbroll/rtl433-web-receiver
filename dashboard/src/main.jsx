@@ -55,6 +55,7 @@ function onLayout(base, topic, payload) {
   if (autoAppliedLayout) return
   if (base !== location.origin) return
   if (!autoApplyEligible) return
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
   autoAppliedLayout = true
   applyTemplate(payload)
 }

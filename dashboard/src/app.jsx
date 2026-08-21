@@ -1,13 +1,12 @@
 import { signal } from '@preact/signals'
 import { editing, setEditing } from './grid.js'
-import { sourceState } from './sources.js'
+import { sourceState, sources } from './sources.js'
 import { SourcesView } from './sources.jsx'
 import { LogView } from './log.jsx'
 import { DevicesView } from './devices-table.jsx'
 import { SettingsView } from './settings.jsx'
 import { CardsView } from './cards.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
-import { sources } from './sources.js'
 import { layouts, postLayout, applyTemplate, disableAutoApply } from './layout_template.js'
 
 export const tab = signal('cards')
