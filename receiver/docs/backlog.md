@@ -19,11 +19,11 @@ alias, and lay out. Nothing else uses it. Three directions, none started:
   rtl_433 JSON is about twenty lines and no new dependency. An MQTT
   subscription needs a broker and roughly 10 KB of flash, against 144 KB free.
   ESP-NOW suits battery nodes but pins them to the station's WiFi channel.
-- Egress to home automation: publishing each decode to
-  `rtl_433/<host>/devices/<model>/<id>/<field>` matches what rtl_433's own
-  `-F mqtt` emits, so existing Home Assistant setups would take it unchanged.
-  A `GET` of a topic from an HA REST sensor works today with no firmware
-  change at all, and is the cheapest first step.
+
+(Egress — publishing each decode out over MQTT — is implemented; see
+`mqtt_publish.h`/`mqtt_publish.cpp` in `architecture.md` and "Publishing to a
+remote broker" in `user-manual.md`. Ingest remains the open gap this item
+describes.)
 
 ## A below-floor noise reading has no error marking on the card
 

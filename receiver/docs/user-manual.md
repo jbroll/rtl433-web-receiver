@@ -22,6 +22,20 @@ Once connected, WiFi is not required to keep decoding: if the connection
 later drops, the sketch keeps decoding and logging to serial, and retries
 reconnecting every 30 seconds without touching stored credentials.
 
+## Publishing to a remote broker
+
+Set `MQTT_BROKER_URL` (`.env` or the provisioning portal) to also publish
+every record, retained, to a remote MQTT broker — off by default. The topic
+is the same key the receiver stores it under locally,
+`<mdnsHostname()>/<model>/<id>`, and the payload is the identical JSON `GET
+/<topic>` would return. `MQTT_TOKEN`, if set, is sent as the CONNECT
+password; a broker on the LAN often needs none. Publishing is
+fire-and-forget — a record that arrives while disconnected from the broker
+is simply not published — but every successful connect or reconnect
+republishes everything currently held, so a broker that was briefly
+unreachable catches back up without waiting for each device's next natural
+transmission.
+
 ## Routes
 
 | Method and path | Behaviour |

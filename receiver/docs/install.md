@@ -68,6 +68,15 @@ A receiver built with a custom `MDNS_PREFIX` won't be found by the app's
 mDNS scan, which filters on the default `rtl433-` prefix; add it manually
 by URL instead.
 
+`MQTT_BROKER_URL` and `MQTT_TOKEN` are optional and off by default: setting
+neither leaves the device publishing nothing. Set `MQTT_BROKER_URL` to
+publish every record, retained, to a remote broker — `mqtt://host:port` for
+a plaintext LAN broker (Mosquitto, Home Assistant), `mqtts://host:port` for
+a public one, like `weather.rkroll.com`'s embedded bridge broker (see
+`../../bridge/docs/install.md`'s `AUTH_TOKEN`), which requires `MQTT_TOKEN`
+to match. Both are overridden the moment they're saved through the
+provisioning portal, same as `OTA_TOKEN`.
+
 A build with `.env` present reconnects with its compiled-in credentials on
 every boot, including after a BOOT-button credential clear (see below) — to
 verify the portal path itself, build with no `.env` present, or one with

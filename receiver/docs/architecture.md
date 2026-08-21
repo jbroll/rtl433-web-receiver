@@ -34,7 +34,11 @@ sweeps a sub unheard from for longer than `SUB_STALE_MS` (1 hour), and frees
 the slot once its last sub is gone.
 
 `record()` stamps `time`, `rssi`, and `count` into the decoded JSON before
-serialising it into the sub for that `message_type`. `SIGNAL_PAYLOAD_MAX` is
+serialising it into the sub for that `message_type`. Up to `SIGNAL_MAX_HOOKS`
+(2) record hooks can be registered with `addRecordHook()`, run in
+registration order right after the stamp and before the size check —
+`device_hooks::dispatch` and `mqtt_publish::onRecord` are the two the
+firmware wires up. `SIGNAL_PAYLOAD_MAX` is
 600 bytes against the library's own 512-byte message buffer, room for the
 roughly 56 bytes the three stamped fields add. A message that still doesn't
 fit is dropped rather than truncated: the SSE frame embeds a device's payload
@@ -129,6 +133,30 @@ every `GET` and stored via `ota_token_store::set()` only if submitted
 non-empty, so leaving it blank on a re-provisioning pass keeps whatever
 token was already set.
 
+**`mqtt_publish_store.h` / `mqtt_publish_store.cpp`** — persists the MQTT
+broker URL and token to `Preferences` namespace `"mqtt"`, in fixed
+`_url`/`_token` buffers. Mirrors `wifi_store`'s fixed-buffer/NVS shape;
+`brokerUrl()`/`token()` follow `ota_token_store::token()`'s precedence
+(stored value, else the `.env`-supplied `MQTT_BROKER_URL`/`MQTT_TOKEN` build
+flags, else empty). `hasBroker()` is false, and the feature stays off, until
+a broker URL is set by either path.
+
+**`mqtt_publish.h` / `mqtt_publish.cpp`** — publishes every record to a
+remote broker over `PubSubClient`, retained. `begin()` parses the stored
+broker URL once (`mqtt://` picks a plain `WiFiClient`, `mqtts://` a
+`WiFiClientSecure` with the ISRG Root X1 root CA compiled in — never
+`setInsecure()`) and calls `PubSubClient::setServer()`; `loop()` runs
+`PubSubClient::loop()` and retries a dropped connection no more than once
+per `MQTT_RECONNECT_BACKOFF_MS`. `onRecord()`, registered as a second
+`signal_store` record hook, publishes the hook's `JsonDocument` unmodified
+to the topic `key` already is — `<mdnsHostname()>/<model>/<id>`, since
+`signal_store::setSource(mdnsHostname())` is what built that key in the
+first place. A publish while disconnected is simply skipped: there is no
+retry queue, because every successful (re)connect calls `replayAll()`,
+walking `signal_store::slotAt()`/`latestPayload()` to republish every
+currently-held record, which backfills anything a fire-and-forget publish
+missed.
+
 ## Boot order
 
 WiFi connection is tried in three steps, each a fallback for the one before:
@@ -204,11 +232,13 @@ it to `broadcast()`, which builds one SSE frame and sends it to every
 subscriber whose filters match and whose replay cursor has already passed
 that device's newest sub.
 
-Before the size check, `record()` calls the registered record hook (if any).
+Before the size check, `record()` calls each registered record hook in turn.
 `device_hooks::dispatch` reads the model from the payload, calls the matching
 hook, and the rain hook computes `rain_today_mm` from the cumulative `rain_mm`
-and a per-device baseline reset at local midnight. The hook writes back into
-the `JsonDocument` before it is serialized into the sub.
+and a per-device baseline reset at local midnight, writing back into the
+`JsonDocument` before it is serialized into the sub. `mqtt_publish::onRecord`
+runs after it, so a configured remote broker gets `rain_today_mm` and every
+other hook-added field too, not just what rtl_433 originally decoded.
 
 ## The replay design
 
