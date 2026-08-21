@@ -60,6 +60,16 @@ node dashboard/test/android-smoke.js
 
 `dashboard/test/android-smoke.js` connects to the WebView through Chrome DevTools, asserts the empty Sources landing state, adds a receiver, and asserts receiver data renders. The CI job `ci/android` runs the same steps automatically when a device is present; it reports the smoke test skipped otherwise.
 
+## mDNS Scan
+
+The Sources tab's "Scan for receivers" button (visible only inside the
+native shell) calls `@devioarts/capacitor-mdns`'s `discover()` and lists
+services whose name starts with `rtl433-`. There is no automated on-device
+test for the scan/add flow — the plugin's `discover()` isn't reachable from
+Playwright against a plain browser page. Check it manually: with a receiver
+on the same LAN as the device, open the Sources tab, tap Scan, and confirm
+the receiver appears and adds correctly.
+
 ## Unsigned Versus Signed
 
 The CI job and local commands above produce an **unsigned debug APK**. It can be installed directly through adb but cannot be published. A release build needs a keystore (Android) or an Apple developer certificate and provisioning profile (iOS). Producing an installable `.ipa` is outside this repository's scope.

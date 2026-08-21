@@ -89,13 +89,13 @@ and can run in parallel. Linearly, auth then mobile is simpler.
   TestFlight build via the macOS CI.
 - App: upgrade Capacitor 7 to 8 (no deliberate reason to stay on 7, and the
   mDNS plugin below needs 8).
-- Receiver: add an `rtl433=1` TXT record to the existing `_http._tcp` mDNS
-  advertisement, so a browse can tell an rtl433 receiver apart from any other
-  HTTP device on the LAN.
-- App: mDNS discovery in the Sources tab (Android first), via
+- App: mDNS discovery in the Sources tab (Android and iOS), via
   `@devioarts/capacitor-mdns` — a "Scan" button browses `_http._tcp.`,
-  filters to services carrying the `rtl433` TXT record, and lets the user
-  pick one into the source list. Design in commit 726a602.
+  filters to services whose name starts with `rtl433-` (Android's NSD API
+  exposes no TXT records, so filtering is name-based on both platforms
+  rather than TXT-based), and lets the user pick one into the source list.
+  Design in commit 726a602; implementation plan in
+  docs/superpowers/plans/2026-08-20-mdns-discovery.md.
 
 ### Goal 5 — Electron (deferred)
 
