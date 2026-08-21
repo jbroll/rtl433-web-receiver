@@ -117,7 +117,7 @@ test("+ matches one segment and # matches the remainder", async () => {
   const all = await openStream(server.url, "?f=" + encodeURIComponent(SOURCE + "/#"));
   expect((await one.settle()).map(f => f.topic)).toEqual([topicOf(ACURITE)]);
   expect((await all.settle()).map(f => f.topic).sort())
-    .toEqual([topicOf(ACURITE), topicOf(OREGON)].sort());
+    .toEqual([topicOf(ACURITE), topicOf(OREGON), SOURCE + "/$tz"].sort());
   one.close();
   all.close();
 });
@@ -167,7 +167,7 @@ test("a subscriber receives retained messages before any live one", async () => 
   server.emit(OREGON);
   const topics = (await s.settle()).map(f => f.topic);
   expect(topics.indexOf(topicOf(OREGON))).toBe(topics.length - 1);
-  expect(topics.slice(0, -1).sort()).toEqual([alias, topicOf(ACURITE)].sort());
+  expect(topics.slice(0, -1).sort()).toEqual([alias, topicOf(ACURITE), SOURCE + "/$tz"].sort());
   s.close();
 });
 
@@ -260,4 +260,63 @@ test("POST /\$tz to another source is 405", async () => {
   server = await startServer({ devices: [] });
   const r = await server.post("other/Receiver/0/$tz", JSON.stringify(-300));
   expect(r.status).toBe(405);
+});
+
+test("a posted location comes back byte for byte", async () => {
+  server = await startServer({ devices: [] });
+  const topic = SOURCE + "/$location";
+  expect((await server.get(topic)).status).toBe(404);
+
+  const loc = { lat: 40.015, lon: -105.2705, label: "Boulder", zone: "America/Denver", zoom: 12 };
+  expect((await server.post(topic, JSON.stringify(loc))).status).toBe(204);
+  const got = await server.get(topic);
+  expect(got.status).toBe(200);
+  expect(JSON.parse(got.body)).toEqual(loc);
+});
+
+test("POST /\$location as a bare source-level topic is accepted", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post("$location", JSON.stringify({ lat: 0, lon: 0 }));
+  expect(r.status).toBe(204);
+  expect((await server.get(SOURCE + "/$location")).status).toBe(200);
+});
+
+test("POST /\$location with a non-object body is 400", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post(SOURCE + "/$location", JSON.stringify("nope"));
+  expect(r.status).toBe(400);
+});
+
+test("POST /\$location to another source is 405", async () => {
+  server = await startServer({ devices: [] });
+  const r = await server.post("other/$location", JSON.stringify({ lat: 0, lon: 0 }));
+  expect(r.status).toBe(405);
+});
+
+test("\$location round-trips through a # subscription", async () => {
+  server = await startServer({ devices: [] });
+  const s = await openStream(server.url, "?f=%23");
+  await s.settle();
+  const loc = { lat: 40.015, lon: -105.2705 };
+  await server.post(SOURCE + "/$location", JSON.stringify(loc));
+  const frames = await s.settle();
+  expect(frames[frames.length - 1]).toEqual({ topic: SOURCE + "/$location", payload: loc });
+  s.close();
+});
+
+test("GET /\$tz returns the current offset, retained from boot", async () => {
+  server = await startServer({ devices: [] });
+  const got = await server.get(SOURCE + "/$tz");
+  expect(got.status).toBe(200);
+  expect(JSON.parse(got.body)).toBe(-240);
+});
+
+test("\$tz round-trips through a # subscription after a POST", async () => {
+  server = await startServer({ devices: [] });
+  const s = await openStream(server.url, "?f=%23");
+  await s.settle();
+  await server.post(SOURCE + "/Receiver/0/$tz", JSON.stringify(-300));
+  const frames = await s.settle();
+  expect(frames[frames.length - 1]).toEqual({ topic: SOURCE + "/$tz", payload: -300 });
+  s.close();
 });

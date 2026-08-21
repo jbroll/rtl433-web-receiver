@@ -3,6 +3,7 @@ const http = require("http");
 const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
 const LAYOUT_SUFFIX = "/$layout";
+const LOCATION_SUFFIX = "/$location";
 
 function validTopic(topic) {
   if (!topic) return false;
@@ -100,6 +101,8 @@ function startServer(opts = {}) {
     return topic;
   }
 
+  publish(source + "/$tz", JSON.stringify(tzOffset));
+
   for (const p of opts.devices || []) put(p);
 
   function readBody(req) {
@@ -181,6 +184,23 @@ function startServer(opts = {}) {
         res.writeHead(204).end();
         return;
       }
+      const isLocation = topic.endsWith(LOCATION_SUFFIX) || topic === "$location";
+      if (isLocation) {
+        if (!topic.startsWith(source + "/") && topic !== "$location") {
+          res.writeHead(405).end("not allowed");
+          return;
+        }
+        const body = await readBody(req);
+        let value;
+        try { value = JSON.parse(body); } catch (e) { value = undefined; }
+        if (value === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+          res.writeHead(400).end("body must be a JSON object");
+          return;
+        }
+        publish(source + LOCATION_SUFFIX, JSON.stringify(value));
+        res.writeHead(204).end();
+        return;
+      }
       const isTz = topic.endsWith("/$tz") || topic === "$tz";
       if (isTz) {
         if (!topic.startsWith(source + "/") && topic !== "$tz") {
@@ -195,6 +215,7 @@ function startServer(opts = {}) {
           return;
         }
         tzOffset = Math.round(value);
+        publish(source + "/$tz", JSON.stringify(tzOffset));
         res.writeHead(204).end();
         return;
       }
@@ -264,6 +285,7 @@ function startServer(opts = {}) {
         emit(payload, meta) { return put(payload, meta); },
         emitAlias(deviceTopic, name) { publish(deviceTopic + ALIAS_SUFFIX, JSON.stringify(name)); },
         emitLayout(template) { publish(source + LAYOUT_SUFFIX, JSON.stringify(template)); },
+        emitLocation(loc) { publish(source + LOCATION_SUFFIX, JSON.stringify(loc)); },
         get(topic) { return request("GET", topic); },
         post(topic, body) { return request("POST", topic, body === undefined ? "" : body); },
         options(topic) { return request("OPTIONS", topic); },
