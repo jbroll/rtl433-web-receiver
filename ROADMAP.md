@@ -110,6 +110,16 @@ and can run in parallel. Linearly, auth then mobile is simpler.
   `aedes`.
 - App: signed Android release APK (keystore, `--release`); signed iOS
   TestFlight build via the macOS CI; write `app/docs/quickstart.md`.
+- App: upgrade Capacitor 7 to 8 (no deliberate reason to stay on 7, and the
+  mDNS plugin below needs 8).
+- Receiver: add an `rtl433=1` TXT record to the existing `_http._tcp` mDNS
+  advertisement, so a browse can tell an rtl433 receiver apart from any other
+  HTTP device on the LAN.
+- App: mDNS discovery in the Sources tab (Android first), via
+  `@devioarts/capacitor-mdns` — a "Scan" button browses `_http._tcp.`,
+  filters to services carrying the `rtl433` TXT record, and lets the user
+  pick one into the source list. Design in
+  [`docs/superpowers/specs/2026-08-20-mdns-discovery-design.md`](docs/superpowers/specs/2026-08-20-mdns-discovery-design.md).
 
 ### Goal 5 — Electron (deferred)
 
