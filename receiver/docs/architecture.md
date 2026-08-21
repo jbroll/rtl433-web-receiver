@@ -15,6 +15,9 @@ key `map`), capped at 2 KB. NVS keys are limited to 15 characters and an alias
 topic runs to 96 bytes, which rules out one NVS key per alias; the blob is
 rewritten whenever an alias changes, a user action and rare enough that
 rewriting the whole table each time costs nothing worth avoiding.
+Its `FAKE_SIGNALS` `selfTest()` is host-tested by `test/host/run.sh` against
+`test/host/arduino_shim/`'s fakes of `Arduino.h`, `ArduinoLog.h`, and
+`Preferences.h` (an in-memory map standing in for NVS).
 
 **`signal_store.h` / `signal_store.cpp`** — 24 device slots holding metadata
 (key, last-seen time, message count), with payloads in a shared 32-entry
@@ -39,7 +42,8 @@ as the JSON object it
 already is, not as an escaped string, so a payload cut mid-object would put
 unparseable JSON on the wire. Truncating and then fixing up the JSON is not
 attempted; dropping the message and counting it in `droppedCount()` is
-simpler.
+simpler. Its `FAKE_SIGNALS` `selfTest()` is host-tested by `test/host/run.sh`
+against the same `arduino_shim/` fakes as `alias_store`.
 
 **`radio_health.h` / `radio_health.cpp`** — an Arduino-free decision module,
 host-tested by `test/host/run.sh` like `topic`. It watches the radio through

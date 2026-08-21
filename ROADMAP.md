@@ -10,8 +10,10 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 
 - **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
-  Open gap: `signal_store` and `alias_store` self-tests never read on a
-  device.
+  `signal_store` and `alias_store` self-tests now run in host CI on every
+  commit (`receiver/test/host/run.sh`); the on-device path is still unread —
+  the self-test's own PASS/FAIL lines have never been read from a live
+  device's serial log.
 - **`bridge/`** — full MQTT to HTTP binding. Has a bearer-token auth path; no
   status endpoint, not published to a registry, slow-SSE and unbounded-body
   gaps, and the dashboard has no field to store a per-source token yet.
@@ -22,21 +24,28 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
   host. iOS builds unsigned on macOS via GitHub Actions. Nothing signed,
   nothing in a store.
 
-`preact-ui-migration` and `capacitor-app` landed on main; the receiver's
-last-hour message-type replay exists only as a design, not an implementation.
+`preact-ui-migration` and `capacitor-app` landed on main. The receiver's
+last-hour message-type replay is implemented (commit `dece06e` and
+follow-ons), and the topic rules already share one case table
+(`test/topic_cases.txt`) read by both `receiver/test/host/topic_test.cpp` and
+`bridge/test/topic.test.js`, including the `a//c` divergent case. Goal 1 is
+done.
 
 Cross-cutting debt: the dashboard suite runs against a fake bridge, not the
 real `bridge/`.
 
 ## Goals
 
-1. **Consolidate in-flight work and cross-cutting debt.** Done when the
+1. ~~**Consolidate in-flight work and cross-cutting debt.**~~ Done: the
    last-hour replay feature is implemented and the topic rules share one case
    table read by both suites.
-2. **Firmware 1.0 — trustworthy and portable.** Done when the stores are
-   host-tested and the self-test is observable over USB (false-decode
-   filtering, runtime WiFi provisioning, the pinned `rtl_433_ESP` commit, and
-   OTA updates are already shipped; last-hour replay is tracked under Goal 1).
+2. ~~**Firmware 1.0 — trustworthy and portable.**~~ Done: `signal_store` and
+   `alias_store` are host-tested (false-decode filtering, runtime WiFi
+   provisioning, the pinned `rtl_433_ESP` commit, and OTA updates were
+   already shipped; last-hour replay is done, see Goal 1). USB CDC logging
+   stays dropped: OTA removed the recurring reason to tether a debug cable,
+   and `Serial0` carries the boot-mode strap, so retargeting `Log` to
+   `Serial` buys little for the risk.
 3. **Bridge auth and release.** Done when the dashboard can store and send a
    per-source token against the bridge's existing auth path, and the bridge
    is published to npm. Moved ahead of mobile because the mobile app reads
@@ -60,22 +69,6 @@ Bridge auth (Goal 3) and the dashboard mobile fixes in Goal 4 are independent
 and can run in parallel. Linearly, auth then mobile is simpler.
 
 ## Ordered actions
-
-### Goal 1 — Consolidation
-
-- Implement the last-hour message-type replay from its archived design
-  (commit 7260849).
-- Extract a shared topic and filter case table read by both
-  `receiver/test/host/topic_test.cpp` and `bridge/test/topic.test.js`; add the
-  `a//c` divergent case; fix whichever side is wrong.
-
-### Goal 2 — Firmware 1.0
-
-- Move `signal_store` and `alias_store` self-tests to a PlatformIO `native`
-  environment or extend `test/host/run.sh`.
-- Point `Log.begin()` at USB CDC `Serial`; capture a boot with
-  `python3 receiver/monitor.py -d 12 -q`; verify an alias survives a power
-  cycle on hardware.
 
 ### Goal 3 — Bridge auth and release
 

@@ -95,16 +95,17 @@ the image uses 28% of it. False decodes are filtered by firmware now (see
 `architecture.md`), so nothing currently motivates narrowing the compiled decoder set
 either.
 
-## The firmware self-test has never been read on a device
+## The firmware self-test has never been read on a live device
 
-`signal_store::selfTest()` and `alias_store::selfTest()` run at startup under
-`FAKE_SIGNALS` and print a PASS/FAIL line per check, but nobody has seen those
-lines. The board flashes and runs, and `ArduinoLog` writes to `Serial0`, a
-hardware UART at 921600 baud, while the port exposed over USB is the S3's CDC
-device. Reading the self-test needs a UART adapter on the TX pin, or the
-sketch pointing `Log.begin()` at `Serial` so it comes out over USB. Until then
-`signal_store`'s 51 checks and `alias_store`'s 22 are verified by compilation
-and by reasoning, not by execution.
+`signal_store::selfTest()` and `alias_store::selfTest()` also run at startup
+under `FAKE_SIGNALS` on real hardware and print a PASS/FAIL line per check,
+but nobody has seen those lines there. The board flashes and runs, and
+`ArduinoLog` writes to `Serial0`, a hardware UART at 921600 baud, while the
+port exposed over USB is the S3's CDC device. Reading the self-test needs a
+UART adapter on the TX pin, or the sketch pointing `Log.begin()` at `Serial`
+so it comes out over USB. `signal_store`'s 51 checks and `alias_store`'s 22
+now run and are checked on every commit via `test/host/run.sh` (see
+`architecture.md`); only the on-device serial output is still unread.
 
 ## An alias surviving a reboot is unverified
 
@@ -140,10 +141,6 @@ a gap for anyone who wants to disable OTA after enabling it.
 
 ## Smaller items
 
-- `signal_store` and `alias_store` each have a `FAKE_SIGNALS` self-test that
-  only compiles and runs on the device (see above); `topic` is the one module
-  host-tested today. A PlatformIO `native` environment would make the other
-  two stores' tests a normal `pio test` as well.
 - `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test
   check. The alias self-test casts `indexOf()`'s result to `uint8_t`, so a `-1`
   would read as 255 and `topicAt()` would return NULL, passing the check for

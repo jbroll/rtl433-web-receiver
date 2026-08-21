@@ -46,8 +46,13 @@ path: the synthetic decode stops and the health state moves to `silent` +
 `pinned` (floor pinned below threshold), triggering a soft re-init after the
 window closes and again on the backoff.
 
-`topic.cpp` has no Arduino dependency and is host-tested: `bash test/host/run.sh`
-compiles and runs it on the host.
+`topic.cpp`, `radio_health.cpp`, and `device_hooks.cpp` have no Arduino
+dependency (or only ArduinoJson) and are host-tested: `bash test/host/run.sh`
+compiles and runs them on the host. `signal_store.cpp` and `alias_store.cpp`
+reach further into Arduino, `ArduinoLog`, and (for `alias_store`)
+`Preferences`; the same script host-compiles their `FAKE_SIGNALS` selfTest()s
+against fakes of those headers in `test/host/arduino_shim/` and runs them too,
+so all five checks above run on every `bash test/host/run.sh`.
 
 `test/binding.spec.js` covers the HTTP binding against `test/binding-server.js`, a JS
 model of the same surface, so it runs without a board: `npm install` once, then `npx
