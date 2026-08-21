@@ -4,7 +4,9 @@
 #include <DNSServer.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <esp_random.h>
 
+#include "ota_token_store.h"
 #include "wifi_store.h"
 
 namespace provisioning {
@@ -39,6 +41,23 @@ static void writeHtmlEscaped(String& out, const char* s) {
       default:  out += *p; break;
     }
   }
+}
+
+// Fills out with a fresh 32-char hex token from the hardware RNG. outSize
+// must be at least OTA_TOKEN_STORE_MAX.
+static void randomToken(char* out, size_t outSize) {
+  uint8_t bytes[16];
+  for (size_t i = 0; i < sizeof(bytes); i += 4) {
+    uint32_t r = esp_random();
+    memcpy(bytes + i, &r, sizeof(r));
+  }
+  static const char hex[] = "0123456789abcdef";
+  size_t pos = 0;
+  for (size_t i = 0; i < sizeof(bytes) && pos + 2 < outSize; i++) {
+    out[pos++] = hex[bytes[i] >> 4];
+    out[pos++] = hex[bytes[i] & 0x0f];
+  }
+  out[pos] = '\0';
 }
 
 // Scans and returns SSIDs by descending RSSI, deduplicated by name (the
@@ -86,6 +105,9 @@ static int scanSorted(String outSsid[], int32_t outRssi[], int maxOut) {
 }
 
 static void handleRoot() {
+  char token[OTA_TOKEN_STORE_MAX];
+  randomToken(token, sizeof(token));
+
   String page =
       "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
       "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -107,8 +129,23 @@ static void handleRoot() {
       "<input type=\"text\" name=\"ssid_manual\" maxlength=\"32\"></label><br><br>"
       "<label>Password<br>"
       "<input type=\"password\" name=\"pass\" maxlength=\"64\"></label><br><br>"
+      "<label>Update token<br>"
+      "<input type=\"text\" id=\"ota_token\" name=\"token\" maxlength=\"32\" value=\"";
+  page += token;
+  page +=
+      "\"><button type=\"button\" onclick=\"copyToken()\">Copy</button></label><br><br>"
       "<button type=\"submit\">Save and connect</button>"
-      "</form></body></html>";
+      "</form>"
+      "<script>"
+      "function copyToken(){"
+      "var el=document.getElementById('ota_token');"
+      "if(navigator.clipboard&&navigator.clipboard.writeText){"
+      "navigator.clipboard.writeText(el.value).catch(function(){fallbackCopy(el);});"
+      "}else{fallbackCopy(el);}"
+      "}"
+      "function fallbackCopy(el){el.select();document.execCommand('copy');}"
+      "</script>"
+      "</body></html>";
 
   _server.send(200, "text/html", page);
 }
@@ -135,6 +172,15 @@ static void handleSave() {
   if (!wifi_store::set(ssid.c_str(), pass.c_str())) {
     _server.send(500, "text/plain", "Could not save credentials, try again.");
     return;
+  }
+
+  String token = _server.arg("token");
+  token.trim();
+  if (token.length() > 0 && !ota_token_store::set(token.c_str())) {
+    // Non-fatal: WiFi is the essential part of this form. A failed token
+    // save just leaves OTA on its prior token (stored, or .env), same as
+    // leaving the field blank.
+    Log.warning(F("provisioning: could not store update token" CR));
   }
 
   _server.send(200, "text/html",

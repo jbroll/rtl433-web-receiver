@@ -115,7 +115,11 @@ radio through STA-mode channel-hopping that would otherwise briefly
 destabilize an already-joined client. The scanned list, deduplicated and
 sorted by RSSI, is cached and rendered into the setup page rather than
 rescanned per request. A DNS server answering every query with the AP's own
-IP is what makes a phone or laptop auto-open the captive portal.
+IP is what makes a phone or laptop auto-open the captive portal. The page's
+third field, the OTA update token, is regenerated with `esp_random()` on
+every `GET` and stored via `ota_token_store::set()` only if submitted
+non-empty, so leaving it blank on a re-provisioning pass keeps whatever
+token was already set.
 
 ## Boot order
 
