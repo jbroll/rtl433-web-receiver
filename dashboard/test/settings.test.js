@@ -2,7 +2,9 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecimals, setCustomField,
-         setLocation, clearLocation, hasLocation, activeZone, localZone } from '../src/settings.js'
+         setLocation, clearLocation, hasLocation, activeZone, localZone,
+         locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources } from '../src/settings.js'
+import { sources } from '../src/sources.js'
 
 function fakeStorage() {
   const map = new Map()
@@ -22,6 +24,9 @@ globalThis.fetch = async () => ({})
 beforeEach(() => {
   fakeStorage()
   loadSettings()
+  sources.value = []
+  locations.value = new Map()
+  tzOffsets.value = new Map()
 })
 
 const NO_PLACE = { lat: null, lon: null, label: '', zone: '', zoom: 11 }
@@ -168,4 +173,79 @@ test('clearing a location leaves the units alone', () => {
   clearLocation()
   assert.equal(hasLocation(), false)
   assert.equal(settings.value.units, 'imperial')
+})
+
+test('setLocation does not POST when the serving origin is not a configured source', async () => {
+  const posted = []
+  globalThis.fetch = async (url) => { posted.push(url); return {} }
+  sources.value = []
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  assert.deepEqual(posted, [])
+  globalThis.fetch = async () => ({})
+})
+
+test('setLocation POSTs both /$tz and /$location when the origin is a configured source', async () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return {} }
+  sources.value = ['http://receiver.test']
+  setLocation({ lat: 40.015, lon: -105.2705, label: 'Boulder', zone: 'America/Denver', zoom: 12 })
+  assert.equal(posted.length, 2)
+  assert.deepEqual(posted.map(p => p[0]).sort(),
+    ['http://receiver.test/$location', 'http://receiver.test/$tz'])
+  globalThis.fetch = async () => ({})
+})
+
+test('onLocationFrame stores a valid object and clears on a non-object payload', () => {
+  onLocationFrame('http://a', { lat: 10, lon: 20, label: '', zone: '', zoom: 5 })
+  assert.equal(locations.value.get('http://a').lat, 10)
+  onLocationFrame('http://a', null)
+  assert.equal(locations.value.has('http://a'), false)
+})
+
+test('onTzFrame stores a finite number and clears on anything else', () => {
+  onTzFrame('http://a', -300)
+  assert.equal(tzOffsets.value.get('http://a'), -300)
+  onTzFrame('http://a', 'nope')
+  assert.equal(tzOffsets.value.has('http://a'), false)
+})
+
+test('locationForSources picks the first source in order that published one', () => {
+  const map = new Map([['http://b', { lat: 1, lon: 1 }], ['http://a', { lat: 2, lon: 2 }]])
+  assert.equal(locationForSources(map, ['http://a', 'http://b']).lat, 2)
+  assert.equal(locationForSources(map, ['http://c', 'http://b']).lat, 1)
+  assert.equal(locationForSources(map, ['http://c']), null)
+})
+
+test('hasLocation falls back to a configured source with no local location set', () => {
+  assert.equal(hasLocation(), false)
+  sources.value = ['http://a', 'http://b']
+  onLocationFrame('http://b', { lat: 5, lon: 6, label: '', zone: '', zoom: 11 })
+  assert.equal(hasLocation(), true)
+  onLocationFrame('http://a', { lat: 7, lon: 8, label: '', zone: '', zoom: 11 })
+  assert.equal(hasLocation(), true)
+})
+
+test('a local location always wins over the network fallback', () => {
+  sources.value = ['http://a']
+  onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: '', zoom: 11 })
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  assert.equal(settings.value.location.lat, 40.015)
+  assert.equal(hasLocation(), true)
+})
+
+test('the network fallback never writes into localStorage', () => {
+  sources.value = ['http://a']
+  onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: 'Europe/Berlin', zoom: 11 })
+  assert.equal(hasLocation(), true)
+  assert.deepEqual(settings.value.location, NO_PLACE)
+  assert.equal(activeZone(), 'Europe/Berlin')
+})
+
+test('activeZone falls back to the network location zone, then the browser zone', () => {
+  sources.value = ['http://a']
+  assert.equal(activeZone(), localZone())
+  onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: '', zoom: 11 })
+  assert.equal(activeZone(), localZone())
+  onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: 'Europe/Berlin', zoom: 11 })
+  assert.equal(activeZone(), 'Europe/Berlin')
 })

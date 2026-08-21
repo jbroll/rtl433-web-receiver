@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals'
 import { offsetMinutes } from './feeds/zone.js'
+import { sources } from './sources.js'
 
 export const SETTINGS_KEY = 'rtl433.settings.v1'
 
@@ -51,6 +52,48 @@ function cleanLocation(l) {
 }
 
 export const settings = signal(fresh())
+
+// base -> location object, the network fallback layer. Same structure
+// layout_template.js's `layouts` map uses for $layout.
+export const locations = signal(new Map())
+// base -> raw UTC-offset minutes, the network fallback layer for $tz.
+export const tzOffsets = signal(new Map())
+
+export function onLocationFrame(base, payload) {
+  const next = new Map(locations.value)
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) next.set(base, cleanLocation(payload))
+  else next.delete(base)
+  locations.value = next
+}
+
+export function onTzFrame(base, payload) {
+  const next = new Map(tzOffsets.value)
+  if (typeof payload === 'number' && Number.isFinite(payload)) next.set(base, payload)
+  else next.delete(base)
+  tzOffsets.value = next
+}
+
+// Load has no write, so it carries none of Save's same-origin trust boundary --
+// any connected source's published location is fair game. Picks the first
+// configured source (in sources.value order) that has one, same convention
+// layoutForSources() established for $layout.
+export function locationForSources(locationsMap, srcs) {
+  for (const base of srcs) {
+    const l = locationsMap.get(base)
+    if (l) return l
+  }
+  return null
+}
+
+// The zone published alongside a network location is an IANA name, usable
+// directly by Intl -- $tz's own network value is a raw UTC-offset in
+// minutes, which Intl's timeZone option cannot consume, so it does not
+// feed this resolution; tzOffsets exists for the receiver's own round trip.
+function resolvedLocation() {
+  const l = settings.value.location
+  if (l.lat !== null && l.lon !== null) return l
+  return locationForSources(locations.value, sources.value) || blankLocation()
+}
 
 let storageBroken = false
 
@@ -108,13 +151,20 @@ export function setLocation(next) {
   const clean = cleanLocation({ ...settings.value.location, ...next })
   settings.value = { ...settings.value, location: clean }
   saveSettings()
-  if (hasLocation()) {
+  // Gated the same way the $layout Save button is: publishing to a source is
+  // only meaningful when this page is served by that source.
+  if (hasLocation() && sources.value.includes(location.origin)) {
     const offset = offsetMinutes(new Date(), activeZone())
     fetch(`${location.origin}/$tz`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(offset),
     }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
+    fetch(`${location.origin}/$location`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(clean),
+    }).catch(err => console.error(`POST $location failed: ${err.message || err}`))
   }
   return clean
 }
@@ -125,7 +175,7 @@ export function clearLocation() {
 }
 
 export function hasLocation() {
-  const l = settings.value.location
+  const l = resolvedLocation()
   return l.lat !== null && l.lon !== null
 }
 
@@ -136,5 +186,5 @@ export function localZone() {
 
 // The zone the feeds should use: the user's choice, else the browser's.
 export function activeZone() {
-  return settings.value.location.zone || localZone()
+  return resolvedLocation().zone || localZone()
 }
