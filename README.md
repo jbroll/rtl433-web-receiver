@@ -10,7 +10,7 @@ Four sub-projects, each built and tested on its own:
   node service.
 - [`dashboard/`](dashboard/README.md) — the browser page, built to one self-contained
   file. Reads a list of receivers and bridges at once. The receiver embeds a build of it.
-- [`app/`](app/README.md) — a Capacitor 7 shell around the dashboard for Android and iOS.
+- [`app/`](app/README.md) — a Capacitor 8 shell around the dashboard for Android and iOS.
 
 They share one protocol, the [HTTP binding for MQTT](bridge/docs/binding.md): stable
 `<source>/<model>/<id>` topics, the rtl_433 JSON message as the payload, and an alias at

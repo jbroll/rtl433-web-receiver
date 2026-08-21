@@ -57,7 +57,7 @@ inheriting one.
 ## From dashboard build to mobile app
 
 `dashboard/build.js` emits one self-contained `index.html`. The `app/` sub-project is a
-Capacitor 7 shell whose `capacitor.config.ts` points `webDir` at `../dashboard/dist`. The
+Capacitor 8 shell whose `capacitor.config.ts` points `webDir` at `../dashboard/dist`. The
 build order is therefore dashboard first, then `npx cap sync <platform>`, then the
 platform build.
 

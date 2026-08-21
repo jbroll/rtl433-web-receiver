@@ -1,6 +1,6 @@
 # rtl_433 mobile app
 
-A Capacitor 7 shell around the [dashboard](../dashboard/README.md). It is not a second UI: the dashboard's self-contained `dist/index.html` is loaded directly by the WebView.
+A Capacitor 8 shell around the [dashboard](../dashboard/README.md). It is not a second UI: the dashboard's self-contained `dist/index.html` is loaded directly by the WebView.
 
 - App ID: `com.rkroll.rtl433`
 - App name: `rtl_433`

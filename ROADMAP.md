@@ -20,7 +20,7 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 - **`dashboard/`** — one self-contained `index.html` built from Preact sources
   by esbuild. Mobile and first-run holes: 360 px viewport overflow, scrollbar
   jitter, empty state broken for the Capacitor shell.
-- **`app/`** — Capacitor 7 shell. Android debug APK builds on the `gpu` CI
+- **`app/`** — Capacitor 8 shell. Android debug APK builds on the `gpu` CI
   host. iOS builds unsigned on macOS via GitHub Actions. Nothing signed,
   nothing in a store.
 
