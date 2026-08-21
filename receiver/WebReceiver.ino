@@ -22,6 +22,7 @@
 #include "alias_store.h"
 #include "device_hooks.h"
 #include "health_store.h"
+#include "mqtt_publish.h"
 #include "mqtt_publish_store.h"
 #include "ota_token_store.h"
 #include "provisioning.h"
@@ -520,6 +521,8 @@ void setup() {
   tz_store::begin();
   device_hooks::begin();
   signal_store::addRecordHook(device_hooks::dispatch);
+  mqtt_publish::begin(mdnsHostname());
+  signal_store::addRecordHook(mqtt_publish::onRecord);
   alias_store::begin();
   web_ui::begin();
   rtl433Queue = xQueueCreate(RTL433_QUEUE_LEN, sizeof(SignalQueueItem));
@@ -542,6 +545,7 @@ void loop() {
   rf.loop();
   serviceWiFi();
   web_ui::loop();
+  mqtt_publish::loop();
   drainSignalQueue();
 #ifdef FAKE_SIGNALS
   fakeSignalTick();
