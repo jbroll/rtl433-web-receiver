@@ -14,7 +14,8 @@
     "build:ios": "cap sync ios && xcodebuild -workspace ios/App/App.xcworkspace -scheme App -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -configuration Debug CODE_SIGNING_ALLOWED=NO"
   },
   "dependencies": {
-    "@capacitor/core": "^8.0.0"
+    "@capacitor/core": "^8.0.0",
+    "@devioarts/capacitor-mdns": "^0.1.0"
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",
