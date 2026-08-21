@@ -116,6 +116,21 @@ test('a wildcard in a topic is 400 and an unsupported method is 405', async () =
   }
 })
 
+test('GET / serves the dashboard when configured, and topic routing is unaffected', async () => {
+  const bridge = await startBridge({ dashboardHtml: '<html>dashboard</html>' })
+  try {
+    const root = await fetch(`${bridge.base}/`)
+    assert.equal(root.status, 200)
+    assert.equal(root.headers.get('content-type'), 'text/html')
+    assert.equal(await root.text(), '<html>dashboard</html>')
+
+    assert.equal((await fetch(`${bridge.base}/`, { method: 'POST', body: '{}' })).status, 400)
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 404)
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('an alias round-trips, and a device without one has no alias topic', async () => {
   const bridge = await startBridge()
   try {

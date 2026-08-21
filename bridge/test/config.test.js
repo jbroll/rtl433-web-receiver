@@ -16,6 +16,7 @@ test('an empty environment gives the local defaults', () => {
     tlsCert: undefined,
     tlsKey: undefined,
     authToken: undefined,
+    dashboardHtmlPath: undefined,
   })
 })
 
@@ -32,6 +33,7 @@ test('the environment overrides every field', () => {
     TLS_CERT: '/etc/cert.pem',
     TLS_KEY: '/etc/key.pem',
     AUTH_TOKEN: 'tok',
+    DASHBOARD_HTML: '/opt/bridge/public/index.html',
   })
   assert.deepEqual(config, {
     mqttUrl: 'mqtt://broker.local:1883',
@@ -45,6 +47,7 @@ test('the environment overrides every field', () => {
     tlsCert: '/etc/cert.pem',
     tlsKey: '/etc/key.pem',
     authToken: 'tok',
+    dashboardHtmlPath: '/opt/bridge/public/index.html',
   })
 })
 
@@ -85,6 +88,11 @@ test('--no-embed-broker disables embedding even with no other config', () => {
 test('--broker-url overrides MQTT_URL', () => {
   const config = readConfig({ MQTT_URL: 'mqtt://env:1883' }, { brokerUrl: 'mqtt://cli:1883' })
   assert.equal(config.mqttUrl, 'mqtt://cli:1883')
+})
+
+test('--dashboard-html overrides DASHBOARD_HTML', () => {
+  const config = readConfig({ DASHBOARD_HTML: '/env/index.html' }, { dashboardHtml: '/cli/index.html' })
+  assert.equal(config.dashboardHtmlPath, '/cli/index.html')
 })
 
 test('the printable broker address keeps the host and port and drops the credentials', () => {
