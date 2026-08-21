@@ -10,4 +10,5 @@ bool matchFilter(const char* filter, const char* topic);
 bool isAlias(const char* topic);
 bool isTz(const char* topic);
 bool isLayout(const char* topic);
+bool isLocation(const char* topic);
 } // namespace topic
