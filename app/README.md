@@ -22,4 +22,6 @@ npm run build:android
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-For day-to-day development, local-network setup, iOS, and the CDP smoke check, see [docs/development.md](docs/development.md).
+See [docs/quickstart.md](docs/quickstart.md) for the condensed version above. For
+day-to-day development, local-network setup, iOS, and the CDP smoke check, see
+[docs/development.md](docs/development.md).

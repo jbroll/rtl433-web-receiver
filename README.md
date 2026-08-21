@@ -25,5 +25,6 @@ A freshly flashed receiver opens a SoftAP captive portal to collect WiFi
 credentials; `cp receiver/.env.example receiver/.env` first is an optional
 shortcut that skips it.
 
+- [`docs/quickstart.md`](docs/quickstart.md) — shortest path to a signal on the page
 - [`docs/architecture.md`](docs/architecture.md) — how the three fit together
 - [`docs/backlog.md`](docs/backlog.md) — the roadmap and anything spanning sub-projects

@@ -15,6 +15,7 @@ loads from a static server and the page the firmware serves are the same artifac
 With no sources configured the dashboard reads the origin it was served from, so the
 firmware-served build works with no setup. The settings panel adds and removes base URLs.
 
+- [`docs/quickstart.md`](docs/quickstart.md) — install, build, and serve it
 - [`docs/user-manual.md`](docs/user-manual.md) — the tabs, the card grid, edit mode, and
   the source list
 - [`docs/architecture.md`](docs/architecture.md) — the modules and the build

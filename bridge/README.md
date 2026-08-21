@@ -15,6 +15,7 @@ in this repo, alongside the [receiver](../receiver/README.md) and the
 The `%23` matters: an unescaped `#` in a URL is a fragment and never reaches
 the server.
 
+- [`docs/quickstart.md`](docs/quickstart.md) — running it and hitting an endpoint
 - [`docs/install.md`](docs/install.md) — running it, environment variables, a runit service
 - [`docs/user-manual.md`](docs/user-manual.md) — every operation and status code
 - [`docs/binding.md`](docs/binding.md) — the protocol this implements
