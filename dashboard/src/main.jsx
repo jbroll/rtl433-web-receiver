@@ -4,7 +4,7 @@ import { App, tab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
-import { applyLayoutFrame, applyTemplate, layouts } from './layout_template.js'
+import { applyLayoutFrame, applyTemplate, layouts, autoApplyEligible, disableAutoApply } from './layout_template.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
@@ -49,18 +49,12 @@ function onAlias(base, topic, payload) {
 }
 
 let autoAppliedLayout = false
-// Snapshot taken once, right after loadCardState() and before any source
-// connects: a device replayed ahead of $layout on the same connection would
-// otherwise populate cardState.order first and make a live order.length
-// check always non-zero, defeating auto-apply for exactly the receivers
-// that have devices worth a saved layout.
-let cardsWereEmptyAtStart = false
 
 function onLayout(base, topic, payload) {
   applyLayoutFrame(base, payload)
   if (autoAppliedLayout) return
   if (base !== location.origin) return
-  if (!cardsWereEmptyAtStart) return
+  if (!autoApplyEligible) return
   autoAppliedLayout = true
   applyTemplate(payload)
 }
@@ -188,7 +182,7 @@ render(<App />, document.body)
 
 exposeForTests()
 store.loadCardState()
-cardsWereEmptyAtStart = store.cardState.value.order.length === 0
+if (store.cardState.value.order.length !== 0) disableAutoApply()
 loadAliases()
 loadSort()
 loadSources()

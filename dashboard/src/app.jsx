@@ -8,7 +8,7 @@ import { SettingsView } from './settings.jsx'
 import { CardsView } from './cards.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
 import { sources } from './sources.js'
-import { layouts, postLayout, applyTemplate } from './layout_template.js'
+import { layouts, postLayout, applyTemplate, disableAutoApply } from './layout_template.js'
 
 export const tab = signal('cards')
 
@@ -56,6 +56,7 @@ export function App() {
           onClick={() => {
             if (confirm('Forget every saved card layout in this browser?')) {
               forgetLayouts()
+              disableAutoApply()
             }
           }}
         >

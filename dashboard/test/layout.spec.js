@@ -59,6 +59,19 @@ test("a $layout frame does not auto-apply once a local layout already exists", a
   await expect(page.locator("#grid-cols")).not.toHaveValue("8");
 });
 
+test("a $layout frame does not auto-apply after an explicit Forget layouts, even if nothing was stored at boot", async ({ page }) => {
+  // Auto-apply eligibility is true at boot (nothing stored locally), but a
+  // user hitting Forget layouts before the $layout frame arrives must still
+  // block the auto-apply that would otherwise silently undo their reset.
+  const server = await open(page, [ACURITE]);
+  await page.click("#edit-cards");
+  page.once("dialog", d => d.accept());
+  await page.click("#forget-cards");
+  server.emitLayout(TEMPLATE);
+  await page.waitForTimeout(200);
+  await expect(page.locator("#grid-cols")).not.toHaveValue("8");
+});
+
 test("Load default layout is offered once a $layout frame arrives, and applies on confirm", async ({ page }) => {
   const server = await open(page, [ACURITE]);
   await expect(page.locator("#load-layout")).toHaveCount(0);

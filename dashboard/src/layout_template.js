@@ -6,6 +6,12 @@ import { isFeed } from './alias.js'
 export const LAYOUT_SUFFIX = '/$layout'
 export const layouts = signal(new Map())
 
+export let autoApplyEligible = true
+
+export function disableAutoApply() {
+  autoApplyEligible = false
+}
+
 function modelOf(key) {
   const rec = devices.value.get(key)
   const obj = rec && rec.obj.value
