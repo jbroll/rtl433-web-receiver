@@ -64,6 +64,10 @@ than leaving the `.env.example` placeholder in place. `.env` is bash syntax,
 gitignored, and read by `load_env.py`, which turns each entry into a `-D`
 build flag.
 
+A receiver built with a custom `MDNS_PREFIX` won't be found by the app's
+mDNS scan, which filters on the default `rtl433-` prefix; add it manually
+by URL instead.
+
 A build with `.env` present reconnects with its compiled-in credentials on
 every boot, including after a BOOT-button credential clear (see below) — to
 verify the portal path itself, build with no `.env` present, or one with

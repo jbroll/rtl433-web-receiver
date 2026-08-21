@@ -30,19 +30,20 @@ const REACHABLE = new Set([
 // off with attributionPrefix={false} but which stays a literal in the bundle.
 const LINKED = new Set(['https://www.openstreetmap.org', 'https://pigeon-maps.js.org'])
 
-// An XML namespace name, the example text in a placeholder attribute, and the
-// minified source of candidateBase()'s own template literal (matched as text
-// since it isn't valid on its own — the closing backtick rides along with it).
-// None of these are ever fetched.
+// An XML namespace name and the example text in a placeholder attribute. Never
+// fetched.
 const NOT_A_REQUEST = new Set([
   'http://www.w3.org',
   'http://bridge.local:8080',
-  'http://${n}:${e.port}`',
 ])
 
 test('the bundle names no origin beyond the ones the feeds reach', async () => {
   const html = await buildHtml()
   for (const match of html.matchAll(/https?:\/\/[^"'\s)\\]+/g)) {
+    // candidateBase()'s own template literal, e.g. `http://${n}:${e.port}`,
+    // survives minification as bundled source rather than a real origin —
+    // whatever esbuild names its variables, the `${` placeholder stays.
+    if (match[0].includes('${')) continue
     let origin
     try { origin = new URL(match[0]).origin } catch (e) { origin = match[0] }
     if (NOT_A_REQUEST.has(origin)) continue

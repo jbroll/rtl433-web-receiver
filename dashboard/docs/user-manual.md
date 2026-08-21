@@ -218,3 +218,9 @@ drops its devices and its cards; re-adding it starts them from defaults again.
 A source on another origin has to allow the dashboard's origin. The receiver and the
 bridge both answer `Access-Control-Allow-Origin: *`, so any build of the dashboard can
 read either.
+
+Inside the native app shell, a "Scan for receivers" button browses the LAN over mDNS and
+lists services whose name starts with `rtl433-`; tap a result to add it as a source. The
+button only appears in the app, not in a plain browser. Manual URL entry always works as a
+fallback, including for a receiver built with a custom `MDNS_PREFIX`, which the scan won't
+find.

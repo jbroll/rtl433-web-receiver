@@ -70,6 +70,12 @@ from another source's device of the same name.
 self-contained file with no external requests, which is what a browser loads and what the
 firmware embeds — one artifact, one thing to test.
 
+`@devioarts/capacitor-mdns` is a dependency of both `app/package.json` and
+`dashboard/package.json`. `app/`'s copy is the native Android plugin; `dashboard/`'s is the
+JS import used by `sources.jsx`. Since `dashboard/` bundles standalone into `dist/index.html`
+— loaded directly by a plain browser and by the Capacitor WebView alike — the import has to
+resolve from `dashboard/`'s own `node_modules`, not `app/`'s.
+
 `DEVICE_MAX` is an esbuild `define` read out of `../receiver/signal_store.h`, so it tracks
 one firmware's slot count. `devices.js` uses it as a per-source cap, multiplied by the
 number of configured sources, rather than a cap on the whole device table — a page reading

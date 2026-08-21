@@ -29,6 +29,10 @@
     </dict>
     <key>NSLocalNetworkUsageDescription</key>
     <string>This app connects to rtl_433 receivers and bridges on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_http._tcp</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
     <key>UIMainStoryboardFile</key>
