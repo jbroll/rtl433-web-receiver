@@ -1,3 +1,4 @@
+import { useState } from 'preact/hooks'
 import { tab } from './app.jsx'
 import { devices } from './devices.js'
 import { cardFields, cardHidden, setCardHidden, valueMode, setValueMode } from './store.js'
@@ -24,6 +25,22 @@ function reading(rec) {
     .join("  ")
 }
 
+function AliasInput({ r, name }) {
+  const [editing, setEditing] = useState(null)
+  const commit = (value) => { setEditing(null); postAlias(r.key, value) }
+  return (
+    <input
+      type="text"
+      value={editing !== null ? editing : aliasOf(r.key)}
+      placeholder={name}
+      title="Name shown on this device's card"
+      onInput={(e) => setEditing(e.target.value)}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+    />
+  )
+}
+
 function DeviceRow({ r }) {
   const obj = r.obj.value
   const name = obj && obj.model ? obj.model : shortKey(r.key)
@@ -43,13 +60,7 @@ function DeviceRow({ r }) {
       <td class="num">{count}</td>
       <td class="num">{age}</td>
       <td>
-        <input
-          type="text"
-          value={aliasOf(r.key)}
-          placeholder={name}
-          title="Name shown on this device's card"
-          onChange={(e) => postAlias(r.key, e.target.value)}
-        />
+        <AliasInput r={r} name={name} />
       </td>
       <td>
         <input
