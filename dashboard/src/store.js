@@ -15,7 +15,7 @@ function blankState() {
   return { grid: { cols: 6, rows: 4 }, order: [], hidden: [], cards: Object.create(null) }
 }
 
-function gridNum(v, fallback) {
+export function gridNum(v, fallback) {
   return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback
 }
 
