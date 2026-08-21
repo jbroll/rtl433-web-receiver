@@ -9,7 +9,7 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
-import { loadSettings, settings, setLocation, clearLocation } from './settings.js'
+import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame } from './settings.js'
 import { measureGrid, installGestures, cellSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
@@ -59,6 +59,14 @@ function onLayout(base, topic, payload) {
   applyTemplate(payload)
 }
 
+function onLocation(base, topic, payload) {
+  onLocationFrame(base, payload)
+}
+
+function onTz(base, topic, payload) {
+  onTzFrame(base, payload)
+}
+
 function onState(base, state) {
   setSourceState(base, state)
 }
@@ -79,11 +87,13 @@ function dropSource(base, stream) {
   const nextLayouts = new Map(layouts.value)
   nextLayouts.delete(base)
   layouts.value = nextLayouts
+  onLocationFrame(base, null)
+  onTzFrame(base, null)
 }
 
 function probeOrigin() {
   const base = location.origin
-  const stream = openSource(base, { onMessage, onAlias, onLayout, onState: onProbeState })
+  const stream = openSource(base, { onMessage, onAlias, onLayout, onLocation, onTz, onState: onProbeState })
   open.set(base, stream)
   probe = { base, stream, timer: setTimeout(abortProbe, 1500) }
 }
@@ -115,7 +125,7 @@ function syncSources() {
   const want = sources.value
   for (const base of want) {
     if (open.has(base)) continue
-    open.set(base, openSource(base, { onMessage, onAlias, onLayout, onState }))
+    open.set(base, openSource(base, { onMessage, onAlias, onLayout, onLocation, onTz, onState }))
   }
   for (const [base, stream] of open) {
     if (want.indexOf(base) >= 0) continue
