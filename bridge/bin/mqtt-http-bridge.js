@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
+import { readFileSync } from 'node:fs'
 
 import { connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
@@ -17,6 +18,7 @@ const { values } = parseArgs({
     'tls-cert': { type: 'string' },
     'tls-key': { type: 'string' },
     'auth-token': { type: 'string' },
+    'dashboard-html': { type: 'string' },
   },
   strict: true,
 })
@@ -29,6 +31,7 @@ const config = readConfig(process.env, {
   tlsCert: values['tls-cert'],
   tlsKey: values['tls-key'],
   authToken: values['auth-token'],
+  dashboardHtml: values['dashboard-html'],
 })
 
 // When embedding, this is the only place a public, unauthenticated broker
@@ -80,7 +83,8 @@ const broker = connectBroker({
   onDisconnect: () => console.error(`broker ${brokerName} disconnected, retrying`),
   onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
 })
-bridge = createBridge({ broker, cache, authToken: config.authToken })
+const dashboardHtml = config.dashboardHtmlPath ? readFileSync(config.dashboardHtmlPath, 'utf8') : undefined
+bridge = createBridge({ broker, cache, authToken: config.authToken, dashboardHtml })
 
 bridge.httpServer.listen(config.port, config.host, () => {
   console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${brokerName}`)

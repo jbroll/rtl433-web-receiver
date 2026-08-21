@@ -119,6 +119,8 @@ replay; a client that acts on each event should be able to act on a repeat.
 
 Every response carries `Access-Control-Allow-Origin: *`, and `OPTIONS` on any topic is
 `204` with `Access-Control-Allow-Methods: GET, POST, OPTIONS`. A dashboard served from
-anywhere can therefore read this. With `AUTH_TOKEN` set, `POST` still requires the
-token regardless of origin, so the wildcard origin doesn't weaken that: a cross-origin
-caller still needs the token to publish.
+anywhere can therefore read this, including the bridge's own origin: `GET /`, with
+`DASHBOARD_HTML` configured, serves a built dashboard directly (see
+[`docs/install.md`](install.md#serving-the-dashboard)). With `AUTH_TOKEN` set, `POST`
+still requires the token regardless of origin, so the wildcard origin doesn't weaken
+that: a cross-origin caller still needs the token to publish.

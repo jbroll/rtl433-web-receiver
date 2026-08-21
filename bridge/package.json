@@ -6,6 +6,7 @@
   "engines": { "node": ">=22" },
   "bin": { "mqtt-http-bridge": "bin/mqtt-http-bridge.js" },
   "scripts": {
+    "build": "node scripts/build-dashboard.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

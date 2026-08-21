@@ -9,9 +9,13 @@
 - `src/sse.js` — one SSE stream's lifetime: the response headers, the
   keepalive timer, filtering outgoing messages, closing.
 - `src/server.js` — routes HTTP requests to the cache, the broker, and
-  `sse.js`; owns the set of open streams.
+  `sse.js`; owns the set of open streams. `GET /` is carved out ahead of
+  topic routing to optionally serve a dashboard build — never a real topic,
+  since `topic.js` rejects the empty string.
 - `bin/mqtt-http-bridge.js` — wires the above together, reads config, starts
   listening, handles shutdown.
+- `scripts/build-dashboard.js` — builds `../dashboard` into `public/index.html`
+  for `DASHBOARD_HTML` to point at; not part of the request path.
 
 ## Caching everything
 

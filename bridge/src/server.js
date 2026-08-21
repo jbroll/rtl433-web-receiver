@@ -4,12 +4,12 @@ import { tokenMatches } from './auth.js'
 import { openStream } from './sse.js'
 import { validFilter, validTopic } from './topic.js'
 
-export function createBridge({ broker, cache, authToken }) {
+export function createBridge({ broker, cache, authToken, dashboardHtml }) {
   const clients = new Set()
 
   const bridge = {
     httpServer: http.createServer((req, res) => {
-      handle(req, res, { broker, cache, clients, authToken }).catch(() => {
+      handle(req, res, { broker, cache, clients, authToken, dashboardHtml }).catch(() => {
         try {
           if (res.headersSent) res.end()
           else send(res, 500, 'internal error')
@@ -26,7 +26,7 @@ export function createBridge({ broker, cache, authToken }) {
   return bridge
 }
 
-async function handle(req, res, { broker, cache, clients, authToken }) {
+async function handle(req, res, { broker, cache, clients, authToken, dashboardHtml }) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
   // The dashboard is served from a different origin than any bridge it reads.
@@ -42,6 +42,14 @@ async function handle(req, res, { broker, cache, clients, authToken }) {
       'access-control-max-age': '600',
     })
     return res.end()
+  }
+
+  // '/' is never a valid topic (topic.js rejects the empty string), so this
+  // cannot shadow any real topic GET, the same way the receiver firmware
+  // special-cases "/" for its own embedded dashboard.
+  if (url.pathname === '/' && req.method === 'GET' && dashboardHtml) {
+    res.writeHead(200, { 'content-type': 'text/html' })
+    return res.end(dashboardHtml)
   }
 
   if (url.pathname === '/events') {

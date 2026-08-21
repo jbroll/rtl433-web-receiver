@@ -37,6 +37,7 @@ the default.
 | `TLS_CERT` | `--tls-cert` | unset | PEM certificate file. Presence (with `TLS_KEY`) switches the embedded broker from the loopback-plaintext listener to the public-MQTTS one. |
 | `TLS_KEY` | `--tls-key` | unset | PEM key file. |
 | `AUTH_TOKEN` | `--auth-token` | unset | Shared secret gating HTTP `POST` (`401` without it) and, when embedding with TLS, MQTT `CONNECT` (refused without it). Required if `TLS_CERT`/`TLS_KEY` are set — the bridge refuses to start otherwise. |
+| `DASHBOARD_HTML` | `--dashboard-html` | unset | Path to a built `dashboard/dist/index.html`. When set, `GET /` serves it instead of being routed as a (malformed, empty) topic. |
 
 ## The embedded broker
 
@@ -83,12 +84,31 @@ The bridge exits 0 on `SIGTERM`, after closing every open SSE stream, the
 HTTP server, the broker connection, and the embedded broker (if running) in
 that order, so a plain `sv down` is enough to stop it cleanly.
 
+## Serving the dashboard
+
+`GET /` is never a valid topic (topic.js rejects the empty string), so it can't
+collide with real topic routing. With `DASHBOARD_HTML` set, the bridge reads
+that file once at startup and serves it, byte for byte, on every `GET /` — the
+same split the receiver firmware makes between its own `/` route and everything
+else.
+
+`npm run build` (`scripts/build-dashboard.js`) builds `../dashboard` in place
+and writes `public/index.html`, the same self-contained artifact
+`dashboard/build.js` produces for the receiver firmware. It requires
+`dashboard/node_modules` (`npm install` in `dashboard/`) and needs `dashboard/`
+checked out alongside `bridge/` — it is not resolvable from a `bridge/`-only
+deploy.
+
 ## Deploying to weather.rkroll.com
 
 `bridge/deploy.conf` and `bridge/secrets.env.example` in this repo are set up
 for that deploy, using the `deploy.sh` system. Copy `secrets.env.example` to
 `secrets.env` (gitignored) and fill in `AUTH_TOKEN` — generate one with
-`openssl rand -hex 24` — before running `deploy init`.
+`openssl rand -hex 24`. `DASHBOARD_HTML` is prefilled to match
+`NODE_APP_DEPLOY_DIRS="src bin public"` in `deploy.conf`, which ships
+`npm run build`'s output alongside the app; `deploy.sh`'s node_app module runs
+`npm run build` itself when `package.json` has a `build` script, so a plain
+`deploy init` builds and deploys the dashboard together with the bridge.
 
 TCP 8883 opens automatically during `deploy init` via the firewall module,
 set in `DEPLOY_TYPES` and `NODE_APP_PUBLIC_PORTS="8883"`. The module runs

@@ -80,3 +80,17 @@
   any bridge that has `AUTH_TOKEN` set — including the `weather.rkroll.com` deploy this
   branch adds. The dashboard needs its own token-configuration surface before that
   deploy's alias-editing UI can work.
+- `POST /$tz` cannot work against a real bridge. MQTT excludes topic names beginning
+  with `$` from a `#` wildcard subscription. `publish()` in `src/broker.js` waits for its
+  own echo on the bridge's `#` subscription before resolving; for a `$`-leading topic
+  that echo can never arrive, so the publish always times out (`ECHO_TIMEOUT_MS`, 5s) and
+  `src/server.js` answers `503`. The dashboard (`dashboard/src/settings.js`) posts its
+  GMT offset to a bare `${location.origin}/$tz`, so a real dashboard pointed at a real
+  bridge stalls 5 seconds and fails every time a user sets their location.
+  `a/b/$tz`-style source-scoped topics are unaffected; only a topic whose name itself
+  starts with `$` is excluded.
+- Clearing an alias does not clear it. `dashboard/src/alias.js` clears an alias by
+  posting an empty string (2 JSON bytes, `""`), expecting the bridge to treat it as a
+  delete. The bridge instead caches it as an ordinary non-empty retained message, so a
+  later `GET` returns `200 ""` instead of `404`, and the retained message survives a
+  broker restart indefinitely.

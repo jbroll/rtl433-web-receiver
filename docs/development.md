@@ -14,7 +14,8 @@ Each sub-project has its own build and test commands. See the README in each dir
 For the dashboard:
 
 ```bash
-cd dashboard
+cd bridge && npm install     # dashboard/test/harness.js runs the real bridge
+cd ../dashboard
 npm install
 npm test
 npm run build

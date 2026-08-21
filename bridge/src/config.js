@@ -44,5 +44,6 @@ export function readConfig(env, cli = {}) {
     tlsCert: cli.tlsCert ?? env.TLS_CERT,
     tlsKey: cli.tlsKey ?? env.TLS_KEY,
     authToken: cli.authToken ?? env.AUTH_TOKEN,
+    dashboardHtmlPath: cli.dashboardHtml ?? env.DASHBOARD_HTML,
   }
 }

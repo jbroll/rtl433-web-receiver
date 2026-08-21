@@ -1,8 +1,5 @@
 # Backlog
 
-- The suite runs against `receiver/test/binding-server.js`, a JS model of the binding,
-  not against the real `bridge/`. Running it over an in-process `aedes` would test what
-  ships. See [`../../docs/backlog.md`](../../docs/backlog.md).
 - A device seen through two bridges is two cards. Nothing merges them.
 - No authentication to a source. The bridge has none, and a dashboard reaching one over
   anything but localhost inherits that. Filed in the bridge's backlog.
