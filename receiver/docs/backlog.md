@@ -4,11 +4,11 @@ Known gaps in the receiver, in rough priority order. None break it as it stands;
 found during review or hardware testing and deliberately left. Anything spanning
 sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
-## No path in or out for sensors that are not 433 MHz decodes
+## No path in for sensors that are not 433 MHz decodes
 
 The receiver's own card proved the shape: anything recorded through
 `signal_store::record()` becomes a device the page already knows how to draw,
-alias, and lay out. Nothing else uses it. Three directions: egress is implemented (below), ingestion remains:
+alias, and lay out. Nothing else uses it. Two directions remain open:
 
 - A wired sensor on the I2C bus at GPIO 47 (SCL) and GPIO 21 (SDA), recorded
   the same way. The BMP280 driver reads temperature and pressure every 30 s
@@ -20,10 +20,8 @@ alias, and lay out. Nothing else uses it. Three directions: egress is implemente
   subscription needs a broker and roughly 10 KB of flash, against 144 KB free.
   ESP-NOW suits battery nodes but pins them to the station's WiFi channel.
 
-(Egress — publishing each decode out over MQTT — is implemented; see
-`mqtt_publish.h`/`mqtt_publish.cpp` in `architecture.md` and "Publishing to a
-remote broker" in `user-manual.md`. Ingest remains the open gap this item
-describes.)
+Egress is done: see `mqtt_publish.h`/`mqtt_publish.cpp` in `architecture.md`
+and "Publishing to a remote broker" in `user-manual.md`.
 
 ## A below-floor noise reading has no error marking on the card
 

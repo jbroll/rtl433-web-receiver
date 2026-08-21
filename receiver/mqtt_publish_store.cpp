@@ -16,6 +16,9 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
 }
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _open = _prefs.begin("mqtt", false);
   if (!_open) {
     Log.warning(F("mqtt publish store: NVS unavailable, settings will not persist" CR));

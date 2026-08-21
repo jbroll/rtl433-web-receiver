@@ -131,7 +131,6 @@ void begin(const char* clientId) {
   strncpy(_clientId, clientId, sizeof(_clientId) - 1);
   _clientId[sizeof(_clientId) - 1] = '\0';
 
-  mqtt_publish_store::begin();
   const char* url = mqtt_publish_store::brokerUrl();
   if (url[0] == '\0') {
     Log.notice(F("mqtt publish: no broker configured, disabled" CR));
@@ -149,14 +148,20 @@ void begin(const char* clientId) {
 
   if (_broker.tls) {
     _secureClient.setCACert(ISRG_ROOT_X1);
+    _secureClient.setTimeout(5);
+    _secureClient.setHandshakeTimeout(5);
     _mqtt.setClient(_secureClient);
   } else {
     _mqtt.setClient(_plainClient);
   }
   _mqtt.setServer(_broker.host, _broker.port);
+  // A dead broker must not stall loop(), and with it rf.loop(), for the 15 s
+  // PubSubClient default.
+  _mqtt.setSocketTimeout(5);
   _enabled = true;
   Log.notice(F("mqtt publish: enabled, broker %s:%u (%s)" CR),
              _broker.host, _broker.port, _broker.tls ? "TLS" : "plain");
+  _lastAttempt = millis() - MQTT_RECONNECT_BACKOFF_MS;
 }
 
 void loop() {

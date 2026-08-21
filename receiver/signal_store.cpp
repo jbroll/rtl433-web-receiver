@@ -589,6 +589,11 @@ bool selfTest() {
   reset();
   static int hookACalls = 0;
   static int hookBCalls = 0;
+  // Production hooks may already fill every slot by the time this runs.
+  uint8_t    savedHookCount = _hookCount;
+  RecordHook savedHooks[SIGNAL_MAX_HOOKS];
+  memcpy(savedHooks, _hooks, sizeof(_hooks));
+  _hookCount = 0;
   addRecordHook([](const char*, JsonDocument&) { hookACalls++; });
   addRecordHook([](const char*, JsonDocument&) { hookBCalls++; });
   record("{\"model\":\"Hooked\",\"id\":1}", -70);  // first sighting: pending, no hook fires
@@ -600,6 +605,9 @@ bool selfTest() {
   record("{\"model\":\"Hooked\",\"id\":1}", -70);  // a repeat fires both again
   ok &= check("hooks fire again on a repeat record",
               hookACalls == 2 && hookBCalls == 2);
+
+  _hookCount = savedHookCount;
+  memcpy(_hooks, savedHooks, sizeof(_hooks));
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
