@@ -36,3 +36,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     -I"$shim" -I"$root" -I"$aj" \
     -o "$out/alias_store_test" "$root/alias_store.cpp" "$root/test/host/alias_store_test.cpp"
 "$out/alias_store_test"
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 \
+    -I"$shim" -I"$root" \
+    -o "$out/layout_store_test" "$root/layout_store.cpp" "$root/test/host/layout_store_test.cpp"
+"$out/layout_store_test"
