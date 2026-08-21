@@ -82,6 +82,14 @@
 - `dashboard/README.md` carries the install and build commands and the test commands.
   The bridge splits the same material into `docs/install.md` and `docs/development.md`.
   The dashboard should match.
+- The card age display doesn't tick. `Age` in `cards.jsx` reads `Date.now() - rec.seenAt.value`
+  at render time, but nothing re-renders it on an interval; only `seenAt` itself is a signal.
+  A card's "time since last update" only updates when a new message arrives, at which point
+  it resets, so it never shows time actually elapsing between messages.
+- No way to rename a module itself (the receiver or bridge a source points at), only the
+  individual device cards it reports. Settings has no field for a source's own label or for
+  the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
+  `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
 ## Information feeds
 
