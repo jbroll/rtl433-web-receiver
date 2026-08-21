@@ -147,10 +147,11 @@ broker URL once (`mqtt://` picks a plain `WiFiClient`, `mqtts://` a
 `WiFiClientSecure` with the ISRG Root X1 root CA compiled in — never
 `setInsecure()`) and calls `PubSubClient::setServer()`; `loop()` runs
 `PubSubClient::loop()` and retries a dropped connection no more than once
-per `MQTT_RECONNECT_BACKOFF_MS`. Connect attempts are bounded to 5 s (socket
-timeout, and TLS handshake timeout on the secure client), so an unreachable
+per `MQTT_RECONNECT_BACKOFF_MS`. Each phase of a connect attempt — TCP
+connect, TLS handshake, CONNACK wait — is bounded to 5 s, so an unreachable
 broker cannot stall `loop()` — and with it `rf.loop()` draining the decode
-queue — for longer than that. `onRecord()`, registered as a second
+queue — indefinitely, though the phases are sequential and a worst case on
+the TLS path adds up to roughly 15 s. `onRecord()`, registered as a second
 `signal_store` record hook, publishes the hook's `JsonDocument` unmodified
 to the topic `key` already is — `<mdnsHostname()>/<model>/<id>`, since
 `signal_store::setSource(mdnsHostname())` is what built that key in the
