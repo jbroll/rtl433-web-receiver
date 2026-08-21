@@ -27,7 +27,8 @@ static uint32_t   _total = 0;
 static uint32_t   _dropped = 0;
 static char       _source[SIGNAL_SOURCE_MAX] = "rtl433";
 static DeviceSub  _subs[SIGNAL_SUB_TABLE];
-static RecordHook _hook = nullptr;
+static RecordHook _hooks[SIGNAL_MAX_HOOKS];
+static uint8_t    _hookCount = 0;
 
 void reset() {
   memset(_devices, 0, sizeof(_devices));
@@ -55,7 +56,11 @@ const char* source() {
   return _source;
 }
 
-void setRecordHook(RecordHook hook) { _hook = hook; }
+void addRecordHook(RecordHook hook) {
+  if (_hookCount < SIGNAL_MAX_HOOKS) {
+    _hooks[_hookCount++] = hook;
+  }
+}
 
 // A topic segment holding a slash or a space would not parse back out of the
 // topic, and rtl_433 model names are free text.
@@ -235,8 +240,8 @@ bool record(const char* payload, int rssi, bool isDecode) {
   doc["rssi"] = rssi;
   doc["count"] = count;
 
-  if (_hook != nullptr) {
-    _hook(key, doc);
+  for (uint8_t h = 0; h < _hookCount; h++) {
+    _hooks[h](key, doc);
   }
 
   // The frame embeds the payload as JSON rather than as an escaped string, so a
@@ -580,6 +585,21 @@ bool selfTest() {
   ok &= check("a repeat of a still-pending key promotes it",
               record("{\"model\":\"Churn\",\"id\":10}", -70));
   ok &= check("the promoted device is the only one", deviceCount() == 1);
+
+  reset();
+  static int hookACalls = 0;
+  static int hookBCalls = 0;
+  addRecordHook([](const char*, JsonDocument&) { hookACalls++; });
+  addRecordHook([](const char*, JsonDocument&) { hookBCalls++; });
+  record("{\"model\":\"Hooked\",\"id\":1}", -70);  // first sighting: pending, no hook fires
+  ok &= check("a pending sighting does not fire hooks",
+              hookACalls == 0 && hookBCalls == 0);
+  record("{\"model\":\"Hooked\",\"id\":1}", -70);  // promotes: both hooks fire once
+  ok &= check("both registered hooks fire on a promoted record",
+              hookACalls == 1 && hookBCalls == 1);
+  record("{\"model\":\"Hooked\",\"id\":1}", -70);  // a repeat fires both again
+  ok &= check("hooks fire again on a repeat record",
+              hookACalls == 2 && hookBCalls == 2);
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

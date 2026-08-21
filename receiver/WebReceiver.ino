@@ -517,7 +517,7 @@ void setup() {
   signal_store::setSource(mdnsHostname());
   tz_store::begin();
   device_hooks::begin();
-  signal_store::setRecordHook(device_hooks::dispatch);
+  signal_store::addRecordHook(device_hooks::dispatch);
   alias_store::begin();
   web_ui::begin();
   rtl433Queue = xQueueCreate(RTL433_QUEUE_LEN, sizeof(SignalQueueItem));

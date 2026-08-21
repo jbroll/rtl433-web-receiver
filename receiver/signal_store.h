@@ -37,8 +37,12 @@ void reset();
 // The first segment of every key. mdnsHostname() supplies it once WiFi is up.
 void        setSource(const char* source);
 const char* source();
+#define SIGNAL_MAX_HOOKS 2
 typedef void (*RecordHook)(const char* key, JsonDocument& doc);
-void        setRecordHook(RecordHook hook);
+// Registers a hook to run in signal_store::record(), in registration order,
+// after time/rssi/count are stamped and before the size check. Silently
+// ignored once SIGNAL_MAX_HOOKS are already registered.
+void        addRecordHook(RecordHook hook);
 // isDecode false records the receiver's own telemetry: it takes a device slot
 // like any other, but stays out of the decode count.
 bool              record(const char* payload, int rssi, bool isDecode = true);
