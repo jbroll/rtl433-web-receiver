@@ -43,7 +43,9 @@ therefore be older than the age column shows.
 The Alias box names that device's card, the same name double-clicking the card
 label sets; both post to `<topic>/$alias`, so a name assigned in either place
 is visible to every viewer. Emptying the box posts `""`, which removes the
-alias and puts the topic's own key back as the name.
+alias and puts the topic's own key back as the name. The box only trims and
+posts on blur or Enter, not on every keystroke, so a trailing or leading space
+can be typed while editing.
 
 A new device gets no card. The Card checkbox is how it gets one, and it reads
 the same setting the ✕ on a card writes, so a device hidden from the Cards tab
