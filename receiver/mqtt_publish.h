@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ArduinoJson.h>
+#include <stdint.h>
 
 namespace mqtt_publish {
 // Reads mqtt_publish_store; call once, after WiFi has come up. clientId
@@ -17,4 +18,10 @@ void onRecord(const char* key, JsonDocument& doc);
 // Publishes the stored $layout, retained, to <clientId>/$layout. A no-op
 // (fire-and-forget) if not currently connected, the same as onRecord.
 void publishLayout(const char* blob);
+// Publishes the stored $location, retained, to <clientId>/$location. A no-op
+// (fire-and-forget) if not currently connected, the same as publishLayout.
+void publishLocation(const char* blob);
+// Publishes the current tz offset, retained, to <clientId>/$tz. A no-op
+// (fire-and-forget) if not currently connected, the same as publishLayout.
+void publishTz(int16_t minutes);
 } // namespace mqtt_publish

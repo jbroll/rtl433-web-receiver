@@ -8,8 +8,10 @@
 #include <stdlib.h>
 
 #include "layout_store.h"
+#include "location_store.h"
 #include "mqtt_publish_store.h"
 #include "signal_store.h"
+#include "tz_store.h"
 
 #ifndef MQTT_RECONNECT_BACKOFF_MS
 #define MQTT_RECONNECT_BACKOFF_MS 30000
@@ -115,6 +117,21 @@ static void replayAll() {
     int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
     if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, layout, true)) sent++;
   }
+  const char* location = location_store::get();
+  if (location[0] != '\0') {
+    char topic[80];
+    int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
+    if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, location, true)) sent++;
+  }
+  {
+    char payload[8];
+    int  pn = snprintf(payload, sizeof(payload), "%d", tz_store::offsetMinutes());
+    if (pn > 0 && (size_t)pn < sizeof(payload)) {
+      char topic[80];
+      int  n = snprintf(topic, sizeof(topic), "%s/$tz", _clientId);
+      if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, payload, true)) sent++;
+    }
+  }
   Log.notice(F("mqtt publish: replayed %d retained record(s) on connect" CR), sent);
 }
 
@@ -196,6 +213,26 @@ void publishLayout(const char* blob) {
   int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
   _mqtt.publish(topic, blob, true);
+}
+
+void publishLocation(const char* blob) {
+  if (!_enabled || !_mqtt.connected()) return;
+  if (blob == nullptr || blob[0] == '\0') return;
+  char topic[80];
+  int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
+  if (n < 0 || (size_t)n >= sizeof(topic)) return;
+  _mqtt.publish(topic, blob, true);
+}
+
+void publishTz(int16_t minutes) {
+  if (!_enabled || !_mqtt.connected()) return;
+  char payload[8];
+  int  pn = snprintf(payload, sizeof(payload), "%d", minutes);
+  if (pn < 0 || (size_t)pn >= sizeof(payload)) return;
+  char topic[80];
+  int  n = snprintf(topic, sizeof(topic), "%s/$tz", _clientId);
+  if (n < 0 || (size_t)n >= sizeof(topic)) return;
+  _mqtt.publish(topic, payload, true);
 }
 
 } // namespace mqtt_publish
