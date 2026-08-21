@@ -118,8 +118,7 @@ and can run in parallel. Linearly, auth then mobile is simpler.
 - App: mDNS discovery in the Sources tab (Android first), via
   `@devioarts/capacitor-mdns` — a "Scan" button browses `_http._tcp.`,
   filters to services carrying the `rtl433` TXT record, and lets the user
-  pick one into the source list. Design in
-  [`docs/superpowers/specs/2026-08-20-mdns-discovery-design.md`](docs/superpowers/specs/2026-08-20-mdns-discovery-design.md).
+  pick one into the source list. Design in commit 726a602.
 
 ### Goal 5 — Electron (deferred)
 
