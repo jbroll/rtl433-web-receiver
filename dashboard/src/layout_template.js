@@ -141,6 +141,10 @@ export function postLayout() {
     body: JSON.stringify(template),
   }).then(res => {
     if (!res.ok) { console.error(`POST ${url} failed: ${res.status}`); return }
+    // Don't wait on the $layout frame echoing back over MQTT to know what we
+    // just saved -- that round trip races a user hitting Load right after
+    // the toast, handing them back whatever the echo hadn't yet overwritten.
+    applyLayoutFrame(location.origin, template)
     showToast('Saved as default layout')
   }).catch(err => {
     console.error(`POST ${url} failed: ${err.message || err}`)
