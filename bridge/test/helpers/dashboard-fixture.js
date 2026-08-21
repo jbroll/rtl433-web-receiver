@@ -6,6 +6,7 @@ import { connectBroker } from '../../src/broker.js'
 import { createCache } from '../../src/cache.js'
 import { createBridge } from '../../src/server.js'
 import { startEmbeddedBroker } from '../../src/embedded-broker.js'
+import { waitFor } from './bridge.js'
 
 // Long enough to outlast a loaded machine running the whole Playwright suite.
 const LANDED_MS = 10000
@@ -23,7 +24,7 @@ export async function startTestBridge(opts = {}) {
     cache,
     // Broadcasting is what feeds /events; opts.onMessage only observes.
     onMessage: (topic, payload) => {
-      bridge.broadcast(topic, payload)
+      bridge?.broadcast(topic, payload)
       opts.onMessage?.(topic, payload)
     },
   })
@@ -68,19 +69,20 @@ export async function startTestBridge(opts = {}) {
   async function publish(topic, json) {
     if (closed) return
     await publisher.publishAsync(topic, json, { qos: 0, retain: true })
-    const deadline = Date.now() + LANDED_MS
-    while (Date.now() < deadline) {
-      if (closed) return
-      try {
-        const res = await get(topic)
-        if (json.length === 0 ? res.status === 404 : res.body === json) return
-      } catch (err) {
-        if (closed) return
-        throw err
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10))
+    const landed = async () => {
+      if (closed) return true
+      const res = await get(topic)
+      return json.length === 0 ? res.status === 404 : res.body === json
     }
-    throw new Error(`the bridge never took a publish of ${topic}`)
+    try {
+      await waitFor(landed, LANDED_MS)
+    } catch (err) {
+      if (closed) return
+      if (err.message === 'timed out waiting for condition') {
+        throw new Error(`the bridge never took a publish of ${topic}`)
+      }
+      throw err
+    }
   }
 
   return {

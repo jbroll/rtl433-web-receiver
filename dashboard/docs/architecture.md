@@ -270,6 +270,19 @@ origin it was served from, so the firmware-served build works with no setup.
 
 ## Tests
 
-`test/*.test.js` are node tests over the modules that touch no DOM. `test/cards.spec.js`
-is Playwright against the built bundle, in front of `receiver/test/binding-server.js` — a
-JS model of the binding, which keeps the suite fast and independent of a broker.
+`test/*.test.js` are node tests over the modules that touch no DOM. `test/*.spec.js` is
+Playwright against the built bundle, served by `startServer()`'s own outer HTTP server
+(`test/harness.js`). That server also reverse-proxies every other request to a real
+`bridge/` running over an in-process aedes broker
+(`bridge/test/helpers/dashboard-fixture.js`), so the suite exercises the real HTTP
+binding rather than a model of it.
+
+Two of the dashboard's own `POST` paths are intercepted by the harness itself instead of
+proxied, because neither works against a real bridge over MQTT: `$tz`, because MQTT
+excludes topic names beginning with `$` from a `#` wildcard subscription, so the bridge
+can never see its own `$tz` publish echo back and always answers `503`; and `$alias`
+posted with an empty body, because the bridge stores that as an ordinary 2-byte retained
+message rather than treating it as a delete. Both are filed as bugs in
+[`bridge/docs/backlog.md`](../../bridge/docs/backlog.md). The harness reproduces the
+receiver firmware's actual behavior for both, so the suite's assertions keep meaning what
+they say.

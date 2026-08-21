@@ -98,7 +98,8 @@ export async function startServer(opts = {}) {
       if (last === "$tz" || last === "$alias") {
         try {
           await postToReceiver(req, res, topic, last);
-        } catch {
+        } catch (err) {
+          console.error(err);
           try {
             res.writeHead(502).end();
           } catch {
