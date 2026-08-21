@@ -2,6 +2,9 @@
   "name": "rtl433-web-receiver-tests",
   "private": true,
   "type": "commonjs",
+  "bin": {
+    "flash-ota": "tools/flash-ota.js"
+  },
   "scripts": {
     "test": "playwright test"
   },

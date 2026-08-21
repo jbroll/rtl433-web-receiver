@@ -137,6 +137,9 @@ POST body.
 
     200 ok
 
+`tools/flash-ota.js` wraps this (`npx flash-ota rtl433-a1b2c3.local`) — see
+`docs/development.md`.
+
 The bearer token is set from the SoftAP captive portal's "Update token"
 field (see `docs/install.md`) or from the `.env` `OTA_TOKEN` build flag if
 none has been set through the portal yet. A missing or wrong
