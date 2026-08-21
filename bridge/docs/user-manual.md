@@ -72,7 +72,9 @@ returns the body byte for byte, and a subscriber already connected has
 received it. The `POST` is held for the round trip that takes.
 
 Publishing to a `$alias` topic works the same way; see
-[`docs/binding.md`](binding.md#aliases).
+[`docs/binding.md`](binding.md#aliases). `$layout`, the site-default
+dashboard arrangement, is documented at
+[`docs/binding.md`](binding.md#layout).
 
 ## GET /events — subscribe
 
