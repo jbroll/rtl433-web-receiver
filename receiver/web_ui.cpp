@@ -439,7 +439,7 @@ static bool sameOriginOrBare() {
   }
   int    schemeEnd  = origin.indexOf("://");
   String originHost = schemeEnd >= 0 ? origin.substring(schemeEnd + 3) : origin;
-  return originHost == _server.header("Host");
+  return originHost == _server.hostHeader();
 }
 
 static void handleMqttOptions() {
@@ -831,6 +831,8 @@ static void drainReplay(int i, FrameBuffer& frame) {
 }
 
 void begin() {
+  static const char* HEADER_KEYS[] = {"Origin"};
+  _server.collectHeaders(HEADER_KEYS, 1);
   _server.on("/", HTTP_GET, handleRoot);
   _server.on("/events", HTTP_GET, handleEvents);
   _server.on("/$update", HTTP_POST, handleUpdateComplete, handleUpdateUpload);

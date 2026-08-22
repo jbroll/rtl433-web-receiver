@@ -197,6 +197,22 @@ void begin(const char* clientId) {
   strncpy(_clientId, clientId, sizeof(_clientId) - 1);
   _clientId[sizeof(_clientId) - 1] = '\0';
 
+  // Every slot may already hold a live socket from a prior begin() — a
+  // dashboard add/remove reshuffles which broker each array index serves, so
+  // every one of them (not just the ones about to be reused) must be torn
+  // down first, or a stale connection keeps publishing to a removed broker.
+  for (uint8_t i = 0; i < MQTT_PUBLISH_MAX_CONNECTIONS; i++) {
+    Connection& c = _conn[i];
+    if (c.mqtt.connected()) {
+      c.mqtt.disconnect();
+    }
+    c.plainClient.stop();
+    c.secureClient.stop();
+    c.enabled = false;
+    c.url[0]   = '\0';
+    c.token[0] = '\0';
+  }
+
   _connCount = 0;
   for (uint8_t i = 0; i < MQTT_PUBLISH_SLOTS; i++) {
     const char* url = mqtt_publish_store::urlAt(i);
