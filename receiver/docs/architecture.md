@@ -115,14 +115,20 @@ on reboot.
 respect: one entry per receiver, stored and served verbatim, host-tested
 `selfTest()`, and a write accepted even when NVS never opened.
 
-**`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`, and
-`/$update` are the only registered routes; every topic is an arbitrary path,
-so `GET` and `POST` of a topic are both dispatched from
-`WebServer::onNotFound`, which does its own topic validation rather than
-relying on route matching. `/$update` is registered directly rather than
-routed through the topic parser, since `$update` isn't a topic, and uses
-`WebServer::on()`'s two-callback form so the ~1.2 MB firmware image streams
-through `Update::write()` in chunks instead of buffering whole. Four SSE
+**`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`,
+`/$update`, and `/$mqtt` (plus `/$mqtt/remove`) are the only registered
+routes; every topic is an arbitrary path, so `GET` and `POST` of a topic are
+both dispatched from `WebServer::onNotFound`, which does its own topic
+validation rather than relying on route matching. `/$update` and `/$mqtt`
+are registered directly rather than routed through the topic parser, since
+neither is a topic. `/$update` uses `WebServer::on()`'s two-callback form so
+the ~1.2 MB firmware image streams through `Update::write()` in chunks
+instead of buffering whole. `/$mqtt` reports `mqtt_publish`'s active
+connections (url and connect state, never the token) and lets a `POST` add
+or update a bridge and a `POST /$mqtt/remove` drop one; both mutating routes
+check the request's `Origin` header against the receiver's own `Host` rather
+than using the bare-path-or-own-source convention `$tz`/`$layout`/`$location`
+use, since `$mqtt` has no source-prefixed form to compare against. Four SSE
 client slots (`WEB_UI_SSE_CLIENTS`), each a `WiFiClient` plus up to four
 filters and one replay cursor, are fixed arrays sized at compile time — there
 is no dynamic connection list.

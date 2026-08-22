@@ -13,6 +13,7 @@
 #include "layout_store.h"
 #include "location_store.h"
 #include "mqtt_publish.h"
+#include "mqtt_publish_store.h"
 #include "ota_token_store.h"
 #include "signal_store.h"
 #include "topic.h"
@@ -426,6 +427,88 @@ static void handleTzPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
+// $mqtt is receiver-local device configuration (which brokers to push to),
+// not a topic — unlike $tz/$layout/$location it has no source-prefixed
+// form, so a real Origin check stands in for the ownSource convention those
+// use: a request with no Origin header (curl, or same-origin) is trusted;
+// one with an Origin that doesn't match this receiver's own Host is not.
+static bool sameOriginOrBare() {
+  String origin = _server.header("Origin");
+  if (origin.length() == 0) {
+    return true;
+  }
+  int    schemeEnd  = origin.indexOf("://");
+  String originHost = schemeEnd >= 0 ? origin.substring(schemeEnd + 3) : origin;
+  return originHost == _server.header("Host");
+}
+
+static void handleMqttOptions() {
+  sendCors();
+  _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  _server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+  _server.sendHeader("Access-Control-Max-Age", "600");
+  _server.send(204, "text/plain", "");
+}
+
+static void handleMqttGet() {
+  JsonDocument doc;
+  JsonArray    arr = doc.to<JsonArray>();
+  for (uint8_t i = 0; i < mqtt_publish::count(); i++) {
+    JsonObject o = arr.add<JsonObject>();
+    o["url"] = mqtt_publish::urlAt(i);
+    o["connected"] = mqtt_publish::connectedAt(i);
+  }
+  String body;
+  serializeJson(doc, body);
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(200, "application/json", body);
+}
+
+static void handleMqttPost() {
+  if (!sameOriginOrBare()) {
+    sendStatus(403, "off-origin");
+    return;
+  }
+  String       body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>() ||
+      !doc["url"].is<const char*>()) {
+    sendStatus(400, "body must be a JSON object with a url");
+    return;
+  }
+  const char* url   = doc["url"];
+  const char* token = doc["token"].is<const char*>() ? doc["token"].as<const char*>() : "";
+  if (!mqtt_publish_store::add(url, token)) {
+    sendStatus(400, "invalid url/token, or the bridge table is full");
+    return;
+  }
+  mqtt_publish::begin(signal_store::source());
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(204, "text/plain", "");
+}
+
+static void handleMqttRemovePost() {
+  if (!sameOriginOrBare()) {
+    sendStatus(403, "off-origin");
+    return;
+  }
+  String       body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>() ||
+      !doc["url"].is<const char*>()) {
+    sendStatus(400, "body must be a JSON object with a url");
+    return;
+  }
+  const char* url = doc["url"];
+  mqtt_publish_store::remove(url); // a url that was never present is not an error
+  mqtt_publish::begin(signal_store::source());
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(204, "text/plain", "");
+}
+
 // Set at UPLOAD_FILE_START, read once by handleUpdateComplete() and reset
 // there — WebServer only invokes the upload callback for a multipart part
 // carrying a filename, so any other POST /$update (e.g. no file part) skips
@@ -751,6 +834,11 @@ void begin() {
   _server.on("/", HTTP_GET, handleRoot);
   _server.on("/events", HTTP_GET, handleEvents);
   _server.on("/$update", HTTP_POST, handleUpdateComplete, handleUpdateUpload);
+  _server.on("/$mqtt", HTTP_GET, handleMqttGet);
+  _server.on("/$mqtt", HTTP_POST, handleMqttPost);
+  _server.on("/$mqtt", HTTP_OPTIONS, handleMqttOptions);
+  _server.on("/$mqtt/remove", HTTP_POST, handleMqttRemovePost);
+  _server.on("/$mqtt/remove", HTTP_OPTIONS, handleMqttOptions);
   // Topics are arbitrary paths, so every other request is dispatched here.
   _server.onNotFound(handleTopic);
   _server.begin();

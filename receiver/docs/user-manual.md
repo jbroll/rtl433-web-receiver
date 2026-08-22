@@ -24,17 +24,25 @@ reconnecting every 30 seconds without touching stored credentials.
 
 ## Publishing to a remote broker
 
-Set `MQTT_BROKER_URL` (`.env` or the provisioning portal) to also publish
-every record, retained, to a remote MQTT broker — off by default. The topic
-is the same key the receiver stores it under locally,
-`<mdnsHostname()>/<model>/<id>`, and the payload is the identical JSON `GET
-/<topic>` would return. `MQTT_TOKEN`, if set, is sent as the CONNECT
-password; a broker on the LAN often needs none. Publishing is
-fire-and-forget — a record that arrives while disconnected from the broker
-is simply not published — but every successful connect or reconnect
-republishes everything currently held, so a broker that was briefly
-unreachable catches back up without waiting for each device's next natural
-transmission.
+The receiver can push every record, retained, to up to four MQTT brokers at
+once: three configured from the dashboard's Settings tab (see below) plus
+one always-on default from the `MQTT_BROKER_URL`/`MQTT_TOKEN` build flags
+(`.env`) — off by default. The topic is the same key the receiver stores it
+under locally, `<mdnsHostname()>/<model>/<id>`, and the payload is the
+identical JSON `GET /<topic>` would return. A broker's token, if set, is
+sent as the CONNECT password; a broker on the LAN often needs none.
+Publishing is fire-and-forget per connection — a record that arrives while
+a given broker is disconnected is simply not published to it — but every
+successful connect or reconnect republishes everything currently held to
+that broker, so one that was briefly unreachable catches back up without
+waiting for each device's next natural transmission. One broker being
+unreachable doesn't affect any other.
+
+Add, update, or remove a bridge from the dashboard's Settings tab (see
+`../../dashboard/docs/user-manual.md`'s "Bridges" section), or directly via
+`POST /$mqtt` / `POST /$mqtt/remove` below. There's no way to edit a stored
+token without re-adding the bridge; posting an already-known url updates its
+token in place.
 
 ## Routes
 
@@ -44,6 +52,9 @@ transmission.
 | `GET /<topic>` | The stored message. `200`, `application/json`, `Cache-Control: no-store`. `404` if there is none |
 | `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success |
 | `POST /$tz` | Store the GMT offset. Body is a JSON number, signed minutes. `204`; `405` unless the topic is `$tz` or under this receiver's source |
+| `POST /$mqtt` | Add or update a bridge to push to. Body `{"url":"...","token":"..."}`. `204` on success, `400` on an invalid url/token or a full table, `403` off-origin |
+| `GET /$mqtt` | This receiver's active push connections. `200`, `application/json`: `[{"url":"...","connected":true}, ...]` — never the token |
+| `POST /$mqtt/remove` | Stop pushing to a bridge. Body `{"url":"..."}`. `204` on success, including if the url wasn't present; `403` off-origin |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `200`, `text/event-stream` |
 | `POST /$update` | Push a firmware image. `multipart/form-data`, bearer token required. `200` and reboots on success |
 
