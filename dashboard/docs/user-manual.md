@@ -243,3 +243,15 @@ lists services whose name starts with `rtl433-`; tap a result to add it as a sou
 button only appears in the app, not in a plain browser. Manual URL entry always works as a
 fallback, including for a receiver built with a custom `MDNS_PREFIX`, which the scan won't
 find.
+
+## Bridges
+
+The Settings tab also shows the receiver's own MQTT push targets — where
+*this* receiver sends its readings, the reverse of Sources' list of places
+it reads from. Add a broker URL (`mqtt://host:port` or
+`mqtts://host:port`) and an optional token, up to three at a time; a dot
+shows whether each is currently connected. Removing one stops that push
+immediately. This panel only appears when the dashboard is served by a
+receiver — a standalone bridge or a dashboard build with no `/$mqtt` shows
+nothing here. There's no way to see or edit a stored token; re-adding the
+same url with a new token replaces it.

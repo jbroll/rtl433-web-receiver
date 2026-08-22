@@ -9,6 +9,7 @@ import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
          setSourceState } from './sources.js'
+import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame } from './settings.js'
 import { measureGrid, installGestures, cellSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
@@ -197,6 +198,7 @@ if (store.cardState.value.order.length !== 0) disableAutoApply()
 loadAliases()
 loadSort()
 loadSources()
+loadBridges()
 loadSettings()
 installGestures()
 

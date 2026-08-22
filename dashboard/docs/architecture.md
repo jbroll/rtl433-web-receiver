@@ -14,6 +14,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `store.js` | card layout in `localStorage`, and `forgetLayouts()` |
 | `settings.js` | units, decimals, and the location, in `localStorage`, with a source-published location as fallback |
 | `sources.js` | the source list and its storage |
+| `bridges.js` | the receiver's MQTT push-bridge list, fetched from `/$mqtt`, and its mutations |
 | `stream.js` | one source's SSE connection and its reconnect |
 | `grid.js` | cell arithmetic, the resize and drag gestures, and value fitting |
 | `cards.jsx` | the card grid, one card, and its values |
@@ -274,6 +275,17 @@ One SSE stream per source, each reconnecting on its own, so one source being dow
 not affect another. Connection state shows as a dot in the settings panel and never
 becomes a column in the device table. With no sources configured the dashboard reads the
 origin it was served from, so the firmware-served build works with no setup.
+
+## Bridges
+
+The reverse of Sources: `bridges.js` fetches `GET /$mqtt` against
+`location.origin` and shows what this receiver currently pushes to, never
+`localStorage` — there's nothing to cache, the receiver's own table is the
+only copy. Adding or removing a bridge `POST`s to `/$mqtt` or
+`/$mqtt/remove` and refetches. If `/$mqtt` isn't served here (the standalone
+bridge, or a dashboard opened before the receiver's boot finished), the
+panel renders nothing, the same as `LocationView`'s `$tz`/`$location` POSTs
+being silently origin-gated today.
 
 ## Tests
 
