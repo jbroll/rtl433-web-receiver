@@ -159,13 +159,20 @@ every `GET` and stored via `ota_token_store::set()` only if submitted
 non-empty, so leaving it blank on a re-provisioning pass keeps whatever
 token was already set.
 
-**`mqtt_publish_store.h` / `mqtt_publish_store.cpp`** — persists the MQTT
-broker URL and token to `Preferences` namespace `"mqtt"`, in fixed
-`_url`/`_token` buffers. Mirrors `wifi_store`'s fixed-buffer/NVS shape;
-`brokerUrl()`/`token()` follow `ota_token_store::token()`'s precedence
-(stored value, else the `.env`-supplied `MQTT_BROKER_URL`/`MQTT_TOKEN` build
-flags, else empty). `hasBroker()` is false, and the feature stays off, until
-a broker URL is set by either path.
+**`mqtt_publish_store.h` / `mqtt_publish_store.cpp`** — persists up to
+`MQTT_PUBLISH_SLOTS` (3) dashboard-configured broker url/token pairs to
+`Preferences` namespace `"mqtt"`, as one JSON blob under key `"table"` — the
+same shape `alias_store`'s 32-slot table uses, for the same reason: NVS keys
+are capped at 15 characters, so one key per slot doesn't scale. `add()`
+validates the same `mqtt://`/`mqtts://` scheme and length caps the old
+single-value `set()` did, updates a slot in place when its url is already
+present, and fails with the table full and no matching url. A pre-existing
+single `url`/`token` NVS value (from before this table existed) is copied
+into slot 0 the first time `begin()` runs against an otherwise-empty table,
+then the old keys are removed — a one-time, silent migration. The
+`MQTT_BROKER_URL`/`MQTT_TOKEN` build flags are read directly by
+`mqtt_publish.cpp`, not through this store; they're a separate, always-on
+connection outside the table.
 
 **`mqtt_publish.h` / `mqtt_publish.cpp`** — publishes every record to a
 remote broker over `PubSubClient`, retained. `begin()` parses the stored

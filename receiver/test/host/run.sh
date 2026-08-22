@@ -44,3 +44,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     -I"$shim" -I"$root" \
     -o "$out/location_store_test" "$root/location_store.cpp" "$root/test/host/location_store_test.cpp"
 "$out/location_store_test"
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 \
+    -I"$shim" -I"$root" -I"$aj" \
+    -o "$out/mqtt_publish_store_test" "$root/mqtt_publish_store.cpp" "$root/test/host/mqtt_publish_store_test.cpp"
+"$out/mqtt_publish_store_test"
