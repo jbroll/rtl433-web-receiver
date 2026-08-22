@@ -93,35 +93,77 @@ static ParsedBroker parseBrokerUrl(const char* url) {
   return p;
 }
 
-static WiFiClient       _plainClient;
-static WiFiClientSecure _secureClient;
-static PubSubClient     _mqtt;
-static ParsedBroker     _broker;
-static char             _token[MQTT_PUBLISH_STORE_TOKEN_MAX] = "";
-static char             _clientId[64] = "";
-static bool             _enabled = false;
-static unsigned long    _lastAttempt = 0;
+// One entry per active connection: up to MQTT_PUBLISH_SLOTS dashboard-added
+// bridges plus the build-flag default. A fixed array, not a dynamic list, so
+// PubSubClient::setClient()'s stored reference to plainClient/secureClient
+// never dangles across a begin() rebuild.
+#define MQTT_PUBLISH_MAX_CONNECTIONS (MQTT_PUBLISH_SLOTS + 1)
 
-static void replayAll() {
+struct Connection {
+  WiFiClient       plainClient;
+  WiFiClientSecure secureClient;
+  PubSubClient     mqtt;
+  ParsedBroker     broker;
+  char             url[MQTT_PUBLISH_STORE_URL_MAX] = "";
+  char             token[MQTT_PUBLISH_STORE_TOKEN_MAX] = "";
+  bool             enabled = false;
+  unsigned long    lastAttempt = 0;
+};
+
+static Connection _conn[MQTT_PUBLISH_MAX_CONNECTIONS];
+static uint8_t    _connCount = 0;
+static char       _clientId[64] = "";
+
+static void setupConnection(Connection& c, const char* url, const char* token) {
+  strncpy(c.url, url, sizeof(c.url) - 1);
+  c.url[sizeof(c.url) - 1] = '\0';
+  c.broker = parseBrokerUrl(url);
+  if (!c.broker.valid) {
+    Log.warning(F("mqtt publish: broker URL \"%s\" is not a valid mqtt(s)://host:port, skipped" CR), url);
+    c.enabled = false;
+    return;
+  }
+  strncpy(c.token, token ? token : "", sizeof(c.token) - 1);
+  c.token[sizeof(c.token) - 1] = '\0';
+
+  if (c.broker.tls) {
+    c.secureClient.setCACert(ISRG_ROOT_X1);
+    c.secureClient.setTimeout(5);
+    c.secureClient.setHandshakeTimeout(5);
+    c.mqtt.setClient(c.secureClient);
+  } else {
+    c.mqtt.setClient(c.plainClient);
+  }
+  c.mqtt.setServer(c.broker.host, c.broker.port);
+  // A dead broker must not stall loop(), and with it rf.loop(), for the 15 s
+  // PubSubClient default.
+  c.mqtt.setSocketTimeout(5);
+  c.enabled = true;
+  c.lastAttempt = millis() - MQTT_RECONNECT_BACKOFF_MS;
+  Log.notice(F("mqtt publish: enabled, broker %s:%u (%s)" CR),
+             c.broker.host, c.broker.port, c.broker.tls ? "TLS" : "plain");
+}
+
+static void replayAll(Connection& c) {
   uint8_t sent = 0;
   for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
     const DeviceSlot* slot = signal_store::slotAt(i);
     if (slot == nullptr) continue;
     const char* payload = signal_store::latestPayload(*slot);
     if (payload == nullptr) continue;
-    if (_mqtt.publish(slot->key, payload, true)) sent++;
+    if (c.mqtt.publish(slot->key, payload, true)) sent++;
   }
   const char* layout = layout_store::get();
   if (layout[0] != '\0') {
     char topic[80];
     int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
-    if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, layout, true)) sent++;
+    if (n > 0 && (size_t)n < sizeof(topic) && c.mqtt.publish(topic, layout, true)) sent++;
   }
   const char* location = location_store::get();
   if (location[0] != '\0') {
     char topic[80];
     int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
-    if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, location, true)) sent++;
+    if (n > 0 && (size_t)n < sizeof(topic) && c.mqtt.publish(topic, location, true)) sent++;
   }
   {
     char payload[8];
@@ -129,24 +171,24 @@ static void replayAll() {
     if (pn > 0 && (size_t)pn < sizeof(payload)) {
       char topic[80];
       int  n = snprintf(topic, sizeof(topic), "%s/$tz", _clientId);
-      if (n > 0 && (size_t)n < sizeof(topic) && _mqtt.publish(topic, payload, true)) sent++;
+      if (n > 0 && (size_t)n < sizeof(topic) && c.mqtt.publish(topic, payload, true)) sent++;
     }
   }
-  Log.notice(F("mqtt publish: replayed %d retained record(s) on connect" CR), sent);
+  Log.notice(F("mqtt publish: replayed %d retained record(s) to %s on connect" CR), sent, c.broker.host);
 }
 
-static bool connectOnce() {
-  if (millis() - _lastAttempt < MQTT_RECONNECT_BACKOFF_MS) return false;
-  _lastAttempt = millis();
-  bool ok = _token[0] != '\0'
-                ? _mqtt.connect(_clientId, "", _token)
-                : _mqtt.connect(_clientId);
+static bool connectOnce(Connection& c) {
+  if (millis() - c.lastAttempt < MQTT_RECONNECT_BACKOFF_MS) return false;
+  c.lastAttempt = millis();
+  bool ok = c.token[0] != '\0'
+                ? c.mqtt.connect(_clientId, "", c.token)
+                : c.mqtt.connect(_clientId);
   if (ok) {
-    Log.notice(F("mqtt publish: connected to %s:%u" CR), _broker.host, _broker.port);
-    replayAll();
+    Log.notice(F("mqtt publish: connected to %s:%u" CR), c.broker.host, c.broker.port);
+    replayAll(c);
   } else {
     Log.warning(F("mqtt publish: connect to %s:%u failed, state=%d" CR),
-                _broker.host, _broker.port, _mqtt.state());
+                c.broker.host, c.broker.port, c.mqtt.state());
   }
   return ok;
 }
@@ -155,84 +197,95 @@ void begin(const char* clientId) {
   strncpy(_clientId, clientId, sizeof(_clientId) - 1);
   _clientId[sizeof(_clientId) - 1] = '\0';
 
-  const char* url = mqtt_publish_store::brokerUrl();
-  if (url[0] == '\0') {
+  _connCount = 0;
+  for (uint8_t i = 0; i < MQTT_PUBLISH_SLOTS; i++) {
+    const char* url = mqtt_publish_store::urlAt(i);
+    if (url == nullptr) continue;
+    setupConnection(_conn[_connCount], url, mqtt_publish_store::tokenAt(i));
+    _connCount++;
+  }
+#ifdef MQTT_BROKER_URL
+  setupConnection(_conn[_connCount], MQTT_BROKER_URL,
+#ifdef MQTT_TOKEN
+                   MQTT_TOKEN
+#else
+                   ""
+#endif
+  );
+  _connCount++;
+#endif
+  if (_connCount == 0) {
     Log.notice(F("mqtt publish: no broker configured, disabled" CR));
-    _enabled = false;
-    return;
   }
-  _broker = parseBrokerUrl(url);
-  if (!_broker.valid) {
-    Log.warning(F("mqtt publish: broker URL \"%s\" is not a valid mqtt(s)://host:port, disabled" CR), url);
-    _enabled = false;
-    return;
-  }
-  strncpy(_token, mqtt_publish_store::token(), sizeof(_token) - 1);
-  _token[sizeof(_token) - 1] = '\0';
-
-  if (_broker.tls) {
-    _secureClient.setCACert(ISRG_ROOT_X1);
-    _secureClient.setTimeout(5);
-    _secureClient.setHandshakeTimeout(5);
-    _mqtt.setClient(_secureClient);
-  } else {
-    _mqtt.setClient(_plainClient);
-  }
-  _mqtt.setServer(_broker.host, _broker.port);
-  // A dead broker must not stall loop(), and with it rf.loop(), for the 15 s
-  // PubSubClient default.
-  _mqtt.setSocketTimeout(5);
-  _enabled = true;
-  Log.notice(F("mqtt publish: enabled, broker %s:%u (%s)" CR),
-             _broker.host, _broker.port, _broker.tls ? "TLS" : "plain");
-  _lastAttempt = millis() - MQTT_RECONNECT_BACKOFF_MS;
 }
 
 void loop() {
-  if (!_enabled) return;
+  if (_connCount == 0) return;
   if (WiFi.status() != WL_CONNECTED) return;
-  if (!_mqtt.connected()) {
-    connectOnce();
-    return;
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (!c.enabled) continue;
+    if (!c.mqtt.connected()) {
+      connectOnce(c);
+      continue;
+    }
+    c.mqtt.loop();
   }
-  _mqtt.loop();
 }
 
 void onRecord(const char* key, JsonDocument& doc) {
-  if (!_enabled || !_mqtt.connected()) return;
-  char payload[SIGNAL_PAYLOAD_MAX + 1];
+  if (_connCount == 0) return;
+  char   payload[SIGNAL_PAYLOAD_MAX + 1];
   size_t n = serializeJson(doc, payload, sizeof(payload));
   if (n == 0 || n >= sizeof(payload)) return;
-  _mqtt.publish(key, payload, true);
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (c.enabled && c.mqtt.connected()) c.mqtt.publish(key, payload, true);
+  }
 }
 
 void publishLayout(const char* blob) {
-  if (!_enabled || !_mqtt.connected()) return;
+  if (_connCount == 0) return;
   if (blob == nullptr || blob[0] == '\0') return;
   char topic[80];
   int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
-  _mqtt.publish(topic, blob, true);
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
+  }
 }
 
 void publishLocation(const char* blob) {
-  if (!_enabled || !_mqtt.connected()) return;
+  if (_connCount == 0) return;
   if (blob == nullptr || blob[0] == '\0') return;
   char topic[80];
   int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
-  _mqtt.publish(topic, blob, true);
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
+  }
 }
 
 void publishTz(int16_t minutes) {
-  if (!_enabled || !_mqtt.connected()) return;
+  if (_connCount == 0) return;
   char payload[8];
   int  pn = snprintf(payload, sizeof(payload), "%d", minutes);
   if (pn < 0 || (size_t)pn >= sizeof(payload)) return;
   char topic[80];
   int  n = snprintf(topic, sizeof(topic), "%s/$tz", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
-  _mqtt.publish(topic, payload, true);
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, payload, true);
+  }
 }
+
+uint8_t count() { return _connCount; }
+
+const char* urlAt(uint8_t i) { return i < _connCount ? _conn[i].url : nullptr; }
+
+bool connectedAt(uint8_t i) { return i < _connCount && _conn[i].mqtt.connected(); }
 
 } // namespace mqtt_publish

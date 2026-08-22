@@ -97,7 +97,8 @@ correct the header.
 
 `load_env.py` passes `WIFI_PASSWORD`, `OTA_TOKEN` and `MQTT_TOKEN` from `.env` to
 `platformio.ini` as `-D` string macros, and `ota_token_store.cpp:35` and
-`mqtt_publish_store.cpp:42,53` return them as fallbacks, so the literals link into
+`mqtt_publish.cpp`'s `begin()` (the `MQTT_BROKER_URL`/`MQTT_TOKEN` build-flag
+default) return them as fallbacks, so the literals link into
 `.rodata`. `.env` is gitignored and untracked, so nothing is in git history, but a `.bin`
 shared for flashing or an `esptool.py read_flash` on a recovered board yields all three as
 plain strings. Provisioning through the portal avoids it; the build-time path does not.

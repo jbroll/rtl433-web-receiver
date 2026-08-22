@@ -174,28 +174,39 @@ then the old keys are removed — a one-time, silent migration. The
 `mqtt_publish.cpp`, not through this store; they're a separate, always-on
 connection outside the table.
 
-**`mqtt_publish.h` / `mqtt_publish.cpp`** — publishes every record to a
-remote broker over `PubSubClient`, retained. `begin()` parses the stored
-broker URL once (`mqtt://` picks a plain `WiFiClient`, `mqtts://` a
-`WiFiClientSecure` with the ISRG Root X1 root CA compiled in — never
-`setInsecure()`) and calls `PubSubClient::setServer()`; `loop()` runs
-`PubSubClient::loop()` and retries a dropped connection no more than once
-per `MQTT_RECONNECT_BACKOFF_MS`. Each phase of a connect attempt — TCP
-connect, TLS handshake, CONNACK wait — is bounded to 5 s, so an unreachable
-broker cannot stall `loop()` — and with it `rf.loop()` draining the decode
-queue — indefinitely, though the phases are sequential and a worst case on
-the TLS path adds up to roughly 15 s. `MQTT_MAX_PACKET_SIZE` (2200, up from
-PubSubClient's 768 default, to fit a full `$layout` blob) is a permanently
-allocated buffer, not just a per-message cap, so it costs roughly 1.4 KB of
-RAM for the process lifetime. `onRecord()`, registered as a second
-`signal_store` record hook, publishes the hook's `JsonDocument` unmodified
-to the topic `key` already is — `<mdnsHostname()>/<model>/<id>`, since
+**`mqtt_publish.h` / `mqtt_publish.cpp`** — publishes every record to up to
+four brokers over `PubSubClient`, retained: one connection per
+`mqtt_publish_store` table slot, plus the always-on `MQTT_BROKER_URL`
+build-flag default as a fourth. Each is a fixed `Connection` (a
+`WiFiClient`/`WiFiClientSecure` pair, a `PubSubClient`, and its own backoff
+timer) in a compile-time-sized array, never a dynamic list — `PubSubClient`
+holds a reference to its client, so a slot's address has to stay stable
+across a `begin()` rebuild. `begin()` re-reads the store and rebuilds every
+connection from scratch; it's called once at boot and again whenever
+`web_ui.cpp`'s `/$mqtt` handlers change the table. Each connection
+connects/reconnects and backs off independently, so one broker being
+unreachable doesn't stall another. `mqtt://` picks a plain `WiFiClient`,
+`mqtts://` a `WiFiClientSecure` with the ISRG Root X1 root CA compiled in —
+never `setInsecure()`. `loop()` runs each connected client's
+`PubSubClient::loop()` and retries a dropped one no more than once per
+`MQTT_RECONNECT_BACKOFF_MS`. Each phase of a connect attempt — TCP connect,
+TLS handshake, CONNACK wait — is bounded to 5 s, so an unreachable broker
+cannot stall `loop()` — and with it `rf.loop()` draining the decode queue —
+indefinitely, though the phases are sequential and a worst case on the TLS
+path adds up to roughly 15 s per connection. `MQTT_MAX_PACKET_SIZE` (2200, up
+from PubSubClient's 768 default, to fit a full `$layout` blob) is a
+permanently allocated buffer per connection, not just a per-message cap, so
+it costs roughly 1.4 KB of RAM per active connection for the process
+lifetime. `onRecord()`, registered as a second `signal_store` record hook,
+publishes the hook's `JsonDocument` unmodified to the topic `key` already
+is — `<mdnsHostname()>/<model>/<id>`, since
 `signal_store::setSource(mdnsHostname())` is what built that key in the
-first place. A publish while disconnected is simply skipped: there is no
-retry queue, because every successful (re)connect calls `replayAll()`,
-walking `signal_store::slotAt()`/`latestPayload()` to republish every
-currently-held record, which backfills anything a fire-and-forget publish
-missed.
+first place — fanned out to every connected connection. A publish while a
+given connection is disconnected is simply skipped on that connection: there
+is no retry queue, because every successful (re)connect calls
+`replayAll()`, walking `signal_store::slotAt()`/`latestPayload()` to
+republish every currently-held record to that connection, which backfills
+anything a fire-and-forget publish missed.
 
 ## Boot order
 
