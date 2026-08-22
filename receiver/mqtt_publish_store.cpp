@@ -212,9 +212,18 @@ bool selfTest() {
 
   // Suppress NVS traffic across the checks below, same as alias_store::selfTest();
   // add()/remove() still exercise their in-memory logic and persist()'s "NVS
-  // closed still returns true" branch.
+  // closed still returns true" branch. Unlike alias_store::selfTest(), the
+  // whole live table is snapshotted and restored below: begin() has already
+  // loaded real bridges from NVS by the time this runs, and leaving the
+  // table wiped would make the next POST /$mqtt persist() over them.
   bool saved_open = _open;
   _open           = false;
+  char saved_url[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_URL_MAX];
+  char saved_token[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_TOKEN_MAX];
+  bool saved_used[MQTT_PUBLISH_SLOTS];
+  memcpy(saved_url, _url, sizeof(_url));
+  memcpy(saved_token, _token, sizeof(_token));
+  memcpy(saved_used, _used, sizeof(_used));
   memset(_used, 0, sizeof(_used));
 
   ok &= check("an empty table has no entries", count() == 0);
@@ -289,7 +298,9 @@ bool selfTest() {
   loadTable("not json at all");
   ok &= check("an unparseable blob loads as empty", count() == 0);
 
-  memset(_used, 0, sizeof(_used));
+  memcpy(_url, saved_url, sizeof(_url));
+  memcpy(_token, saved_token, sizeof(_token));
+  memcpy(_used, saved_used, sizeof(_used));
   _open = saved_open;
   Log.notice(F("mqtt_publish_store selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
