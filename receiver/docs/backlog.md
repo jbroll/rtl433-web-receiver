@@ -292,3 +292,11 @@ a gap for anyone who wants to disable OTA after enabling it.
   configure another; a broker not chained to Let's Encrypt (a commercial cloud
   broker, a self-signed LAN broker) will fail its handshake silently, showing
   only a dot that never turns green.
+- `mqtt_publish::begin()` tears down and reconnects every configured
+  connection on every `POST /$mqtt`/`/$mqtt/remove` (`mqtt_publish.cpp:203-217`),
+  not just the one that changed, so adding or removing one bridge drops and
+  re-handshakes every other already-working bridge too — up to ~15 s per TLS
+  connection, plus a full `replayAll()` re-publish to each. Diffing the table
+  against the live connections to leave unchanged slots alone would avoid
+  this, at the cost of the per-slot comparison logic (url, token, plain-vs-TLS)
+  that produced the original teardown bug in the first place.

@@ -206,7 +206,9 @@ it costs roughly 1.4 KB of RAM per active connection for the process
 lifetime. That figure excludes TLS: an `mqtts://` connection also holds an
 mbedTLS context and its buffers, on the order of tens of KB of heap once the
 handshake completes, and that cost — not the 1.4 KB packet buffer — is the
-real limit on how many `mqtts://` bridges a device can hold concurrently. `onRecord()`, registered as a second `signal_store` record hook,
+real limit on how many `mqtts://` bridges a device can hold concurrently.
+
+`onRecord()`, registered as a second `signal_store` record hook,
 publishes the hook's `JsonDocument` unmodified to the topic `key` already
 is — `<mdnsHostname()>/<model>/<id>`, since
 `signal_store::setSource(mdnsHostname())` is what built that key in the

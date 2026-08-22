@@ -219,7 +219,7 @@
 - The Bridges panel gives no failure feedback beyond `aria-invalid` on the url
   field — a full table, an invalid url, and a network error all look identical to
   the user, and a failed `removeBridge()` produces no visible signal at all. The
-  codebase already has a toast mechanism (`log.jsx`'s `showToast`, used elsewhere)
+  codebase already has a toast mechanism (`toast.js`'s `showToast`, used elsewhere)
   that could surface these.
 - No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly (there's no
   host-testable seam for `web_ui.cpp` routes at all, receiver-wide) and no
