@@ -207,6 +207,9 @@ primeFeeds()
 // tick is the app's only timer, so the feed scheduler rides it rather than
 // starting one of its own. Reading settings restarts the feeds on a move.
 effect(() => { tick.value; settings.value; pump() })
+// A bridge's connected state only settles after loop() reconnects it, so
+// refetch whenever the Settings tab is switched to rather than only at boot.
+effect(() => { if (settingsTab.value === 'settings') loadBridges() })
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()

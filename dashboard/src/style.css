@@ -148,6 +148,29 @@ section[hidden] { display:none; }
 #source-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
               color:inherit; border:1px solid var(--line); cursor:pointer; }
 
+#settings-bridges { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);
+                     min-width:18rem; }
+#bridge-list { list-style:none; margin:0 0 .5rem; padding:0; }
+#bridge-list li { display:flex; align-items:center; gap:.5rem; padding:.15rem 0;
+                  font-size:.8rem; }
+#bridge-list li .url { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis;
+                       white-space:nowrap; }
+#bridge-list li .dot { flex:0 0 auto; width:.55rem; height:.55rem; border-radius:50%;
+                       background:#8886; }
+#bridge-list li .dot[data-state=connected] { background:#3a3; }
+#bridge-list li .dot[data-state=connecting] { background:#c82; }
+#bridge-list li button.rm { font:inherit; font-size:.75rem; line-height:1; padding:.1rem .3rem;
+                            background:none; color:inherit; border:1px solid var(--line);
+                            border-radius:.3rem; cursor:pointer; }
+#bridge-form { display:flex; gap:.35rem; }
+#bridge-url { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
+              background:Canvas; color:inherit; border:1px solid var(--line); }
+#bridge-url[aria-invalid=true] { border-color:#c44; }
+#bridge-token { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
+                background:Canvas; color:inherit; border:1px solid var(--line); }
+#bridge-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
+              color:inherit; border:1px solid var(--line); cursor:pointer; }
+
 #mdns-scan { margin:0 0 .5rem; }
 #mdns-scan button[type=button] { font:inherit; font-size:.8rem; padding:.2rem .6rem;
                                  background:Canvas; color:inherit; border:1px solid var(--line);
