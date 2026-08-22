@@ -284,3 +284,11 @@ a gap for anyone who wants to disable OTA after enabling it.
 - `monitor.py:80-91` declares `--reset/-r` as `action="store_true",
   default=True`, so the flag is a no-op and `args.reset` is never read (`:138`
   tests `args.no_reset`). Harmless today, wrong the moment the default changes.
+- `mqtt_publish_store::add()` doesn't reject a url identical to the build-flag
+  `MQTT_BROKER_URL` default — adding it again from the dashboard creates two
+  connections to the same broker under the same client ID, which most brokers
+  resolve by kicking one session, producing an endless connect/disconnect flap.
+- Every `mqtts://` bridge is pinned to the ISRG Root X1 CA with no way to
+  configure another; a broker not chained to Let's Encrypt (a commercial cloud
+  broker, a self-signed LAN broker) will fail its handshake silently, showing
+  only a dot that never turns green.
