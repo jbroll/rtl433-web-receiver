@@ -1,11 +1,13 @@
 #pragma once
 
 // Host stand-in for the ESP32 Arduino core's Preferences (NVS) wrapper,
-// backed by an in-memory map instead of flash. Only the calls alias_store.cpp
-// makes: begin(namespace, readOnly), putString(key, value), getString(key,
-// default).
+// backed by an in-memory map instead of flash. Only the calls the stores
+// make: begin(namespace, readOnly), putString/getString, putBytes/getBytes/
+// getBytesLength, and remove.
 
+#include <cstring>
 #include <map>
+#include <set>
 #include <string>
 
 #include "Arduino.h"
@@ -36,9 +38,33 @@ class Preferences {
     return String(defaultValue);
   }
 
+  // NVS keys are typed, so a getBytes* on a key holding a string reads as
+  // absent, which is what layout_store's migration off putString relies on.
+  size_t putBytes(const char* key, const void* value, size_t len) {
+    _store[_ns][key].assign((const char*)value, len);
+    _blobs[_ns].insert(key);
+    return len;
+  }
+
+  size_t getBytesLength(const char* key) {
+    if (_blobs[_ns].count(key) == 0) return 0;
+    auto ns = _store.find(_ns);
+    if (ns == _store.end()) return 0;
+    auto it = ns->second.find(key);
+    return it == ns->second.end() ? 0 : it->second.size();
+  }
+
+  size_t getBytes(const char* key, void* buf, size_t maxLen) {
+    size_t n = getBytesLength(key);
+    if (n == 0 || n > maxLen) return 0;
+    memcpy(buf, _store[_ns][key].data(), n);
+    return n;
+  }
+
   bool remove(const char* key) {
     auto ns = _store.find(_ns);
     if (ns == _store.end()) return false;
+    _blobs[_ns].erase(key);
     return ns->second.erase(key) > 0;
   }
 
@@ -47,6 +73,8 @@ class Preferences {
   // Shared across instances, like real NVS namespaces, so a Preferences
   // object that goes out of scope doesn't lose what it wrote.
   static std::map<std::string, std::map<std::string, std::string>> _store;
+  static std::map<std::string, std::set<std::string>>              _blobs;
 };
 
 inline std::map<std::string, std::map<std::string, std::string>> Preferences::_store;
+inline std::map<std::string, std::set<std::string>>              Preferences::_blobs;

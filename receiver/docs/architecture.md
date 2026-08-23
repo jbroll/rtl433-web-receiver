@@ -96,11 +96,19 @@ replays.
 **`layout_store.h` / `layout_store.cpp`** — persists the dashboard's
 site-default `$layout` (grid size, per-model card settings) as one opaque
 JSON blob in `Preferences` namespace `layout`, key `blob`, capped at
-`LAYOUT_STORE_MAX`, 4000 bytes. A card costs the template about 170 bytes and
-`SIGNAL_DEVICE_SLOTS` is 24, so the cap is set to what `nvs_set_str()`
-documents as its ceiling for a single string entry, which covers a full
-24-device layout with a little room. The 2 KB it used to be ran out at seven
-devices. Unlike `alias_store`'s table of topic/name pairs, there is
+`LAYOUT_STORE_MAX`, 5 KB. A card costs the template about 165 bytes and the
+dashboard can save 24 radio devices plus four feed cards, so the cap covers a
+full receiver with room over. The 2 KB it used to be ran out at seven devices.
+
+The blob is written with `putBytes()`, not `putString()`. `nvs_set_str()` needs
+its whole length in one page's free run, which on a device whose `nvs`
+partition already holds the radio calibration refused a 2,955-byte write and
+accepted a 2,689-byte one — nowhere near the 4000 the API documents. An NVS
+blob is chunked across pages, so the store's own cap is the only limit left.
+`begin()` reads the blob key, falls back to the string key a layout saved
+before this was written to, and rewrites it as a blob.
+
+Unlike `alias_store`'s table of topic/name pairs, there is
 exactly one `$layout` per receiver, so the blob is stored and served
 verbatim rather than parsed and reserialized — the receiver never inspects
 its contents, only the dashboard does. Its `FAKE_SIGNALS` `selfTest()` is
@@ -201,10 +209,10 @@ never `setInsecure()`. `loop()` runs each connected client's
 TLS handshake, CONNACK wait — is bounded to 5 s, so an unreachable broker
 cannot stall `loop()` — and with it `rf.loop()` draining the decode queue —
 indefinitely, though the phases are sequential and a worst case on the TLS
-path adds up to roughly 15 s per connection. `MQTT_MAX_PACKET_SIZE` (4200, up
+path adds up to roughly 15 s per connection. `MQTT_MAX_PACKET_SIZE` (5300, up
 from PubSubClient's 768 default, to fit a full `LAYOUT_STORE_MAX` `$layout`
 blob plus its topic) is a permanently allocated buffer per connection, not
-just a per-message cap, so it costs about 4 KB of RAM per active connection
+just a per-message cap, so it costs about 5 KB of RAM per active connection
 for the process lifetime. That figure excludes TLS: an `mqtts://` connection
 also holds an mbedTLS context and its buffers, on the order of tens of KB of
 heap once the handshake completes, and that cost — not the packet buffer —
@@ -281,8 +289,8 @@ calibration under `phy/cal_data` is the largest entry at ~1,950 bytes; the
 WiFi driver's own credentials in `nvs.net80211` are a few hundred; the
 `wifi_store` module's copy of those same credentials (namespace `wifi`) is
 under 100 bytes; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB; the
-layout blob is capped at `LAYOUT_STORE_MAX`, 4000 bytes. Worst-case usage
-across every store is still under 9 KB against the 20 KB partition.
+layout blob is capped at `LAYOUT_STORE_MAX`, 5 KB. Worst-case usage across
+every store is about 11 KB against the 20 KB partition.
 
 ## Data flow
 
