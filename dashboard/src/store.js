@@ -11,6 +11,12 @@ let hideNewCards = true
 
 const GRID_MIN = 1, GRID_MAX = 24
 
+// layout_template.js registers here rather than store.js importing it, which
+// would close an import cycle. A visitor's own edit ends the site default's
+// claim on the arrangement; a card merely appearing is not an edit.
+let onEdit = () => {}
+export function setEditHook(fn) { onEdit = fn }
+
 function blankState() {
   return { grid: { cols: 6, rows: 4 }, order: [], hidden: [], cards: Object.create(null) }
 }
@@ -161,6 +167,7 @@ export function setValueMode(key, field, mode) {
   }
   if (mode === 'hidden') c.hiddenValues.push(field)
   else if (mode === 'bottom') c.bottomValues.push(field)
+  onEdit()
   saveCardState()
 }
 
@@ -188,6 +195,7 @@ export function setCardHidden(key, hidden) {
   const i = s.hidden.indexOf(key)
   if (hidden === (i >= 0)) return
   if (hidden) s.hidden.push(key); else s.hidden.splice(i, 1)
+  onEdit()
   saveCardState()
 }
 
@@ -201,6 +209,7 @@ export function moveCard(key, beforeKey) {
   order.splice(from, 1)
   const to = beforeKey === null ? order.length : order.indexOf(beforeKey)
   order.splice(to < 0 ? order.length : to, 0, key)
+  onEdit()
   saveCardState()
 }
 
@@ -213,6 +222,7 @@ export function moveValue(key, field, beforeField) {
   order.splice(from, 1)
   const to = beforeField === null ? order.length : order.indexOf(beforeField)
   order.splice(to < 0 ? order.length : to, 0, field)
+  onEdit()
   saveCardState()
 }
 
@@ -225,6 +235,7 @@ export function setCardSize(key, w, h) {
   }
   c.w = w
   c.h = h
+  onEdit()
   saveCardState()
 }
 
@@ -237,6 +248,7 @@ export function setGrid(axis, n) {
       ...cardState.value,
       grid: { ...cardState.value.grid, [axis]: v },
     }
+    onEdit()
     saveCardState()
   }
 }

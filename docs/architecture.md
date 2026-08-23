@@ -79,6 +79,17 @@ earlier rearranged the page.
 the default: an empty `hiddenValues` or `bottomValues`, and `hidden` on a shown card. That
 is about 50 bytes a card against the receiver's `LAYOUT_STORE_MAX`.
 
+A browser with no layout of its own adopts the site default as it arrives, and keeps
+adopting it as cards turn up. One apply is not enough: the receiver replays `$layout`
+before `$location`, and a feed card cannot exist until a location resolves, so the first
+frame never names every card the default covers. Applying once left the four feed cards at
+their computed sizes at the end of the grid while the radio devices took the saved
+arrangement. `autoApply()` therefore re-applies whenever the number of named slots that
+have a card grows, until the visitor's first edit — any call into `setGrid`, `setCardSize`,
+`moveCard`, `moveValue`, `setValueMode` or `setCardHidden` — ends it for the life of the
+page. A card merely appearing is not an edit; `store.js` calls the hook only from the six
+gesture-driven mutators, never from `ensureCard()`.
+
 ## From dashboard build to mobile app
 
 `dashboard/build.js` emits one self-contained `index.html`. The `app/` sub-project is a

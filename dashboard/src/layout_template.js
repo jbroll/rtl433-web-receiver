@@ -1,5 +1,5 @@
-import { signal } from '@preact/signals'
-import { cardState, gridNum, saveCardState, cardHidden } from './store.js'
+import { signal, effect } from '@preact/signals'
+import { cardState, gridNum, saveCardState, cardHidden, setEditHook } from './store.js'
 import { devices } from './devices.js'
 import { isFeed, topicOf } from './alias.js'
 import { showToast } from './toast.js'
@@ -7,12 +7,38 @@ import { showToast } from './toast.js'
 export const LAYOUT_SUFFIX = '/$layout'
 export const layouts = signal(new Map())
 
-// One-way latch for the lifetime of the page load -- never re-enabled once disabled.
-export let autoApplyEligible = true
+// One-way latch for the lifetime of the page load -- never re-enabled once
+// disabled. A stored local arrangement disables it at boot, and so does the
+// visitor's first edit.
+let auto = { on: true, template: null, matched: 0, stop: null }
+
+// Watching devices costs a subscriber on every reading, and a browser that
+// will never auto-apply must not pay it: the watch starts only once a site
+// default has actually arrived, and is torn down the moment it cannot fire
+// again.
+function watchCards() {
+  if (auto.stop) return
+  auto.stop = effect(() => { devices.value; runAutoApply() })
+}
+
+function unwatchCards() {
+  if (!auto.stop) return
+  auto.stop()
+  auto.stop = null
+}
 
 export function disableAutoApply() {
-  autoApplyEligible = false
+  auto.on = false
+  unwatchCards()
 }
+
+// Tests only: the latch and the pending template outlive a loadCardState().
+export function resetAutoApply() {
+  unwatchCards()
+  auto = { on: true, template: null, matched: 0, stop: null }
+}
+
+setEditHook(disableAutoApply)
 
 // model/id, using the same id/channel/0 tie-break signal_store::buildKey uses
 // to key a topic -- a real field the reading itself carries, not something
@@ -144,6 +170,34 @@ export function applyLayoutFrame(base, payload) {
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) next.set(base, payload)
   else next.delete(base)
   layouts.value = next
+}
+
+// The receiver replays $layout ahead of $location, and a feed card cannot
+// exist until a location resolves, so the first frame never names every card
+// the site default covers. Re-apply as each named card turns up rather than
+// applying once and leaving the rest at their defaults.
+export function autoApply(template) {
+  if (!auto.on) return
+  if (!template || typeof template !== 'object' || Array.isArray(template)) return
+  auto.template = template
+  runAutoApply()
+  watchCards()
+}
+
+function namedSlotsPresent(template) {
+  const named = Array.isArray(template.order)
+    ? new Set(template.order.filter(s => typeof s === 'string')) : new Set()
+  let n = 0
+  for (const slot of cardSlots().values()) if (named.has(slot)) n++
+  return n
+}
+
+function runAutoApply() {
+  if (!auto.on || !auto.template) return
+  const n = namedSlotsPresent(auto.template)
+  if (n <= auto.matched) return
+  auto.matched = n
+  applyTemplate(auto.template)
 }
 
 export function postLayout() {

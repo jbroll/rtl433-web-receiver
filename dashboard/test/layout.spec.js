@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { startServer, startPage } from "./harness.js";
-import { ACURITE, topicOf } from "./fixtures.js";
+import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
 
@@ -43,6 +43,36 @@ test("a $layout retained before connect auto-applies when nothing is stored loca
   // hideNewCards hides a fresh device's card by default; auto-apply must
   // un-hide it since the template's model entry carries no hidden: true.
   await expect(page.locator(`.card[data-key$="${ACURITE_KEY}"]`)).toBeVisible();
+});
+
+test("a card the site default names is placed when it turns up after the $layout frame", async ({ page }) => {
+  // The receiver replays $layout ahead of $location, and a feed card cannot
+  // exist until a location resolves, so the first frame never names every
+  // card the default covers. A late arrival gets the template, not defaults.
+  const template = {
+    grid: { cols: 8, rows: 5 },
+    order: ["Acurite-5n1/396", "Oregon-THN132N/23"],
+    models: {
+      ...TEMPLATE.models,
+      "Oregon-THN132N/23": {
+        w: 4, h: 3, valueOrder: ["temperature_C"], hiddenValues: [], bottomValues: [],
+      },
+    },
+  };
+  const server = await startServer({ devices: [ACURITE] });
+  servers.push(server);
+  server.emitLayout(template);
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await expect(page.locator("#grid-cols")).toHaveValue("8");
+
+  await server.emit(OREGON);
+  const key = topicOf(OREGON);
+  await expect(page.locator(`.card[data-key$="${key}"]`)).toBeVisible();
+  await expect.poll(async () => page.evaluate(
+    k => { const c = window.cardState.cards[Object.keys(window.cardState.cards).find(x => x.endsWith(k))]; return c && `${c.w}x${c.h}`; },
+    key,
+  )).toBe("4x3");
 });
 
 test("a $layout frame does not auto-apply once a local layout already exists", async ({ page }) => {

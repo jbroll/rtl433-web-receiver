@@ -3,11 +3,12 @@ globalThis.DEVICE_MAX = 24
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { cardState, loadCardState, saveCardState, ensureCard } from '../src/store.js'
+import { cardState, loadCardState, saveCardState, ensureCard, setGrid } from '../src/store.js'
 import { devices, upsert } from '../src/devices.js'
 import * as src from '../src/sources.js'
 import {
   layouts, deriveTemplate, applyTemplate, applyLayoutFrame, postLayout,
+  autoApply, disableAutoApply, resetAutoApply,
 } from '../src/layout_template.js'
 
 const BASE = 'http://a'
@@ -39,6 +40,7 @@ beforeEach(() => {
   devices.value = new Map()
   loadCardState()
   layouts.value = new Map()
+  resetAutoApply()
 })
 
 test('deriveTemplate groups cards by model, skipping modelless devices', () => {
@@ -359,4 +361,59 @@ test('a feed card the template names is hidden and shown like any other', () => 
   cardState.value = { ...cardState.value, hidden: [] }
   applyTemplate(t)
   assert.equal(cardState.value.hidden.includes(WEATHER), true)
+})
+
+test('autoApply places a card the template names that turns up after the frame', () => {
+  const WEATHER = 'local feed/Weather'
+  const t = {
+    grid: { cols: 6, rows: 4 },
+    order: ['Acurite-5n1/396', 'feed/Weather'],
+    models: {
+      'Acurite-5n1/396': { w: 5, h: 1, valueOrder: ['temperature_C'] },
+      'feed/Weather': { w: 4, h: 3, valueOrder: ['now'] },
+    },
+  }
+
+  addDevice(KEY, 'Acurite-5n1', 396)
+  ensureCard(KEY, { temperature_C: 21 })
+  saveCardState()
+  autoApply(t)
+  assert.equal(cardState.value.cards[KEY].w, 5)
+
+  addDevice(WEATHER, undefined)
+  ensureCard(WEATHER, { now: 'clear' }, { autoShow: true })
+  assert.equal(cardState.value.cards[WEATHER].w, 4)
+  assert.equal(cardState.value.cards[WEATHER].h, 3)
+})
+
+test('autoApply stops re-applying once the visitor edits a card', () => {
+  const WEATHER = 'local feed/Weather'
+  const t = {
+    grid: { cols: 6, rows: 4 },
+    order: ['feed/Weather'],
+    models: { 'feed/Weather': { w: 4, h: 3, valueOrder: ['now'] } },
+  }
+
+  autoApply(t)
+  setGrid('cols', 8)
+
+  addDevice(WEATHER, undefined)
+  ensureCard(WEATHER, { now: 'clear' }, { autoShow: true })
+  assert.notEqual(cardState.value.cards[WEATHER].w, 4)
+  assert.equal(cardState.value.grid.cols, 8)
+})
+
+test('autoApply does nothing once auto-apply is off', () => {
+  addDevice(KEY, 'Acurite-5n1', 396)
+  ensureCard(KEY, { temperature_C: 21 })
+  cardState.value.cards[KEY].w = 1
+  saveCardState()
+
+  disableAutoApply()
+  autoApply({
+    grid: { cols: 6, rows: 4 },
+    order: ['Acurite-5n1/396'],
+    models: { 'Acurite-5n1/396': { w: 5, h: 1, valueOrder: ['temperature_C'] } },
+  })
+  assert.equal(cardState.value.cards[KEY].w, 1)
 })

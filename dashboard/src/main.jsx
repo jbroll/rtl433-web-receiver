@@ -4,7 +4,7 @@ import { App, tab, settingsTab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
-import { applyLayoutFrame, applyTemplate, layouts, autoApplyEligible, disableAutoApply } from './layout_template.js'
+import { applyLayoutFrame, autoApply, layouts, disableAutoApply } from './layout_template.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
@@ -49,15 +49,9 @@ function onAlias(base, topic, payload) {
   applyAliasFrame(makeKey(base, topic), payload)
 }
 
-let autoAppliedLayout = false
-
 function onLayout(base, topic, payload) {
   applyLayoutFrame(base, payload)
-  if (autoAppliedLayout) return
-  if (!autoApplyEligible) return
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
-  autoAppliedLayout = true
-  applyTemplate(payload)
+  autoApply(payload)
 }
 
 function onLocation(base, topic, payload) {
