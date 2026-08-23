@@ -102,7 +102,11 @@ set. Layout is never sent to the device by default, so two browsers can
 arrange the same receiver differently.
 
 A receiver can also hold one site-default layout, at `$layout`, keyed by
-device model rather than by individual device. **Save as default layout**
+`model/id` rather than by the full device topic, so the same layout fits any
+browser reading that receiver. The clock, sun, moon and weather cards travel
+with it too, under their own names: they are computed from the location and
+time zone the receiver stores, so every browser derives the same four.
+**Save as default layout**
 (next to Forget layouts, visible only when the served receiver is one of
 the dashboard's connected sources) posts the current arrangement there.
 **Load default layout** (visible once one has been read from the receiver
@@ -113,11 +117,17 @@ so a new user does not start from a blank grid if the receiver already has
 a saved default. Auto-apply also un-hides any device card whose model is
 covered by the template and was not hidden when the template was saved.
 
+Loading a default layout moves only the cards it names. A card for a device
+that has gone quiet, or one saved by an older dashboard, stays where it is
+rather than being pushed to the end of the grid.
+
 A card the user showed or renamed is kept even after its device goes quiet, so
 a sensor that returns finds its card as it left it. A card that was never
 shown is dropped once its device is gone from the table, which is what keeps a
 band full of one-off false decodes from growing the stored layout without
-limit.
+limit. That only happens while the source is still delivering other devices —
+a receiver that is unreachable, or one whose page has only just opened, says
+nothing about which of its devices are gone.
 
 Forget layouts, in edit mode, clears the lot after a confirmation prompt. The
 devices on screen at the time keep their cards; only ones seen afterwards

@@ -133,6 +133,32 @@ that is not a JSON number is `400`, body `body must be a JSON number`. A
 `$tz` topic under another source is `405`. The offset survives a reboot via
 NVS.
 
+### `POST /$layout`
+
+Stores the site-default card layout the dashboard's **Save as default layout**
+button posts — one JSON object holding the grid size and a per-card entry,
+kept verbatim. The receiver never reads inside it.
+
+    POST /rtl433-a1b2c3/$layout
+    Content-Type: application/json
+
+    {"grid":{"cols":6,"rows":4},"order":["Acurite-5n1/1234"],"models":{...}}
+
+    204
+
+`GET` of the same path returns the stored object, or `404`, body `no message`,
+when nothing is stored. Every save is also broadcast on `/events` and
+published to each configured MQTT bridge, and replayed to a browser that
+connects later.
+
+The bare `/$layout` form works when the receiver is the origin the dashboard
+was served from; the source-prefixed form is equivalent, and a `$layout` topic
+under another source is `405`. A body that is not a JSON object is `400`, body
+`body must be a JSON object`. A body at or over 5 KB, or one NVS refuses to
+write, is `503`, body `layout store full`, and the stored layout is unchanged.
+5 KB holds all 24 device slots plus the four dashboard-computed cards, at
+roughly 165 bytes each.
+
 ### `POST /$update`
 
 Pushes a new firmware image over WiFi — the same shape as `pio run -t
