@@ -11,4 +11,5 @@ bool isAlias(const char* topic);
 bool isTz(const char* topic);
 bool isLayout(const char* topic);
 bool isLocation(const char* topic);
+bool isUnits(const char* topic);
 } // namespace topic

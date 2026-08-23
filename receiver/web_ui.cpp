@@ -12,6 +12,7 @@
 #include "dashboard_html.h"
 #include "layout_store.h"
 #include "location_store.h"
+#include "units_store.h"
 #include "mqtt_publish.h"
 #include "mqtt_publish_store.h"
 #include "ota_token_store.h"
@@ -431,6 +432,34 @@ static void handleLocationPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
+static void handleUnitsPost(const char* path) {
+  // Same same-origin-or-bare gating as $layout and $location: the dashboard
+  // POSTs a bare /$units to its own origin, the source-prefixed form is the
+  // documented curl-able equivalent.
+  const char* src = signal_store::source();
+  size_t      srcLen = strlen(src);
+  bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
+  if (strcmp(path, "$units") != 0 && !ownSource) {
+    sendStatus(405, "not allowed");
+    return;
+  }
+  String body = _server.arg("plain");
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>()) {
+    sendStatus(400, "body must be a JSON object");
+    return;
+  }
+  if (!units_store::set(body.c_str())) {
+    sendStatus(503, "units store full");
+    return;
+  }
+  web_ui::broadcastUnits(units_store::get());
+  mqtt_publish::publishUnits(units_store::get());
+  sendCors();
+  _server.sendHeader("Cache-Control", "no-store");
+  _server.send(204, "text/plain", "");
+}
+
 static void handleTzPost(const char* path) {
   // The dashboard POSTs a bare /$tz to its own origin; the source-prefixed
   // form is the documented curl-able equivalent.
@@ -628,6 +657,10 @@ static void handleTopic() {
       handleLocationPost(path);
       return;
     }
+    if (topic::isUnits(path)) {
+      handleUnitsPost(path);
+      return;
+    }
     if (topic::isTz(path)) {
       handleTzPost(path);
       return;
@@ -652,6 +685,17 @@ static void handleTopic() {
   }
   if (topic::isLocation(path)) {
     const char* blob = location_store::get();
+    if (blob[0] == '\0') {
+      sendStatus(404, "no message");
+      return;
+    }
+    sendCors();
+    _server.sendHeader("Cache-Control", "no-store");
+    _server.send(200, "application/json", blob);
+    return;
+  }
+  if (topic::isUnits(path)) {
+    const char* blob = units_store::get();
     if (blob[0] == '\0') {
       sendStatus(404, "no message");
       return;
@@ -841,6 +885,21 @@ static void drainReplay(int i, Frame& frame) {
         continue;
       }
       buildFrame(frame, topic, tzPayload);
+    } else if (at == SIGNAL_SUB_TABLE + ALIAS_SLOTS + 3) {
+      const char* blob = units_store::get();
+      if (blob[0] == '\0') {
+        continue;
+      }
+      static char unitsTopic[SIGNAL_KEY_MAX];
+      int n = snprintf(unitsTopic, sizeof(unitsTopic), "%s/$units", signal_store::source());
+      if (n < 0 || (size_t)n >= sizeof(unitsTopic)) {
+        continue;
+      }
+      topic = unitsTopic;
+      if (!slotWants(i, topic)) {
+        continue;
+      }
+      buildFrame(frame, topic, blob);
     } else {
       _replay[i] = -1;
       return;
@@ -991,6 +1050,21 @@ void broadcastLocation(const char* blob) {
     return;
   }
   broadcastFrame(topic, SIGNAL_SUB_TABLE + ALIAS_SLOTS + 1, frame);
+}
+
+void broadcastUnits(const char* blob) {
+  char topic[SIGNAL_KEY_MAX];
+  int  n = snprintf(topic, sizeof(topic), "%s/$units", signal_store::source());
+  if (n < 0 || (size_t)n >= sizeof(topic)) {
+    return;
+  }
+  FrameBuffer frame;
+  buildFrame(frame, topic, blob); // raw-embed: blob is a JSON object, not a quoted string
+  if (frame.overflowed()) {
+    Log.warning(F("SSE units frame overflow, dropping frame" CR));
+    return;
+  }
+  broadcastFrame(topic, SIGNAL_SUB_TABLE + ALIAS_SLOTS + 3, frame);
 }
 
 void broadcastTz(int16_t minutes) {

@@ -166,6 +166,15 @@ source unit composes with any display unit. The stored readings in `devices`
 are never modified; a Celsius reading stays Celsius in the device object and
 receives an °F conversion only when rendered.
 
+Units and decimals are per browser, and a change to either is also published to
+the receiver serving the page, at `$units`, when that receiver is one of the
+dashboard's sources. A browser where nobody has chosen units — a fresh private
+window, or a visitor opening the receiver for the first time — takes what the
+receiver publishes, so it shows the owner's units rather than the metric
+default. The first unit change made in that browser ends that, and the stored
+choice stands from then on. Setting a location is not a unit choice and leaves
+the receiver's units in force.
+
 ## Location
 
 The Settings section carries a location, which the information feed cards need

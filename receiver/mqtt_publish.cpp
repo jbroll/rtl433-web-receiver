@@ -9,6 +9,7 @@
 
 #include "layout_store.h"
 #include "location_store.h"
+#include "units_store.h"
 #include "mqtt_publish_store.h"
 #include "signal_store.h"
 #include "tz_store.h"
@@ -165,6 +166,12 @@ static void replayAll(Connection& c) {
     int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
     if (n > 0 && (size_t)n < sizeof(topic) && c.mqtt.publish(topic, location, true)) sent++;
   }
+  const char* units = units_store::get();
+  if (units[0] != '\0') {
+    char topic[80];
+    int  n = snprintf(topic, sizeof(topic), "%s/$units", _clientId);
+    if (n > 0 && (size_t)n < sizeof(topic) && c.mqtt.publish(topic, units, true)) sent++;
+  }
   {
     char payload[8];
     int  pn = snprintf(payload, sizeof(payload), "%d", tz_store::offsetMinutes());
@@ -277,6 +284,18 @@ void publishLocation(const char* blob) {
   if (blob == nullptr || blob[0] == '\0') return;
   char topic[80];
   int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
+  if (n < 0 || (size_t)n >= sizeof(topic)) return;
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
+  }
+}
+
+void publishUnits(const char* blob) {
+  if (_connCount == 0) return;
+  if (blob == nullptr || blob[0] == '\0') return;
+  char topic[80];
+  int  n = snprintf(topic, sizeof(topic), "%s/$units", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
   for (uint8_t i = 0; i < _connCount; i++) {
     Connection& c = _conn[i];

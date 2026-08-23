@@ -25,6 +25,9 @@ void publishLayout(const char* blob);
 // Publishes the stored $location, retained, to <clientId>/$location, on
 // every connected connection. Same fire-and-forget behavior as onRecord.
 void publishLocation(const char* blob);
+// Publishes the stored $units, retained, to <clientId>/$units, on every
+// connected connection. Same fire-and-forget behavior as onRecord.
+void publishUnits(const char* blob);
 // Publishes the current tz offset, retained, to <clientId>/$tz, on every
 // connected connection. Same fire-and-forget behavior as onRecord.
 void publishTz(int16_t minutes);

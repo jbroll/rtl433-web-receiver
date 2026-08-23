@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 
 import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecimals, setCustomField,
          setLocation, clearLocation, hasLocation, activeZone, localZone,
-         locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources } from '../src/settings.js'
+         locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources,
+         unitsBySource, onUnitsFrame, unitsForSources } from '../src/settings.js'
 import { sources } from '../src/sources.js'
 
 function fakeStorage() {
@@ -27,6 +28,7 @@ beforeEach(() => {
   sources.value = []
   locations.value = new Map()
   tzOffsets.value = new Map()
+  unitsBySource.value = new Map()
 })
 
 const NO_PLACE = { lat: null, lon: null, label: '', zone: '', zoom: 11 }
@@ -264,4 +266,90 @@ test('activeZone falls back to the network location zone, then the browser zone'
   assert.equal(activeZone(), localZone())
   onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: 'Europe/Berlin', zoom: 11 })
   assert.equal(activeZone(), 'Europe/Berlin')
+})
+
+const IMPERIAL = { units: 'imperial', decimals: 2,
+                   custom: { temp: 'F', rain: 'in', wind: 'mi/h', pressure: 'hPa' } }
+
+test('a $units frame is adopted when the browser had nothing stored', () => {
+  sources.value = ['http://a']
+  onUnitsFrame('http://a', IMPERIAL)
+  assert.equal(settings.value.units, 'imperial')
+  assert.equal(settings.value.decimals, 2)
+  assert.equal(settings.value.custom.temp, 'F')
+})
+
+test('an adopted $units frame is not written into localStorage', () => {
+  sources.value = ['http://a']
+  onUnitsFrame('http://a', IMPERIAL)
+  assert.equal(localStorage.getItem(SETTINGS_KEY), null)
+})
+
+test('a $units frame does not override settings the browser had stored', () => {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ units: 'metric', decimals: 3 }))
+  loadSettings()
+  sources.value = ['http://a']
+  onUnitsFrame('http://a', IMPERIAL)
+  assert.equal(settings.value.units, 'metric')
+  assert.equal(settings.value.decimals, 3)
+})
+
+test('a $units frame does not override a choice the visitor has since made', () => {
+  sources.value = ['http://a']
+  setUnits('metric')
+  onUnitsFrame('http://a', IMPERIAL)
+  assert.equal(settings.value.units, 'metric')
+  assert.equal(settings.value.custom.temp, 'C')
+})
+
+test('onUnitsFrame cleans what it stores and clears on a malformed payload', () => {
+  onUnitsFrame('http://a', { units: 'bogus', decimals: 9, custom: { temp: 'K' } })
+  assert.deepEqual(unitsBySource.value.get('http://a'),
+    { units: 'metric', decimals: 1, custom: { temp: 'C', rain: 'mm', wind: 'km/h', pressure: 'hPa' } })
+  assert.equal(settings.value.units, 'metric')
+  for (const bad of ['imperial', 42, null, ['imperial']]) {
+    onUnitsFrame('http://a', bad)
+    assert.equal(unitsBySource.value.has('http://a'), false, JSON.stringify(bad))
+  }
+})
+
+test('unitsForSources picks the first source in order that published one', () => {
+  const map = new Map([['http://b', { units: 'imperial' }], ['http://a', { units: 'custom' }]])
+  assert.equal(unitsForSources(map, ['http://a', 'http://b']).units, 'custom')
+  assert.equal(unitsForSources(map, ['http://c', 'http://b']).units, 'imperial')
+  assert.equal(unitsForSources(map, ['http://c']), null)
+})
+
+test('a unit change POSTs $units only when the origin is a configured source', async () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return {} }
+  sources.value = []
+  setUnits('imperial')
+  assert.deepEqual(posted, [])
+  sources.value = ['http://receiver.test']
+  setDecimals(3)
+  setCustomField('temp', 'C')
+  assert.equal(posted.length, 2)
+  assert.deepEqual(posted.map(p => p[0]),
+    ['http://receiver.test/$units', 'http://receiver.test/$units'])
+  assert.deepEqual(JSON.parse(posted[0][1]),
+    { units: 'imperial', decimals: 3,
+      custom: { temp: 'F', rain: 'in', wind: 'mi/h', pressure: 'hPa' } })
+  globalThis.fetch = async () => ({})
+})
+
+test('a browser that only ever set a location still adopts the receiver units', () => {
+  sources.value = ['http://a']
+  setLocation({ lat: 40, lon: -105, zone: 'America/Denver' })
+  loadSettings()
+  onUnitsFrame('http://a', IMPERIAL)
+  assert.equal(settings.value.units, 'imperial')
+})
+
+test('settings stored before $units existed count as a unit choice', () => {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ units: 'metric', decimals: 3 }))
+  loadSettings()
+  sources.value = ['http://a']
+  onUnitsFrame('http://a', IMPERIAL)
+  assert.equal(settings.value.units, 'metric')
 })

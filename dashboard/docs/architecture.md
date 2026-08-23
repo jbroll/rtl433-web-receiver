@@ -12,7 +12,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `alias.js` | keys, the alias map, name resolution, the alias POST, `isFeed()` |
 | `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
 | `store.js` | card layout in `localStorage`, and `forgetLayouts()` |
-| `settings.js` | units, decimals, and the location, in `localStorage`, with a source-published location as fallback |
+| `settings.js` | units, decimals, and the location, in `localStorage`, with a source-published location and units as fallback |
 | `sources.js` | the source list and its storage |
 | `bridges.js` | the receiver's MQTT push-bridge list, fetched from `/$mqtt`, and its mutations |
 | `stream.js` | one source's SSE connection and its reconnect |
@@ -125,6 +125,20 @@ consulted by `resolvedLocation()` only when nothing is set locally. The
 fallback is never written into `localStorage`, so a location set locally takes
 over the moment it exists. Setting a location also POSTs `$location` and `$tz`
 back, but only to an origin that is itself a configured source.
+
+`$units` carries the same three unit fields the settings signal holds, in a
+per-source map of its own. It resolves differently from the location: rather
+than sitting behind the signal, a frame is adopted into it, because every
+reading is rendered from the signal and nothing reads a fallback layer. Adoption
+is a one-way latch, the same discipline `layout_template.js` uses for the site
+default layout: the visitor's first unit change closes it, and `saveSettings()`
+records that as `unitsChosen` so a reload closes it again. Saving a location
+alone leaves the marker false and adoption open. A blob written before `$units`
+existed carries no marker at all and counts as a choice, so upgrading never
+overrides units someone had already picked. An adopted frame is never saved, so
+a browser where no choice was made takes whatever the receiver publishes on each
+load. `setUnits`, `setDecimals` and `setCustomField` each POST the whole object
+back, origin-gated the way the location POSTs are.
 
 `cards.jsx` and `devices-table.jsx` both render readings through `displayValue`.
 `CardsView` reads the settings signal as a dependency, so any settings change

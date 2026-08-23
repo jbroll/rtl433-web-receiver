@@ -113,4 +113,10 @@ bool isLocation(const char* t) {
   return strcmp(last != NULL ? last + 1 : t, "$location") == 0;
 }
 
+bool isUnits(const char* t) {
+  if (t == NULL) return false;
+  const char* last = strrchr(t, '/');
+  return strcmp(last != NULL ? last + 1 : t, "$units") == 0;
+}
+
 } // namespace topic

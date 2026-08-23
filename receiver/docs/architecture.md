@@ -90,7 +90,7 @@ persists it and pushes it into `device_hooks` so the rain hook's midnight
 boundary follows the user's timezone. The offset reads back the same way it is
 written — `GET /$tz`, a retained `<source>/$tz` MQTT publish, and an SSE frame
 — so a dashboard on another origin can pick it up. Unlike `$layout` and
-`$location` it is never unset, so its `GET` never `404`s and it always
+`$location`/`$units` it is never unset, so its `GET` never `404`s and it always
 replays.
 
 **`layout_store.h` / `layout_store.cpp`** — persists the dashboard's
@@ -125,6 +125,14 @@ on reboot.
 respect: one entry per receiver, stored and served verbatim, host-tested
 `selfTest()`, and a write accepted even when NVS never opened.
 
+**`units_store.h` / `units_store.cpp`** — persists the owner's unit
+preferences (`{units, decimals, custom}`) as one opaque JSON blob in
+`Preferences` namespace `units`, key `blob`, capped at `UNITS_STORE_MAX`, 256
+bytes. Same shape as `location_store`: one entry per receiver, stored and
+served verbatim, host-tested `selfTest()`, and a write accepted even when NVS
+never opened. Whoever set it sets it for every visitor, since the blob is
+served to all of them.
+
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`,
 `/$update`, and `/$mqtt` (plus `/$mqtt/remove`) are the only registered
 routes; every topic is an arbitrary path, so `GET` and `POST` of a topic are
@@ -137,11 +145,11 @@ instead of buffering whole. `/$mqtt` reports `mqtt_publish`'s active
 connections (url and connect state, never the token) and lets a `POST` add
 or update a bridge and a `POST /$mqtt/remove` drop one; both mutating routes
 check the request's `Origin` header against the receiver's own `Host` rather
-than using the bare-path-or-own-source convention `$tz`/`$layout`/`$location`
-use, since `$mqtt` has no source-prefixed form to compare against. Four SSE
-client slots (`WEB_UI_SSE_CLIENTS`), each a `WiFiClient` plus up to four
-filters and one replay cursor, are fixed arrays sized at compile time — there
-is no dynamic connection list.
+than using the bare-path-or-own-source convention `$tz`, `$layout`,
+`$location`, and `$units` use, since `$mqtt` has no source-prefixed form to
+compare against. Four SSE client slots (`WEB_UI_SSE_CLIENTS`), each a
+`WiFiClient` plus up to four filters and one replay cursor, are fixed arrays
+sized at compile time — there is no dynamic connection list.
 
 **`wifi_store.h` / `wifi_store.cpp`** — persists WiFi credentials to
 `Preferences` namespace `"wifi"`, in fixed `_ssid`/`_pass` buffers sized
@@ -325,8 +333,8 @@ write rather than losing it.
 
 The cursor walks flat indices — the sub table (0 through 31,
 `SIGNAL_SUB_TABLE`), then the alias table (32 through 63), then one index each
-for `$layout` (64), `$location` (65), and `$tz` (66) — rather than
-`signal_store::device(i)`'s recency order. `device(i)` re-sorts on every call
+for `$layout` (64), `$location` (65), `$tz` (66), and `$units` (67) — rather
+than `signal_store::device(i)`'s recency order. `device(i)` re-sorts on every call
 and a device's position in it changes the moment it is heard from again, so a
 cursor stepping through that order could skip a device that has just moved
 ahead of it, or resend one that has moved behind. Flat indices don't move: a

@@ -52,6 +52,7 @@ token in place.
 | `GET /<topic>` | The stored message. `200`, `application/json`, `Cache-Control: no-store`. `404` if there is none |
 | `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success |
 | `POST /$tz` | Store the GMT offset. Body is a JSON number, signed minutes. `204`; `405` unless the topic is `$tz` or under this receiver's source |
+| `POST /$units` | Store the unit preferences. Body is a JSON object. `204`; `405` unless the topic is `$units` or under this receiver's source |
 | `POST /$mqtt` | Add or update a bridge to push to. Body `{"url":"...","token":"..."}`. `204` on success, `400` on an invalid url/token or a full table, `403` off-origin |
 | `GET /$mqtt` | This receiver's active push connections. `200`, `application/json`: `[{"url":"...","connected":true}, ...]` — never the token |
 | `POST /$mqtt/remove` | Stop pushing to a bridge. Body `{"url":"..."}`. `204` on success, including if the url wasn't present; `403` off-origin |
@@ -158,6 +159,32 @@ under another source is `405`. A body that is not a JSON object is `400`, body
 write, is `503`, body `layout store full`, and the stored layout is unchanged.
 5 KB holds all 24 device slots plus the four dashboard-computed cards, at
 roughly 165 bytes each.
+
+### `POST /$units`
+
+Stores the units every visitor's dashboard renders in — one JSON object kept
+verbatim. The receiver never reads inside it.
+
+    POST /rtl433-a1b2c3/$units
+    Content-Type: application/json
+
+    {"units":"metric","decimals":1,
+     "custom":{"temp":"C","rain":"mm","wind":"km/h","pressure":"hPa"}}
+
+    204
+
+`GET` of the same path returns the stored object, or `404`, body `no message`,
+when nothing is stored. Every save is also broadcast on `/events` and
+published to each configured MQTT bridge, and replayed to a browser that
+connects later, so a visitor gets the owner's units rather than picking their
+own.
+
+The bare `/$units` form works when the receiver is the origin the dashboard
+was served from; the source-prefixed form is equivalent, and a `$units` topic
+under another source is `405`. A body that is not a JSON object is `400`, body
+`body must be a JSON object`. A body at or over 256 bytes, or one NVS refuses
+to write, is `503`, body `units store full`, and the stored units are
+unchanged.
 
 ### `POST /$update`
 

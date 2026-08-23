@@ -2,6 +2,7 @@ const ALIAS_SUFFIX = '/$alias'
 const LAYOUT_SUFFIX = '/$layout'
 const LOCATION_SUFFIX = '/$location'
 const TZ_SUFFIX = '/$tz'
+const UNITS_SUFFIX = '/$units'
 
 function parse(raw) { try { return JSON.parse(raw) } catch (e) { return null } }
 
@@ -29,6 +30,7 @@ export function openSource(base, handlers) {
       else if (msg.topic.endsWith(LAYOUT_SUFFIX)) handlers.onLayout(base, msg.topic, msg.payload)
       else if (msg.topic.endsWith(LOCATION_SUFFIX)) handlers.onLocation(base, msg.topic, msg.payload)
       else if (msg.topic.endsWith(TZ_SUFFIX)) handlers.onTz(base, msg.topic, msg.payload)
+      else if (msg.topic.endsWith(UNITS_SUFFIX)) handlers.onUnits(base, msg.topic, msg.payload)
       else handlers.onMessage(base, msg.topic, msg.payload)
     }
   }

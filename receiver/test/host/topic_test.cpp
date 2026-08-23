@@ -86,6 +86,11 @@ int main(int argc, char** argv) {
   check("isLocation rejects a non-$location topic", !topic::isLocation("rtl433-a1b2c3/Acurite-5n1/1234"));
   check("isLocation rejects NULL", !topic::isLocation(NULL));
 
+  check("isUnits identifies a $units topic", topic::isUnits("rtl433-a1b2c3/$units"));
+  check("a bare $units is a units topic", topic::isUnits("$units"));
+  check("isUnits rejects a non-$units topic", !topic::isUnits("rtl433-a1b2c3/Acurite-5n1/1234"));
+  check("isUnits rejects NULL", !topic::isUnits(NULL));
+
   printf("%s\n", failures == 0 ? "topic: PASS" : "topic: FAIL");
   return failures == 0 ? 0 : 1;
 }

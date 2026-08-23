@@ -4,6 +4,7 @@ const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
 const LAYOUT_SUFFIX = "/$layout";
 const LOCATION_SUFFIX = "/$location";
+const UNITS_SUFFIX = "/$units";
 
 function validTopic(topic) {
   if (!topic) return false;
@@ -198,6 +199,23 @@ function startServer(opts = {}) {
           return;
         }
         publish(source + LOCATION_SUFFIX, JSON.stringify(value));
+        res.writeHead(204).end();
+        return;
+      }
+      const isUnits = topic.endsWith(UNITS_SUFFIX) || topic === "$units";
+      if (isUnits) {
+        if (!topic.startsWith(source + "/") && topic !== "$units") {
+          res.writeHead(405).end("not allowed");
+          return;
+        }
+        const body = await readBody(req);
+        let value;
+        try { value = JSON.parse(body); } catch (e) { value = undefined; }
+        if (value === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
+          res.writeHead(400).end("body must be a JSON object");
+          return;
+        }
+        publish(source + UNITS_SUFFIX, JSON.stringify(value));
         res.writeHead(204).end();
         return;
       }

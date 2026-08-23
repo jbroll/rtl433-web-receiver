@@ -79,7 +79,7 @@ compiles and runs them on the host. `signal_store.cpp` and `alias_store.cpp`
 reach further into Arduino, `ArduinoLog`, and (for `alias_store`)
 `Preferences`; the same script host-compiles their `FAKE_SIGNALS` selfTest()s
 against fakes of those headers in `test/host/arduino_shim/` and runs them too,
-so all five checks above run on every `bash test/host/run.sh`.
+so every check above runs on every `bash test/host/run.sh`.
 
 `test/binding.spec.js` covers the HTTP binding against `test/binding-server.js`, a JS
 model of the same surface, so it runs without a board: `npm install` once, then `npx

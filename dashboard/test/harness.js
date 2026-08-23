@@ -12,6 +12,7 @@ const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
 const LAYOUT_SUFFIX = "/$layout";
 const LOCATION_SUFFIX = "/$location";
+const UNITS_SUFFIX = "/$units";
 
 // Built once per run: every test loads the same artifact the firmware embeds.
 let html = null;
@@ -86,6 +87,10 @@ export async function startServer(opts = {}) {
     await fixture.publish(source + LOCATION_SUFFIX, JSON.stringify(loc));
   }
 
+  async function emitUnits(u) {
+    await fixture.publish(source + UNITS_SUFFIX, JSON.stringify(u));
+  }
+
   // The receiver's $tz is never unset -- it defaults to -240 and replays on
   // every connect, so the model retains one from the start too.
   await fixture.publish(source + "/$tz", JSON.stringify(tzOffsetValue));
@@ -109,7 +114,8 @@ export async function startServer(opts = {}) {
         return;
       }
       const last = topic.split("/").pop();
-      if (last === "$tz" || last === "$alias" || last === "$layout" || last === "$location") {
+      if (last === "$tz" || last === "$alias" || last === "$layout" || last === "$location"
+          || last === "$units") {
         try {
           await postToReceiver(req, res, topic, last);
         } catch (err) {
@@ -126,16 +132,16 @@ export async function startServer(opts = {}) {
     proxyToFixture(req, res, fixture.httpPort);
   });
 
-  // Four POST paths the firmware's own binding owns, which the bridge does
+  // Five POST paths the firmware's own binding owns, which the bridge does
   // not implement: MQTT reserves a leading '$', so a bare "$tz", "$layout",
-  // or "$location" publish never comes back on the bridge's '#' subscription
-  // and its POST answers 503 — the real receiver sidesteps this by always
-  // canonicalizing to <source>/$tz, <source>/$layout, or <source>/$location
-  // before broadcasting, regardless of what path was POSTed, so this does
-  // the same before handing off to the bridge; and an empty alias means
-  // delete the retained message, which the bridge stores as the string it
-  // is. All four are kept here rather than in the bridge because all four
-  // are what receiver/test/binding-server.js does.
+  // "$location", or "$units" publish never comes back on the bridge's '#'
+  // subscription and its POST answers 503 — the real receiver sidesteps this
+  // by always canonicalizing to <source>/$tz, <source>/$layout,
+  // <source>/$location, or <source>/$units before broadcasting, regardless of
+  // what path was POSTed, so this does the same before handing off to the
+  // bridge; and an empty alias means delete the retained message, which the
+  // bridge stores as the string it is. All five are kept here rather than in
+  // the bridge because all five are what receiver/test/binding-server.js does.
   async function postToReceiver(req, res, topic, last) {
     const raw = await readBody(req);
     let value;
@@ -163,12 +169,13 @@ export async function startServer(opts = {}) {
       res.writeHead(204).end();
       return;
     }
-    if (last === "$location") {
+    if (last === "$location" || last === "$units") {
       if (value === undefined || typeof value !== "object" || value === null || Array.isArray(value)) {
         res.writeHead(400).end("body must be a JSON object");
         return;
       }
-      await fixture.publish(source + LOCATION_SUFFIX, JSON.stringify(value));
+      const suffix = last === "$units" ? UNITS_SUFFIX : LOCATION_SUFFIX;
+      await fixture.publish(source + suffix, JSON.stringify(value));
       res.writeHead(204).end();
       return;
     }
@@ -195,6 +202,7 @@ export async function startServer(opts = {}) {
     emitAlias(deviceTopic, name) { return emitAlias(deviceTopic, name); },
     emitLayout(template) { return emitLayout(template); },
     emitLocation(loc) { return emitLocation(loc); },
+    emitUnits(u) { return emitUnits(u); },
     get(topic) { return fixture.get(topic); },
     setBuild(id) { build = id; },
     tzOffset() { return tzOffsetValue; },
