@@ -58,18 +58,6 @@ device payload. `web_ui.cpp:294` states the no-authentication design deliberatel
 write surface is what makes it more than a read exposure. Same root cause as the bridge's
 CORS entry; a shared token scheme would settle both.
 
-## A layout larger than about 1310 bytes never reaches a browser
-
-`FrameBuffer::_buf` is sized from `SIGNAL_PAYLOAD_MAX` (600) at `web_ui.cpp:208`, giving
-1363 bytes; `buildFrame()` spends roughly 52 on framing plus the `source/$layout` topic.
-`layout_store::set()` accepts anything under `LAYOUT_STORE_MAX` 2048 (`layout_store.cpp:30`)
-and `MQTT_MAX_PACKET_SIZE` 2200 carries it fine. Arrange enough cards and the POST returns
-204, NVS holds the blob, MQTT subscribers get it, but `broadcastLayout()` (`:850`) and the
-replay path in `drainReplay` (`:701`) both hit `frame.overflowed()`, log "SSE layout frame
-overflow", and drop it. Every other tab keeps the stale layout and a reload does not
-recover it. Either the frame buffer sizes to the largest thing that can go through it, or
-`layout_store` refuses what SSE cannot carry.
-
 ## A failed sub claim leaves a device slot allocated
 
 `signal_store::record()` runs `claimSlot()` (which increments `_deviceCount`), copies the

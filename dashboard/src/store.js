@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 import { devices } from './devices.js'
-import { aliases, isSelf, isFeed } from './alias.js'
+import { aliases, isSelf, isFeed, sourceOf } from './alias.js'
 import { STATUS_FIELDS } from './units.js'
 
 const CARDS_KEY = 'rtl433.dashboard.v1'
@@ -68,10 +68,18 @@ export function loadCardState() {
 
 function pruneCardState() {
   const s = cardState.value
+  // Only a source that has already delivered something can say one of its
+  // devices is gone. At boot devices.value is empty, and primeFeeds() saves
+  // before any stream has opened, so pruning against it there threw away every
+  // hidden card's saved size and left the Receiver card -- the one card
+  // ensureCard() never re-hides -- showing again on every page load.
+  const spoken = new Set()
+  for (const k of devices.value.keys()) spoken.add(sourceOf(k))
   // A feed with no location set has no device record yet; dropping it here
   // would discard its saved size and value layout before it ever runs.
   const keep = new Set(s.order.filter(
-    k => devices.value.has(k) || isFeed(k) || !cardHidden(k) || aliases.value.has(k)))
+    k => devices.value.has(k) || isFeed(k) || !cardHidden(k) || aliases.value.has(k) ||
+      !spoken.has(sourceOf(k))))
   s.order = s.order.filter(k => keep.has(k))
   s.hidden = s.hidden.filter(k => keep.has(k))
   for (const k of Object.keys(s.cards)) if (!keep.has(k)) delete s.cards[k]

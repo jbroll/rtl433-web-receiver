@@ -96,9 +96,11 @@ replays.
 **`layout_store.h` / `layout_store.cpp`** — persists the dashboard's
 site-default `$layout` (grid size, per-model card settings) as one opaque
 JSON blob in `Preferences` namespace `layout`, key `blob`, capped at
-`LAYOUT_STORE_MAX`, 2 KB — the same cap as `alias_store`'s table, for the
-same reason: a realistic layout (a handful of models) lands well under 1 KB
-in practice. Unlike `alias_store`'s table of topic/name pairs, there is
+`LAYOUT_STORE_MAX`, 4000 bytes. A card costs the template about 170 bytes and
+`SIGNAL_DEVICE_SLOTS` is 24, so the cap is set to what `nvs_set_str()`
+documents as its ceiling for a single string entry, which covers a full
+24-device layout with a little room. The 2 KB it used to be ran out at seven
+devices. Unlike `alias_store`'s table of topic/name pairs, there is
 exactly one `$layout` per receiver, so the blob is stored and served
 verbatim rather than parsed and reserialized — the receiver never inspects
 its contents, only the dashboard does. Its `FAKE_SIGNALS` `selfTest()` is
@@ -199,14 +201,15 @@ never `setInsecure()`. `loop()` runs each connected client's
 TLS handshake, CONNACK wait — is bounded to 5 s, so an unreachable broker
 cannot stall `loop()` — and with it `rf.loop()` draining the decode queue —
 indefinitely, though the phases are sequential and a worst case on the TLS
-path adds up to roughly 15 s per connection. `MQTT_MAX_PACKET_SIZE` (2200, up
-from PubSubClient's 768 default, to fit a full `$layout` blob) is a
-permanently allocated buffer per connection, not just a per-message cap, so
-it costs roughly 1.4 KB of RAM per active connection for the process
-lifetime. That figure excludes TLS: an `mqtts://` connection also holds an
-mbedTLS context and its buffers, on the order of tens of KB of heap once the
-handshake completes, and that cost — not the 1.4 KB packet buffer — is the
-real limit on how many `mqtts://` bridges a device can hold concurrently.
+path adds up to roughly 15 s per connection. `MQTT_MAX_PACKET_SIZE` (4200, up
+from PubSubClient's 768 default, to fit a full `LAYOUT_STORE_MAX` `$layout`
+blob plus its topic) is a permanently allocated buffer per connection, not
+just a per-message cap, so it costs about 4 KB of RAM per active connection
+for the process lifetime. That figure excludes TLS: an `mqtts://` connection
+also holds an mbedTLS context and its buffers, on the order of tens of KB of
+heap once the handshake completes, and that cost — not the packet buffer —
+is the real limit on how many `mqtts://` bridges a device can hold
+concurrently.
 
 `onRecord()`, registered as a second `signal_store` record hook,
 publishes the hook's `JsonDocument` unmodified to the topic `key` already
@@ -278,8 +281,8 @@ calibration under `phy/cal_data` is the largest entry at ~1,950 bytes; the
 WiFi driver's own credentials in `nvs.net80211` are a few hundred; the
 `wifi_store` module's copy of those same credentials (namespace `wifi`) is
 under 100 bytes; the alias map is capped at `ALIAS_BLOB_MAX`, 2 KB; the
-layout blob is capped at `LAYOUT_STORE_MAX`, another 2 KB. Worst-case usage
-across every store is still under 7 KB against the 20 KB partition.
+layout blob is capped at `LAYOUT_STORE_MAX`, 4000 bytes. Worst-case usage
+across every store is still under 9 KB against the 20 KB partition.
 
 ## Data flow
 
@@ -334,15 +337,20 @@ revisited, so its live frame is delivered immediately instead.
 A device updated after its sub was already sent is therefore never lost, and
 a device updated before the cursor reaches it is sent once, not twice.
 
-`FrameBuffer` (in `web_ui.cpp`) is sized for one device payload
-(`SIGNAL_PAYLOAD_MAX`, 600 bytes) doubled for the worst case of an escaped
-alias string, not for a `$layout` blob up to `LAYOUT_STORE_MAX` (2 KB). A
-`$layout` broadcast or replay frame that overflows it is dropped and logged
-(`web_ui.cpp`'s existing fail-safe, not a crash) rather than sent truncated;
-`GET /$layout` is unaffected, since it serves the stored blob directly, not
-through `FrameBuffer`. In practice a real `$layout` (a handful of models)
-stays well under the buffer's ~1.2 KB payload ceiling, the same margin the
-NVS budget above relies on.
+Frames are assembled in one of two buffers (`web_ui.cpp`). `FrameBuffer` holds
+a device payload (`SIGNAL_PAYLOAD_MAX`, 600 bytes) doubled for the worst case
+of an escaped alias string, and is a stack local in the broadcast paths.
+`LayoutFrameBuffer` holds a full `LAYOUT_STORE_MAX` blob and is used by
+`broadcastLayout()` and by the replay drain, which carries `$layout` as well as
+device payloads; both are `static`, because 4 KB does not belong on the loop
+task's stack and `web_ui` only ever runs from `loop()`. A `static_assert` ties
+the layout buffer to `LAYOUT_STORE_MAX`: a blob the store accepts must fit a
+frame. It did not before — the store took 2 KB while the one shared buffer held
+1,362 bytes, so a layout over about 1,310 bytes (seven cards was enough)
+persisted, answered 204, and then had every frame carrying it dropped. `GET
+/$layout` still returned it, but the dashboard only reads `$layout` from the
+stream, so the layout was invisible to every browser that had not just saved
+it.
 
 A sub swept before the cursor reaches it is simply not delivered: `subAt()`
 returns `NULL` for a swept sub, `slotAt()` for a slot already freed with it,

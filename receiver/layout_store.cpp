@@ -30,22 +30,16 @@ bool set(const char* json) {
   if (json == NULL || *json == '\0' || strlen(json) >= LAYOUT_STORE_MAX) {
     return false;
   }
-  char previous[LAYOUT_STORE_MAX];
-  strncpy(previous, _blob, sizeof(previous) - 1);
-  previous[sizeof(previous) - 1] = '\0';
+  // Persist first, then adopt: a failed write leaves the stored blob alone
+  // without needing a second LAYOUT_STORE_MAX buffer on the caller's stack.
+  if (_open && _prefs.putString("blob", json) == 0) {
+    return false;
+  }
+  // A receiver whose NVS won't open should still let a viewer save a layout
+  // for the session rather than answer 503 to every save.
   strncpy(_blob, json, sizeof(_blob) - 1);
   _blob[sizeof(_blob) - 1] = '\0';
-  if (!_open) {
-    // A receiver whose NVS won't open should still let a viewer save a
-    // layout for the session rather than answer 503 to every save.
-    return true;
-  }
-  if (_prefs.putString("blob", _blob) > 0) {
-    return true;
-  }
-  strncpy(_blob, previous, sizeof(_blob) - 1);
-  _blob[sizeof(_blob) - 1] = '\0';
-  return false;
+  return true;
 }
 
 #ifdef FAKE_SIGNALS
@@ -78,7 +72,7 @@ bool selfTest() {
   ok &= check("a rejected set leaves the stored blob alone",
               strcmp(get(), "{\"grid\":{\"cols\":4,\"rows\":3}}") == 0);
 
-  char big[LAYOUT_STORE_MAX + 1];
+  static char big[LAYOUT_STORE_MAX + 1];
   memset(big, '.', sizeof(big) - 1);
   big[sizeof(big) - 1] = '\0';
   ok &= check("a blob at or over the cap is rejected", !set(big));

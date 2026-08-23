@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { cardState, gridNum, saveCardState, cardHidden } from './store.js'
 import { devices } from './devices.js'
-import { isFeed } from './alias.js'
+import { isFeed, topicOf } from './alias.js'
 import { showToast } from './toast.js'
 
 export const LAYOUT_SUFFIX = '/$layout'
@@ -26,11 +26,14 @@ function slotOf(key) {
   return `${obj.model}/${id}`
 }
 
-function modelSlots() {
+// A feed's key is the same in every browser reading the same receiver -- the
+// receiver stores the location and time zone the feeds are computed from -- so
+// a feed card belongs in the site default like any other. Its slot is its own
+// topic, "feed/Weather", which no model/id slot can collide with.
+function cardSlots() {
   const slots = new Map()
   for (const rec of devices.value.values()) {
-    if (isFeed(rec.key)) continue
-    const slot = slotOf(rec.key)
+    const slot = isFeed(rec.key) ? topicOf(rec.key) : slotOf(rec.key)
     if (slot) slots.set(rec.key, slot)
   }
   return slots
@@ -38,23 +41,22 @@ function modelSlots() {
 
 export function deriveTemplate() {
   const s = cardState.value
-  const slotOf = modelSlots()
+  const slotOf = cardSlots()
   const models = Object.create(null)
   const order = []
   for (const key of s.order) {
-    if (isFeed(key)) continue
     const slot = slotOf.get(key)
     if (!slot) continue
     const c = s.cards[key]
     if (!c) continue
-    models[slot] = {
-      w: c.w,
-      h: c.h,
-      valueOrder: c.valueOrder.slice(),
-      hiddenValues: c.hiddenValues.slice(),
-      bottomValues: (c.bottomValues || []).slice(),
-      hidden: cardHidden(key),
-    }
+    // An empty list and hidden: false are what applyTemplate() already assumes
+    // for a missing field, and the blob has to fit LAYOUT_STORE_MAX on the
+    // receiver, so omitting them buys about 50 bytes a card.
+    const spec = { w: c.w, h: c.h, valueOrder: c.valueOrder.slice() }
+    if (c.hiddenValues.length) spec.hiddenValues = c.hiddenValues.slice()
+    if (c.bottomValues && c.bottomValues.length) spec.bottomValues = c.bottomValues.slice()
+    if (cardHidden(key)) spec.hidden = true
+    models[slot] = spec
     order.push(slot)
   }
   return { grid: { cols: s.grid.cols, rows: s.grid.rows }, order, models }
@@ -73,7 +75,7 @@ export function applyTemplate(template) {
   const nextCards = Object.assign(Object.create(null), s.cards)
 
   const keyForSlot = new Map()
-  for (const [key, slot] of modelSlots()) keyForSlot.set(slot, key)
+  for (const [key, slot] of cardSlots()) keyForSlot.set(slot, key)
 
   const matched = []
   const seenKeys = new Set()
@@ -98,7 +100,19 @@ export function applyTemplate(template) {
     }
     hiddenByKey.set(key, spec.hidden === true)
   }
-  const unmatched = s.order.filter(k => !seenKeys.has(k))
+  // A card the template does not name -- a device that has gone quiet, or one
+  // saved before feed cards were carried -- keeps the position it already
+  // holds, and the template's own order is dealt back into the positions the
+  // rest left. Appending them instead moved every such card to the end of the
+  // grid on each Load.
+  const queue = matched.slice()
+  const nextOrder = []
+  for (const key of s.order) {
+    if (!seenKeys.has(key)) { nextOrder.push(key); continue }
+    const next = queue.shift()
+    if (next !== undefined) nextOrder.push(next)
+  }
+  for (const key of queue) nextOrder.push(key)
 
   const nextHidden = s.hidden.filter(k => !hiddenByKey.has(k))
   for (const [key, hidden] of hiddenByKey) {
@@ -107,7 +121,7 @@ export function applyTemplate(template) {
 
   cardState.value = {
     grid: nextGrid,
-    order: matched.concat(unmatched),
+    order: nextOrder,
     hidden: nextHidden,
     cards: nextCards,
   }

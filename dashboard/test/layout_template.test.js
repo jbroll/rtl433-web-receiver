@@ -12,7 +12,7 @@ import {
 
 const BASE = 'http://a'
 const KEY = `${BASE} src/Acurite-5n1/396`
-const FEED_KEY = 'local clock'
+const FEED_KEY = 'local feed/Clock'
 
 function fakeStorage() {
   const map = new Map()
@@ -41,11 +41,12 @@ beforeEach(() => {
   layouts.value = new Map()
 })
 
-test('deriveTemplate groups cards by model, skipping feeds and modelless devices', () => {
+test('deriveTemplate groups cards by model, skipping modelless devices', () => {
+  const MODELLESS = `${BASE} src/nothing`
   addDevice(KEY, 'Acurite-5n1')
-  addDevice(FEED_KEY, undefined)
+  addDevice(MODELLESS, undefined)
   ensureCard(KEY, { temperature_C: 21, humidity: 40 })
-  ensureCard(FEED_KEY, { time: '12:00' })
+  ensureCard(MODELLESS, { time: '12:00' })
   saveCardState()
 
   const t = deriveTemplate()
@@ -58,14 +59,18 @@ test('deriveTemplate groups cards by model, skipping feeds and modelless devices
   assert.equal(Object.keys(t.models).includes(undefined), false)
 })
 
-test('deriveTemplate records a shown device as hidden: false', () => {
+test('deriveTemplate leaves hidden off a shown device, which reads back as shown', () => {
   addDevice(KEY, 'Acurite-5n1')
   ensureCard(KEY, { temperature_C: 21 })
   cardState.value = { ...cardState.value, hidden: cardState.value.hidden.filter(k => k !== KEY) }
   saveCardState()
 
   const t = deriveTemplate()
-  assert.equal(t.models['Acurite-5n1/0'].hidden, false)
+  assert.equal('hidden' in t.models['Acurite-5n1/0'], false)
+
+  cardState.value = { ...cardState.value, hidden: [KEY] }
+  applyTemplate(t)
+  assert.equal(cardState.value.hidden.includes(KEY), false)
 })
 
 test('deriveTemplate keeps grid dimensions', () => {
@@ -110,7 +115,7 @@ test('applyTemplate rebuilds order: matched devices in template order, then unma
   assert.deepEqual(cardState.value.order, [KEY, OTHER_KEY])
 })
 
-test('applyTemplate appends an unmatched device after every matched one, in its prior relative order', () => {
+test('applyTemplate leaves an unmatched device in the position it already held', () => {
   const UNMATCHED_KEY = `${BASE} src/Other/9`
   addDevice(KEY, 'Acurite-5n1')
   addDevice(UNMATCHED_KEY, 'SomeOtherModel')
@@ -121,7 +126,7 @@ test('applyTemplate appends an unmatched device after every matched one, in its 
     models: { 'Acurite-5n1/0': { w: 1, h: 1, valueOrder: [], hiddenValues: [], bottomValues: [] } },
   }
   applyTemplate(template)
-  assert.deepEqual(cardState.value.order, [KEY, UNMATCHED_KEY])
+  assert.deepEqual(cardState.value.order, [UNMATCHED_KEY, KEY])
 })
 
 test('applyTemplate clamps grid dimensions and rejects malformed arrays', () => {
@@ -259,4 +264,99 @@ test('postLayout updates layouts synchronously on success, without waiting for t
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test('applyTemplate leaves a feed card where it already sits', () => {
+  addDevice(KEY, 'Acurite-5n1', 396)
+  const KEY2 = `${BASE} src/Nexus-TH/2`
+  addDevice(KEY2, 'Nexus-TH', 2)
+  addDevice(FEED_KEY, undefined)
+  ensureCard(FEED_KEY, { time: '12:00' }, { autoShow: true })
+  ensureCard(KEY, { temperature_C: 21 })
+  ensureCard(KEY2, { temperature_C: 22 })
+  cardState.value = { ...cardState.value, order: [FEED_KEY, KEY, KEY2] }
+  saveCardState()
+
+  applyTemplate(deriveTemplate())
+  assert.deepEqual(cardState.value.order, [FEED_KEY, KEY, KEY2])
+})
+
+test('applyTemplate leaves a card whose device has gone quiet where it sits', () => {
+  const QUIET = `${BASE} src/LaCrosse-TX141THBv2/178`
+  addDevice(KEY, 'Acurite-5n1', 396)
+  ensureCard(KEY, { temperature_C: 21 })
+  cardState.value.cards[QUIET] = { w: 2, h: 1, valueOrder: [], hiddenValues: [], bottomValues: [] }
+  cardState.value = { ...cardState.value, order: [QUIET, KEY] }
+  saveCardState()
+
+  applyTemplate(deriveTemplate())
+  assert.deepEqual(cardState.value.order, [QUIET, KEY])
+})
+
+test('applyTemplate reorders the cards the template does name', () => {
+  const KEY2 = `${BASE} src/Nexus-TH/2`
+  addDevice(KEY, 'Acurite-5n1', 396)
+  addDevice(KEY2, 'Nexus-TH', 2)
+  addDevice(FEED_KEY, undefined)
+  ensureCard(FEED_KEY, { time: '12:00' }, { autoShow: true })
+  ensureCard(KEY, { temperature_C: 21 })
+  ensureCard(KEY2, { temperature_C: 22 })
+  cardState.value = { ...cardState.value, order: [KEY, FEED_KEY, KEY2] }
+  saveCardState()
+
+  const t = deriveTemplate()
+  t.order = ['Nexus-TH/2', 'Acurite-5n1/396']
+  applyTemplate(t)
+  assert.deepEqual(cardState.value.order, [KEY2, FEED_KEY, KEY])
+})
+
+test('deriveTemplate omits empty lists and a shown card, to spend fewer stored bytes', () => {
+  addDevice(KEY, 'Acurite-5n1', 396)
+  ensureCard(KEY, { temperature_C: 21 })
+  cardState.value = { ...cardState.value, hidden: [] }
+  saveCardState()
+
+  const spec = deriveTemplate().models['Acurite-5n1/396']
+  assert.equal('hiddenValues' in spec, false)
+  assert.equal('bottomValues' in spec, false)
+  assert.equal('hidden' in spec, false)
+})
+
+test('a feed card travels in the template, keyed on its own topic', () => {
+  const WEATHER = 'local feed/Weather'
+  addDevice(KEY, 'Acurite-5n1', 396)
+  addDevice(WEATHER, undefined)
+  ensureCard(KEY, { temperature_C: 21 })
+  ensureCard(WEATHER, { temperature_F: 70 }, { autoShow: true })
+  cardState.value = { ...cardState.value, order: [WEATHER, KEY] }
+  cardState.value.cards[WEATHER].w = 4
+  cardState.value.cards[WEATHER].h = 2
+  saveCardState()
+
+  const t = deriveTemplate()
+  assert.deepEqual(t.order, ['feed/Weather', 'Acurite-5n1/396'])
+  assert.equal(t.models['feed/Weather'].w, 4)
+  assert.equal(t.models['feed/Weather'].h, 2)
+
+  cardState.value.cards[WEATHER].w = 1
+  applyTemplate(t)
+  assert.equal(cardState.value.cards[WEATHER].w, 4)
+  assert.deepEqual(cardState.value.order, [WEATHER, KEY])
+})
+
+test('a feed card the template names is hidden and shown like any other', () => {
+  const WEATHER = 'local feed/Weather'
+  addDevice(WEATHER, undefined)
+  ensureCard(WEATHER, { temperature_F: 70 }, { autoShow: true })
+  saveCardState()
+  assert.equal('hidden' in deriveTemplate().models['feed/Weather'], false)
+
+  cardState.value = { ...cardState.value, hidden: [WEATHER] }
+  saveCardState()
+  const t = deriveTemplate()
+  assert.equal(t.models['feed/Weather'].hidden, true)
+
+  cardState.value = { ...cardState.value, hidden: [] }
+  applyTemplate(t)
+  assert.equal(cardState.value.hidden.includes(WEATHER), true)
 })

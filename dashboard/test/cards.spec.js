@@ -175,14 +175,18 @@ test("a device the user never showed is dropped once it is gone", async ({ page 
   server.emit(OREGON);
   await expect(page.locator("#devices tr")).toHaveCount(0); // the tab is hidden
 
-  // Show one of them, then drop both from the device table and save.
+  // Show one of them, then drop the one nobody showed and save. The shown one
+  // stays: a source has to still be delivering something before a save will
+  // conclude any of its devices are gone.
   await page.click("#tab-devices");
   await page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`).check();
-  const stored = await page.evaluate(() => {
+  const stored = await page.evaluate((gone) => {
+    const kept = [...devices.entries()].filter(([k]) => k !== gone);
     devices.clear();
+    for (const [, rec] of kept) upsert(rec);
     saveCardState();
     return cardState;
-  });
+  }, storeKey(server, OREGON_KEY));
   expect(stored.order).toEqual([storeKey(server, ACURITE_KEY)]);
   expect(Object.keys(stored.cards)).toEqual([storeKey(server, ACURITE_KEY)]);
   expect(stored.hidden).toEqual([]);

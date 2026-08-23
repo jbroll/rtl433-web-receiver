@@ -1,5 +1,11 @@
 # Backlog
 
+- `LAYOUT_STORE_MAX` is 4000, the ceiling `nvs_set_str()` documents for one string entry,
+  and a card costs the template about 165 bytes. That covers roughly 22 cards. A receiver
+  holding all 24 `SIGNAL_DEVICE_SLOTS` plus four feed cards would not fit, and the save
+  would fail with a 503 rather than truncate. Going past 4000 means storing the blob with
+  `putBytes()` instead, which spans NVS pages and takes a larger share of the 20 KB `nvs`
+  partition that also holds the radio calibration.
 - A device seen through two bridges is two cards. Nothing merges them.
 - No authentication to a source. The bridge has none, and a dashboard reaching one over
   anything but localhost inherits that. Filed in the bridge's backlog.

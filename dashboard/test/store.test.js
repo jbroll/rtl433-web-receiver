@@ -69,6 +69,8 @@ test('a device nobody showed is dropped from storage once it is gone', () => {
   store.setCardHidden(K, false)
   const junk = `${BASE} src/Noise/1`
   store.ensureCard(junk, { humidity: 154 })
+  const live = `${BASE} src/Nexus-TH/2`
+  devices.value.set(live, { key: live, merged: READ })
   store.saveCardState()
   assert.deepEqual(store.orderedKeys(), [])
   assert.deepEqual(JSON.parse(localStorage.getItem('rtl433.dashboard.v1')).order, [K])
@@ -116,12 +118,36 @@ test('a hidden feed keeps its layout across a save', () => {
   assert.equal(store.cardEntry(FEED).h, 2)
 })
 
-test('a hidden radio device with no record is still pruned', () => {
+test('a hidden radio device with no record is pruned once its source has spoken', () => {
+  const OTHER = `${BASE} src/Nexus-TH/2`
   store.ensureCard(K, READ)
   store.setCardHidden(K, true)
+  devices.value.set(OTHER, { key: OTHER, merged: READ })
   store.saveCardState()
 
   assert.equal(store.cardEntry(K), undefined)
+})
+
+test('a hidden radio device survives a save made before its source has spoken', () => {
+  store.ensureCard(K, READ)
+  store.setCardSize(K, 4, 3)
+  store.setCardHidden(K, true)
+  devices.value = new Map()
+  store.saveCardState()
+
+  assert.ok(store.cardEntry(K), 'card was pruned before its source replayed')
+  assert.equal(store.cardEntry(K).w, 4)
+  assert.equal(store.cardHidden(K), true)
+})
+
+test('a hidden radio device survives a save while another source is live', () => {
+  const OTHER = 'http://b src/Nexus-TH/2'
+  store.ensureCard(K, READ)
+  store.setCardHidden(K, true)
+  devices.value.set(OTHER, { key: OTHER, merged: READ })
+  store.saveCardState()
+
+  assert.ok(store.cardEntry(K), 'another source spoke for this one')
 })
 
 test('a feed can start some values hidden, without dropping them', () => {

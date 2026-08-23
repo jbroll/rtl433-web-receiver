@@ -174,14 +174,23 @@ class ChunkedResponse : public Print {
   bool       _aborted = false;
 };
 
+// "data: {"topic":"","payload":}\n\n" plus a key, plus a payload.
+#define FRAME_OVERHEAD (64 + SIGNAL_KEY_MAX)
+// A device payload is embedded raw and an alias name is escaped, which can
+// double it.
+#define FRAME_DEVICE_CAP (FRAME_OVERHEAD + (2 * SIGNAL_PAYLOAD_MAX + 2) + 1)
+// The layout blob is embedded raw and is several times any device payload, so
+// it gets its own size rather than putting 4 KB on the stack for every frame.
+#define FRAME_LAYOUT_CAP (FRAME_OVERHEAD + LAYOUT_STORE_MAX + 1)
+
 // Assembles a whole SSE frame so broadcast() sends it in one call, and flags
 // overflow rather than clamping, so a truncated frame is never put on the wire.
-class FrameBuffer : public Print {
+class Frame : public Print {
  public:
   size_t write(uint8_t b) override { return write(&b, 1); }
 
   size_t write(const uint8_t* data, size_t len) override {
-    size_t n = min(len, sizeof(_buf) - 1 - _len);
+    size_t n = min(len, _cap - 1 - _len);
     if (n < len) {
       _overflow = true;
     }
@@ -200,16 +209,35 @@ class FrameBuffer : public Print {
     _buf[0] = '\0';
   }
 
+ protected:
+  Frame(char* buf, size_t cap) : _buf(buf), _cap(cap) {}
+
  private:
-  // "data: {"topic":"","payload":}\n\n" plus a key, plus a payload that is
-  // embedded raw for a device and escaped for an alias, where escaping can
-  // double it.
-  // Zero-initialized so the untouched byte past the last write is always the
-  // null terminator data() promises.
-  char _buf[64 + SIGNAL_KEY_MAX + (2 * SIGNAL_PAYLOAD_MAX + 2) + 1] = {};
+  char*  _buf;
+  size_t _cap;
   size_t _len      = 0;
   bool   _overflow = false;
 };
+
+// Zero-initialized so the untouched byte past the last write is always the
+// null terminator data() promises.
+template <size_t CAP>
+class SizedFrame : public Frame {
+ public:
+  SizedFrame() : Frame(_storage, CAP) {}
+
+ private:
+  char _storage[CAP] = {};
+};
+
+typedef SizedFrame<FRAME_DEVICE_CAP> FrameBuffer;
+typedef SizedFrame<FRAME_LAYOUT_CAP> LayoutFrameBuffer;
+
+// A blob the store accepts has to fit a frame. When it didn't, a save
+// persisted and answered 204 while every frame carrying it was dropped, so the
+// layout was readable over HTTP and invisible to the dashboard.
+static_assert(FRAME_LAYOUT_CAP > 31 + SIGNAL_KEY_MAX + LAYOUT_STORE_MAX,
+              "layout frame buffer is too small for LAYOUT_STORE_MAX");
 
 } // namespace
 
@@ -248,7 +276,7 @@ static bool slotWants(int i, const char* topic) {
 
 // payload is JSON text, embedded as it stands: an object for a device, a quoted
 // string for an alias.
-static void buildFrame(FrameBuffer& frame, const char* topic, const char* payload) {
+static void buildFrame(Frame& frame, const char* topic, const char* payload) {
   frame.print("data: {\"topic\":");
   writeJsonString(frame, topic);
   frame.print(",\"payload\":");
@@ -257,7 +285,7 @@ static void buildFrame(FrameBuffer& frame, const char* topic, const char* payloa
 }
 
 // alias frame: payload is a quoted string (escaped inline)
-static void buildAliasFrame(FrameBuffer& frame, const char* topic, const char* name) {
+static void buildAliasFrame(Frame& frame, const char* topic, const char* name) {
   frame.print("data: {\"topic\":");
   writeJsonString(frame, topic);
   frame.print(",\"payload\":");
@@ -265,7 +293,7 @@ static void buildAliasFrame(FrameBuffer& frame, const char* topic, const char* n
   frame.print("}\n\n");
 }
 
-static void sendTo(int i, const FrameBuffer& frame) {
+static void sendTo(int i, const Frame& frame) {
   WiFiClient& c = _sse[i];
   if (!c) {
     return;
@@ -739,7 +767,7 @@ static void handleEvents() {
 // from mid-replay is delivered with its newer payload when the cursor reaches
 // it, and one evicted mid-replay is simply not delivered. The sub table now
 // has holes like the alias table, so every index is visited and NULLs skip.
-static void drainReplay(int i, FrameBuffer& frame) {
+static void drainReplay(int i, Frame& frame) {
   for (int sent = 0; sent < REPLAY_PER_LOOP && _replay[i] >= 0; ) {
     int16_t at = _replay[i]++;
     const char* topic = NULL;
@@ -860,7 +888,10 @@ void loop() {
   }
   _server.handleClient();
   {
-    FrameBuffer replayFrame;
+    // The replay carries the layout blob as well as device payloads, so it
+    // needs the larger buffer. Static rather than automatic: 4 KB is more than
+    // half the loop task's stack.
+    static LayoutFrameBuffer replayFrame;
     for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
       if (_sse[i] && _replay[i] >= 0) {
         drainReplay(i, replayFrame);
@@ -886,7 +917,7 @@ void loop() {
 
 // index is the topic's raw flat index (a sub-table index, or SIGNAL_SUB_TABLE
 // + alias slot), or -1 when it has none (an alias that was just removed).
-static void broadcastFrame(const char* topic, int index, const FrameBuffer& frame) {
+static void broadcastFrame(const char* topic, int index, const Frame& frame) {
   for (int i = 0; i < WEB_UI_SSE_CLIENTS; i++) {
     if (!_sse[i]) {
       continue;
@@ -935,7 +966,10 @@ void broadcastLayout(const char* blob) {
   if (n < 0 || (size_t)n >= sizeof(topic)) {
     return;
   }
-  FrameBuffer frame;
+  // Static for the same reason the replay buffer is: 4 KB does not belong on
+  // the loop task's stack, and web_ui only ever runs from loop().
+  static LayoutFrameBuffer frame;
+  frame.reset();
   buildFrame(frame, topic, blob); // raw-embed: blob is a JSON object, not a quoted string
   if (frame.overflowed()) {
     Log.warning(F("SSE layout frame overflow, dropping frame" CR));

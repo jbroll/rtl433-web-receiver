@@ -54,7 +54,7 @@ sources publishing the same topic stay two devices with two cards. A card's stor
 uses the same key, so moving a device between bridges gives it a new card rather than
 inheriting one.
 
-## The saved default layout is keyed by model/id, not by source+topic
+## The saved default layout is keyed by slot, not by source+topic
 
 `$layout` (`dashboard/src/layout_template.js`) is a second, separate notion of layout from
 the per-browser `cardState` above. Each slot is `model/id`, using the same id/channel/0
@@ -62,6 +62,22 @@ tie-break `signal_store::buildKey` uses to key a topic — applied uniformly, so
 Receiver's own pseudo-device (always id 0) gets the slot `Receiver/0`. This is what lets two
 sensors sharing a model (two `Acurite-5n1` units) keep independent saved layouts instead of
 colliding on one shared `Acurite-5n1` slot.
+
+Feed cards take a slot too, their own topic — `feed/Weather` and its three siblings, which
+no `model/id` slot collides with. A feed is computed from the location and time zone the
+receiver stores, so every browser reading that receiver derives the same four cards, and
+they belong in the site default like any radio device.
+
+A card the template does not name — a device that has gone quiet since the layout was
+saved, or one saved by an older dashboard — keeps the position it already holds, and the
+template's own order is dealt back into the positions the rest left. Appending unnamed
+cards after the matched ones instead, which is what `applyTemplate()` used to do, moved
+every feed card to the end of the grid on each Load, so loading a layout saved a moment
+earlier rearranged the page.
+
+`deriveTemplate()` writes a spec per slot and omits what `applyTemplate()` already reads as
+the default: an empty `hiddenValues` or `bottomValues`, and `hidden` on a shown card. That
+is about 50 bytes a card against the receiver's `LAYOUT_STORE_MAX`.
 
 ## From dashboard build to mobile app
 

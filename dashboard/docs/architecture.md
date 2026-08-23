@@ -174,6 +174,12 @@ Four places assumed every record came off a radio, and `isFeed()` guards each:
 - `clearSource()` matched anything sharing a base prefix.
 - `pruneCardState()` kept only keys with a live device record, which would
   discard a feed's saved size and value layout before it ever ran.
+  It also needs a source to have delivered at least one device before it will
+  drop any of that source's hidden cards. `devices.value` is empty at boot and
+  `primeFeeds()` saves before any stream opens, so pruning against it there
+  threw away every hidden card's saved size — and left the Receiver card
+  showing again on every load, because `ensureCard()` is the one place that
+  never re-hides it.
 - `ensureCard()` hides every new card. Feeds pass `autoShow`, applied only on
   creation so a later user hide is never undone.
 
