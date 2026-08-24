@@ -15,3 +15,12 @@
   provisioning profile (iOS). See
   [`docs/development.md`](development.md#unsigned-versus-signed) and
   [`ROADMAP.md`](../../ROADMAP.md) Goal 4.
+- `.github/workflows/ios.yml` builds only for the simulator, with
+  `CODE_SIGNING_ALLOWED=NO`, so it produces nothing installable on a device. Once an
+  Apple Developer Program account exists, an App Store Connect API key (issuer ID, key
+  ID, `.p8`) plus the team ID, held as repository secrets, covers both signing and
+  TestFlight upload: write the `.p8` to `~/.appstoreconnect/private_keys/`, replace the
+  simulator build with `xcodebuild archive -sdk iphoneos -allowProvisioningUpdates` and
+  `-exportArchive` against an `ExportOptions.plist`, and Xcode fetches the certificate
+  and profile itself. `com.rkroll.rtl433` has to be registered as an App ID on the team
+  and match the bundle ID in `ios/App/App.xcodeproj`.
