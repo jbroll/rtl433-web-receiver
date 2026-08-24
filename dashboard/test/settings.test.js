@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecimals, setCustomField,
          setLocation, clearLocation, hasLocation, activeZone, localZone,
          locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources,
-         unitsBySource, onUnitsFrame, unitsForSources } from '../src/settings.js'
+         unitsBySource, onUnitsFrame, unitsForSources, publishUnits } from '../src/settings.js'
 import { sources } from '../src/sources.js'
 
 function fakeStorage() {
@@ -352,4 +352,32 @@ test('settings stored before $units existed count as a unit choice', () => {
   sources.value = ['http://a']
   onUnitsFrame('http://a', IMPERIAL)
   assert.equal(settings.value.units, 'metric')
+})
+
+test('publishUnits POSTs the current units when the origin is a configured source', () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return {} }
+  sources.value = ['http://receiver.test']
+  publishUnits()
+  assert.deepEqual(posted,
+    [['http://receiver.test/$units',
+      JSON.stringify({ units: 'metric', decimals: 1,
+                       custom: { temp: 'C', rain: 'mm', wind: 'km/h', pressure: 'hPa' } })]])
+  globalThis.fetch = async () => ({})
+})
+
+test('publishUnits does not POST when the serving origin is not a configured source', () => {
+  const posted = []
+  globalThis.fetch = async (url) => { posted.push(url); return {} }
+  sources.value = []
+  publishUnits()
+  assert.deepEqual(posted, [])
+  globalThis.fetch = async () => ({})
+})
+
+test('publishUnits leaves the adoption latch open', () => {
+  sources.value = ['http://receiver.test']
+  publishUnits()
+  onUnitsFrame('http://receiver.test', IMPERIAL)
+  assert.equal(settings.value.units, 'imperial')
 })

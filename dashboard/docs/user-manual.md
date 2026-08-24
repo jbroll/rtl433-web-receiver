@@ -108,7 +108,8 @@ with it too, under their own names: they are computed from the location and
 time zone the receiver stores, so every browser derives the same four.
 **Save as default layout**
 (next to Forget layouts, visible only when the served receiver is one of
-the dashboard's connected sources) posts the current arrangement there.
+the dashboard's connected sources) posts the current arrangement there, and
+the page's current units with it (see [Settings](#settings)).
 **Load default layout** (visible once one has been read from the receiver
 serving this page) replaces the current arrangement with it, after a
 confirmation prompt. A genuinely fresh browser — nothing in localStorage
@@ -183,6 +184,11 @@ that has never been given units: a receiver with an empty store sends no `$units
 frame at all and answers `GET /$units` with `404`, so the client keeps the metric
 default. Set the units once from the receiver's own page and every other client
 picks them up on its next connection.
+
+**Save as default layout** publishes the page's current units alongside the card
+arrangement, so a receiver nobody has ever changed the units on still ends up
+with some. It is the same `$units` write a unit change makes, under the same
+same-origin gate the button itself is shown under.
 
 ## Location
 

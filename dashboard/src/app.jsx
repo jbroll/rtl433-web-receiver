@@ -4,6 +4,7 @@ import { sourceState, sources } from './sources.js'
 import { LogView } from './log.jsx'
 import { DevicesView } from './devices-table.jsx'
 import { SettingsView } from './settings.jsx'
+import { publishUnits } from './settings.js'
 import { CardsView } from './cards.jsx'
 import { Toast } from './toast.jsx'
 import { setGrid, forgetLayouts, grid } from './store.js'
@@ -77,7 +78,7 @@ export function App() {
           <button
             id="save-layout"
             title="Save this arrangement as the site default"
-            onClick={() => { postLayout() }}
+            onClick={() => { postLayout(); publishUnits() }}
           >
             Save as default layout
           </button>

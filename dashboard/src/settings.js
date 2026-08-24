@@ -167,11 +167,10 @@ export function saveSettings() {
   catch (e) { storageBroken = true }
 }
 
-// The visitor's own choice ends any claim the receiver's units have on this
-// browser. The POST is gated the same way setLocation()'s are: publishing to a
-// source is only meaningful when this page is served by that source.
-function unitsChanged() {
-  unitsAuto = false
+// Gated the same way setLocation()'s POSTs are: publishing to a source is only
+// meaningful when this page is served by that source. Also called by the Save
+// button, so a receiver whose units nobody has changed still gets some.
+export function publishUnits() {
   if (!sources.value.includes(location.origin)) return
   const { units, decimals, custom } = settings.value
   fetch(`${location.origin}/$units`, {
@@ -179,6 +178,13 @@ function unitsChanged() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ units, decimals, custom }),
   }).catch(err => console.error(`POST $units failed: ${err.message || err}`))
+}
+
+// The visitor's own choice ends any claim the receiver's units have on this
+// browser.
+function unitsChanged() {
+  unitsAuto = false
+  publishUnits()
 }
 
 export function setUnits(u) {

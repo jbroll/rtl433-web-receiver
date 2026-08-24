@@ -136,6 +136,21 @@ test("Save as default layout posts the derived template to the source", async ({
   expect(posted.order).toContain("Acurite-5n1/396");
 });
 
+test("Save as default layout also posts the page's units", async ({ page }) => {
+  const server = await open(page, [ACURITE]);
+  await page.click("#edit-cards");
+  await page.click("#save-layout");
+  await expect.poll(async () => {
+    const res = await server.get(server.source + "/$units");
+    return res.status;
+  }).toBe(200);
+  const res = await server.get(server.source + "/$units");
+  expect(JSON.parse(res.body)).toEqual({
+    units: "metric", decimals: 1,
+    custom: { temp: "C", rain: "mm", wind: "km/h", pressure: "hPa" },
+  });
+});
+
 test("multiple sensors of the same model each keep their own saved size", async ({ page }) => {
   const ACURITE2 = { ...ACURITE, id: 500 };
   const KEY2 = topicOf(ACURITE2);
