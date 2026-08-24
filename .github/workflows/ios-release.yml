@@ -78,7 +78,9 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/App.xcarchive"
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
 
       - name: Export ipa
         run: |

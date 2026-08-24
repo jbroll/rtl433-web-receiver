@@ -47,6 +47,11 @@ new distribution certificate on every run because each runner starts with an emp
 and Apple caps a team at three. The certificate is imported into a keychain in `RUNNER_TEMP`
 that dies with the job.
 
+The App target carries manual signing and the profile name; the team ID is passed on the
+`xcodebuild` line from `APPLE_TEAM_ID` so it stays out of this public repository. The build
+number comes from `github.run_number`, since App Store Connect refuses an upload whose build
+number it has already seen.
+
 Six repository secrets feed it:
 
 | Secret | Source |
