@@ -224,9 +224,16 @@ structural rather than a flag because the failure is silent — the same text
 rendered as a scalar takes its whole card from 47px to 11px.
 `test/fontfit.spec.js` pins it.
 
-Type inside a rich cell scales by container query against the cell itself. An
-engine without container queries drops the `clamp()` and falls back to inherited
-body type, which is legible.
+Type inside a rich cell scales by container query against the cell itself, in
+two terms: how much of the cell height the slot has, and what the string costs
+in cell width at that size. The smaller of the two is the size, so the type
+grows until whichever dimension runs out first, the way the dials fill their
+cell. The width term needs the string, which only a measurement gives, so the
+renderer computes it with `textWidthEm()` and sets `font-size` on the element;
+the stylesheet holds the parts that share a row at fractions of it. Nothing
+joins the page-wide fit. Fixed pixel ceilings used to cap these, which left a
+large card mostly empty. An engine without container queries drops the `min()`
+and falls back to inherited body type, which is legible.
 
 The sun and moon renderers are composites: they draw their rise and set times
 inside the SVG rather than beside it, so the whole thing scales as one unit and

@@ -220,8 +220,10 @@ section[hidden] { display:none; }
 .cval .cfn { font-size:clamp(8px,13cqh,12px); text-transform:uppercase; letter-spacing:.05em;
              opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
              display:flex; justify-content:space-between; align-items:center; }
-.cval .big { font-size:clamp(11px,34cqh,64px); font-variant-numeric:tabular-nums;
-             line-height:1.05; }
+/* The renderer sets the size these carry: it has the string to measure, which
+   is what a width term needs. A flat px ceiling here left a large card mostly
+   empty. */
+.cval .big { font-variant-numeric:tabular-nums; line-height:1.05; }
 .cval .ctext { font-size:clamp(9px,16cqh,22px); overflow:hidden; }
 /* The clock's .cfn + .big have no flex:1 1 auto wrapper, so they sit at the
    top of the cell under .cval's flex-start. Center them like a plain .val. */
@@ -247,8 +249,13 @@ section[hidden] { display:none; }
 #settings-map a { color:inherit; }
 .cval .wx { flex:1 1 auto; display:flex; align-items:center; justify-content:center;
             gap:.4em; min-height:0; overflow:hidden; }
-.cval .glyph { font-size:clamp(12px,30cqh,48px); line-height:1; }
+/* The row's own font-size is fitted to its whole content, so the parts take
+   their share of it. Changing these means changing the width terms in
+   renderers.jsx that assume them. */
+.cval .wx .big { font-size:1em; }
+.cval .wx.now .glyph { font-size:.9em; }
+.cval .glyph { font-size:1em; line-height:1; }
 .cval .hilo { display:flex; flex-direction:column; line-height:1.05;
               font-variant-numeric:tabular-nums; }
-.cval .hi { font-size:clamp(11px,24cqh,38px); }
-.cval .lo { font-size:clamp(9px,16cqh,24px); opacity:.6; }
+.cval .hi { font-size:.8em; }
+.cval .lo { font-size:.55em; opacity:.6; }

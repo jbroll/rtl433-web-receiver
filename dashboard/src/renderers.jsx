@@ -3,10 +3,25 @@ import { tick } from './tick.js'
 import { displayValue } from './units.js'
 import { settings } from './settings.js'
 import { glyphOf } from './feeds/wx-icons.js'
+import { textWidthEm } from './grid.js'
 
 // Imported for its registrations, so a renderer is reachable by tag before the
 // first card renders. Components live here rather than beside the registry so
 // the registry stays plain JS that `node --test` can import.
+
+// A rich cell sizes its own type instead of joining the page-wide fit, so it
+// fills its cell the way the dials do. The height term is the slot's share of
+// the cell; the width term is what the measured string costs at that size.
+// Whichever runs out first sets the size.
+function fitFont(heightCqh, widthEm) {
+  return `max(11px,min(${heightCqh}cqh,${(96 / widthEm).toFixed(1)}cqw))`
+}
+
+// Emoji come from a fallback font the probe cannot measure reliably, so hold
+// the result to the range a weather glyph actually occupies.
+function glyphEm(g) {
+  return Math.min(1.4, Math.max(0.9, textWidthEm(g)))
+}
 
 registerValue('text', ({ v }) => (
   <>
@@ -39,7 +54,9 @@ registerValue('clock', ({ v }) => {
         <span>{v.label}</span>
         {ampm && <span>{ampm}</span>}
       </div>
-      <div class="big">{time}</div>
+      {/* A trailing literal from the 12-hour format collapses when drawn, so
+          the measured string has to drop it too. */}
+      <div class="big" style={{ fontSize: fitFont(76, textWidthEm(time.trim())) }}>{time}</div>
     </>
   )
 })
@@ -145,16 +162,26 @@ function temp(v, unit, s) {
   return d.num + d.unit
 }
 
+// The glyph and the hi/lo stack share the row, and the stack's own two lines
+// set its height, so both terms carry the sizes the CSS gives those parts.
+const fcEm = (g, hi, lo) =>
+  glyphEm(g) + 0.4 + Math.max(0.8 * textWidthEm(hi), 0.55 * textWidthEm(lo))
+
+const nowEm = (g, t) => 0.9 * glyphEm(g) + 0.4 + textWidthEm(t)
+
 registerValue('forecastDay', ({ v }) => {
   const s = settings.value
+  const g = glyphOf(v.sky, v.night)
+  const hi = temp(v.hi, v.unit, s)
+  const lo = temp(v.lo, v.unit, s)
   return (
     <>
       <div class="cfn">{v.label}</div>
-      <div class="wx">
-        <span class="glyph">{glyphOf(v.sky, v.night)}</span>
+      <div class="wx" style={{ fontSize: fitFont(48, fcEm(g, hi, lo)) }}>
+        <span class="glyph">{g}</span>
         <span class="hilo">
-          <span class="hi">{temp(v.hi, v.unit, s)}</span>
-          <span class="lo">{temp(v.lo, v.unit, s)}</span>
+          <span class="hi">{hi}</span>
+          <span class="lo">{lo}</span>
         </span>
       </div>
       <div class="csub">{v.pop > 0 ? `${v.pop}% rain` : v.text || ''}</div>
@@ -164,12 +191,14 @@ registerValue('forecastDay', ({ v }) => {
 
 registerValue('now', ({ v }) => {
   const s = settings.value
+  const g = glyphOf(v.sky, v.night)
+  const t = temp(v.temp, v.unit, s)
   return (
     <>
       {v.place && <div class="cfn">{v.place}</div>}
-      <div class="wx">
-        <span class="glyph">{glyphOf(v.sky, v.night)}</span>
-        <span class="big">{temp(v.temp, v.unit, s)}</span>
+      <div class="wx now" style={{ fontSize: fitFont(62, nowEm(g, t)) }}>
+        <span class="glyph">{g}</span>
+        <span class="big">{t}</span>
       </div>
       <div class="csub">{v.text || ''}</div>
     </>

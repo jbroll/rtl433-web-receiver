@@ -131,3 +131,33 @@ test("moving the location refetches against the new point", async ({ page }) => 
   await expect.poll(() => seen.filter(p => p.startsWith("/points/")).length).toBe(1);
   expect(seen.some(p => p === "/points/39.7392,-104.9903")).toBe(true);
 });
+
+test("a forecast day's glyph and temperatures fill the row without clipping", async ({ page }) => {
+  await open(page);
+  await setPlace(page);
+  await expect(page.locator(`${CARD} .val[data-f="day0"]`)).toHaveCount(1);
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.evaluate(() => {
+    setGrid("cols", 4);
+    setGrid("rows", 3);
+    setCardSize("local feed/Weather", 2, 2);
+    saveCardState();
+  });
+  await expect.poll(() => page.locator(`${CARD} .val[data-f="day0"]`)
+    .evaluate(c => c.clientWidth)).toBeGreaterThan(200);
+
+  const fit = await page.locator(`${CARD} .val[data-f="day0"] .wx`).evaluate(row => {
+    let used = 0, tall = 0;
+    for (const part of row.children) {
+      const r = part.getBoundingClientRect();
+      used += r.width;
+      tall = Math.max(tall, r.height);
+    }
+    return { w: used / row.clientWidth, h: tall / row.clientHeight,
+             clipped: Math.max(row.scrollWidth - row.clientWidth,
+                               row.scrollHeight - row.clientHeight) };
+  });
+
+  expect(fit.clipped).toBe(0);
+  expect(Math.max(fit.w, fit.h)).toBeGreaterThan(0.8);
+});

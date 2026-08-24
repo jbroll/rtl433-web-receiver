@@ -16,6 +16,11 @@
   ellipsizes.
 - One size for the page means one crowded card sets it for every other. Nothing caps
   how far a single card can pull the rest down short of the 11px floor.
+- `Body()` in `cards.jsx` lays the values out as `repeat(w, minmax(0,1fr))` columns, one
+  value per grid cell of card width, so a card showing fewer values than it is wide leaves
+  the rest of the card empty. A 2-wide Clock card showing only the time fills the left half
+  and nothing else, at any type size. Sizing the columns from the visible value count would
+  fix it, and would change every card, scalar ones included.
 - `LINE_HEIGHT` in `grid.js` repeats the `line-height` on `.card .val` in CSS. Changing
   one without the other leaves the height fit off by that ratio.
 - `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid has no `gap`.

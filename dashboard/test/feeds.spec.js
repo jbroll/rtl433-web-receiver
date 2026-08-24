@@ -309,3 +309,29 @@ test("a computed feed is never cached, so it cannot paint a stale shape", async 
   expect(cached).not.toContain("sun");
   expect(cached).not.toContain("clock");
 });
+
+test("the clock time fills the width of its cell and is not clipped", async ({ page }) => {
+  await open(page);
+  await setPlace(page, 40.015, -105.2705, "America/Denver");
+  await expect(page.locator(CLOCK)).toBeVisible();
+  await page.setViewportSize({ width: 1180, height: 820 });
+  await page.evaluate(() => {
+    setGrid("cols", 4);
+    setGrid("rows", 3);
+    setCardSize("local feed/Clock", 2, 2);
+    saveCardState();
+  });
+  await expect.poll(() => page.locator(`${CLOCK} .val[data-f="local_time_12"]`)
+    .evaluate(c => c.clientWidth)).toBeGreaterThan(200);
+
+  const fit = await page.locator(`${CLOCK} .val[data-f="local_time_12"]`).evaluate(cell => {
+    const big = cell.querySelector(".big");
+    const range = document.createRange();
+    range.selectNodeContents(big);
+    return { used: range.getBoundingClientRect().width / cell.clientWidth,
+             clipped: big.scrollWidth - big.clientWidth };
+  });
+
+  expect(fit.clipped).toBe(0);
+  expect(fit.used).toBeGreaterThan(0.85);
+});
