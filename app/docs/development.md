@@ -31,7 +31,36 @@ cd ../app && npm run sync:ios
 npm run build:ios
 ```
 
-On a Linux development machine `npm run sync:ios` fails at `pod install`. The repository provides a GitHub Actions workflow (`.github/workflows/ios.yml`) that builds unsigned on `macos-latest` instead.
+On a Linux development machine `npm run sync:ios` fails at `pod install`. Two GitHub
+Actions workflows build on `macos-latest` instead: `.github/workflows/ios.yml` builds
+unsigned for the simulator on every push, and `.github/workflows/ios-release.yml` builds
+signed for a device.
+
+## Signed iOS builds
+
+`.github/workflows/ios-release.yml` runs on `workflow_dispatch` and on `v*` tags. It
+archives Release against the `iphoneos` SDK with manual signing, exports an `.ipa`, uploads
+it to TestFlight, and keeps the `.ipa` as a run artifact.
+
+Signing uses a fixed certificate rather than `-allowProvisioningUpdates`, which would mint a
+new distribution certificate on every run because each runner starts with an empty keychain,
+and Apple caps a team at three. The certificate is imported into a keychain in `RUNNER_TEMP`
+that dies with the job.
+
+Six repository secrets feed it:
+
+| Secret | Source |
+| --- | --- |
+| `APPLE_TEAM_ID` | Membership details on developer.apple.com |
+| `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_KEY_P8` | App Store Connect → Users and Access → Integrations → Team Keys, App Manager role with full access |
+| `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` | An Apple Distribution certificate and its key, as base64 PKCS#12 |
+| `IOS_PROVISION_PROFILE` | An App Store Connect profile for `com.rkroll.rtl433` named `rtl433 App Store`, as base64 |
+
+The certificate can be made without a Mac. Generate a key and request with `openssl genrsa`
+and `openssl req -new`, upload the `.csr` at Certificates, IDs & Profiles → Certificates →
+Apple Distribution, then pack the downloaded `.cer` with the key and Apple's WWDR
+intermediate using `openssl pkcs12 -export -legacy`. The profile references the certificate
+by name, so replacing one means regenerating the other.
 
 ## Platform Sync
 
@@ -72,4 +101,4 @@ the receiver appears and adds correctly.
 
 ## Unsigned Versus Signed
 
-The CI job and local commands above produce an **unsigned debug APK**. It can be installed directly through adb but cannot be published. A release build needs a keystore (Android) or an Apple developer certificate and provisioning profile (iOS). Producing an installable `.ipa` is outside this repository's scope.
+The Android CI job and local commands above produce an **unsigned debug APK**. It can be installed directly through adb but cannot be published; a release build needs a keystore. iOS is signed, through `ios-release.yml` above.
