@@ -2,6 +2,12 @@ name: iOS signed build
 
 on:
   workflow_dispatch:
+    inputs:
+      distribution:
+        description: Where the signed build goes
+        type: choice
+        default: testflight
+        options: [testflight, adhoc]
   push:
     tags: ['v*']
 
@@ -14,6 +20,8 @@ jobs:
     env:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       PROFILE_NAME: rtl433 App Store
+      ADHOC_PROFILE_NAME: rtl433 Ad Hoc
+      DISTRIBUTION: ${{ inputs.distribution || 'testflight' }}
 
     steps:
       - uses: actions/checkout@v5
@@ -54,13 +62,15 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
           rm "$RUNNER_TEMP/dist.p12"
 
-      - name: Install provisioning profile
+      - name: Install provisioning profiles
         env:
           IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          IOS_ADHOC_PROFILE: ${{ secrets.IOS_ADHOC_PROFILE }}
         run: |
           DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$DIR"
-          echo "$IOS_PROVISION_PROFILE" | base64 --decode > "$DIR/rtl433.mobileprovision"
+          echo "$IOS_PROVISION_PROFILE" | base64 --decode > "$DIR/rtl433-appstore.mobileprovision"
+          echo "$IOS_ADHOC_PROFILE" | base64 --decode > "$DIR/rtl433-adhoc.mobileprovision"
 
       - name: Place App Store Connect API key
         env:
@@ -84,18 +94,25 @@ jobs:
 
       - name: Export ipa
         run: |
+          if [ "$DISTRIBUTION" = adhoc ]; then
+            METHOD=release-testing
+            PROFILE="$ADHOC_PROFILE_NAME"
+          else
+            METHOD=app-store-connect
+            PROFILE="$PROFILE_NAME"
+          fi
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-            <key>method</key><string>app-store-connect</string>
+            <key>method</key><string>${METHOD}</string>
             <key>teamID</key><string>${APPLE_TEAM_ID}</string>
             <key>destination</key><string>export</string>
             <key>signingStyle</key><string>manual</string>
             <key>provisioningProfiles</key>
             <dict>
-              <key>com.rkroll.rtl433</key><string>${PROFILE_NAME}</string>
+              <key>com.rkroll.rtl433</key><string>${PROFILE}</string>
             </dict>
           </dict>
           </plist>
@@ -106,6 +123,7 @@ jobs:
             -exportPath "$RUNNER_TEMP/export"
 
       - name: Upload to TestFlight
+        if: ${{ (inputs.distribution || 'testflight') == 'testflight' }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -116,5 +134,5 @@ jobs:
       - name: Upload ipa artifact
         uses: actions/upload-artifact@v5
         with:
-          name: rtl433-ios-signed
+          name: rtl433-ios-${{ inputs.distribution || 'testflight' }}
           path: ${{ runner.temp }}/export/App.ipa

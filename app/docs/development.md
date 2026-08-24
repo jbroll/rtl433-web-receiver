@@ -47,12 +47,23 @@ new distribution certificate on every run because each runner starts with an emp
 and Apple caps a team at three. The certificate is imported into a keychain in `RUNNER_TEMP`
 that dies with the job.
 
+A `distribution` input picks where the build goes. `testflight`, the default, exports with
+`app-store-connect` and uploads. `adhoc` exports with `release-testing` against the
+`rtl433 Ad Hoc` profile and only attaches the `.ipa` to the run; install it over USB with
+`ideviceinstaller -i App.ipa`, which works from Linux. Ad hoc is the route for a device too
+old for the current TestFlight app, which needs iOS 16. Only devices listed in the ad-hoc
+profile can run that build, so a new device means regenerating the profile and updating
+`IOS_ADHOC_PROFILE`.
+
+The archive itself always signs with the App Store profile; `xcodebuild -exportArchive`
+re-signs with whichever profile the export options name.
+
 The App target carries manual signing and the profile name; the team ID is passed on the
 `xcodebuild` line from `APPLE_TEAM_ID` so it stays out of this public repository. The build
 number comes from `github.run_number`, since App Store Connect refuses an upload whose build
 number it has already seen.
 
-Six repository secrets feed it:
+Seven repository secrets feed it:
 
 | Secret | Source |
 | --- | --- |
@@ -60,6 +71,7 @@ Six repository secrets feed it:
 | `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_KEY_P8` | App Store Connect → Users and Access → Integrations → Team Keys, App Manager role with full access |
 | `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` | An Apple Distribution certificate and its key, as base64 PKCS#12 |
 | `IOS_PROVISION_PROFILE` | An App Store Connect profile for `com.rkroll.rtl433` named `rtl433 App Store`, as base64 |
+| `IOS_ADHOC_PROFILE` | An Ad Hoc profile named `rtl433 Ad Hoc` listing the test devices, as base64 |
 
 The certificate can be made without a Mac. Generate a key and request with `openssl genrsa`
 and `openssl req -new`, upload the `.csr` at Certificates, IDs & Profiles → Certificates →
