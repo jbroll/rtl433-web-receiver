@@ -175,6 +175,15 @@ default. The first unit change made in that browser ends that, and the stored
 choice stands from then on. Setting a location is not a unit choice and leaves
 the receiver's units in force.
 
+Two things follow for a page the receiver does not serve, which is every load of
+the mobile app and any dashboard opened from a file or a different host. Its
+units are local to that client and are never published, because the POST is gated
+on the origin being one of the sources. And it adopts nothing from a receiver
+that has never been given units: a receiver with an empty store sends no `$units`
+frame at all and answers `GET /$units` with `404`, so the client keeps the metric
+default. Set the units once from the receiver's own page and every other client
+picks them up on its next connection.
+
 ## Location
 
 The Settings section carries a location, which the information feed cards need

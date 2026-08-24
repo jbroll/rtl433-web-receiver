@@ -79,6 +79,15 @@ Apple Distribution, then pack the downloaded `.cer` with the key and Apple's WWD
 intermediate using `openssl pkcs12 -export -legacy`. The profile references the certificate
 by name, so replacing one means regenerating the other.
 
+## Settings the app cannot publish
+
+The app loads the dashboard from the Capacitor WebView, so its origin is never
+one of the dashboard's sources. Units, decimals, and location changed in the app
+stay on the device; the POSTs that publish them to a receiver only fire from a
+page that receiver served. The app still adopts a receiver's published `$units`,
+but only when the receiver has some stored. See
+[`dashboard/docs/user-manual.md`](../../dashboard/docs/user-manual.md).
+
 ## Platform Sync
 
 `capacitor.config.ts` sets `webDir: "../dashboard/dist"`. After every dashboard change, rebuild the dashboard and run the relevant `npm run sync:*` before testing the platform build. Generated platform files that should not be committed are listed in `app/.gitignore`.
