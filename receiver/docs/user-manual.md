@@ -163,7 +163,9 @@ roughly 165 bytes each.
 ### `POST /$units`
 
 Stores the units every visitor's dashboard renders in — one JSON object kept
-verbatim. The receiver never reads inside it.
+verbatim. The receiver never reads inside it. The dashboard posts it on every
+change to a unit or decimals control, and again with the **Save as default
+layout** button, so one Save fills both stores.
 
     POST /rtl433-a1b2c3/$units
     Content-Type: application/json

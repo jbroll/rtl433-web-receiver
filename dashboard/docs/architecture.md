@@ -138,7 +138,10 @@ existed carries no marker at all and counts as a choice, so upgrading never
 overrides units someone had already picked. An adopted frame is never saved, so
 a browser where no choice was made takes whatever the receiver publishes on each
 load. `setUnits`, `setDecimals` and `setCustomField` each POST the whole object
-back, origin-gated the way the location POSTs are.
+back through `publishUnits()`, origin-gated the way the location POSTs are. The
+Save as default layout button calls `publishUnits()` too, so a receiver nobody
+has changed a unit control on still ends up with stored units instead of
+404ing `GET /$units`.
 
 `cards.jsx` and `devices-table.jsx` both render readings through `displayValue`.
 `CardsView` reads the settings signal as a dependency, so any settings change
