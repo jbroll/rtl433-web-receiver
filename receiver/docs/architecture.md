@@ -462,7 +462,9 @@ pending entry before the second sighting arrives, losing the promotion.
 `radio_health` runs once per telemetry cycle in `loop()`, fed with the current
 `lastDecodeAt` and `averageRssi`. It classifies the radio state as `silent` or
 `pinned` and returns an action. `pinned` triggers a soft re-init:
-`initReceiver()` re-creates the receiver task and restarts the radio. There is
+`reinitRadio()` disables the receiver task and interrupt, then `initReceiver()`
+resets and reconfigures the radio and restarts the task; the transaction mutex
+below covers single register reads, not a reset under a running RSSI poll. There is
 no reboot path: the firmware never calls `esp_restart()` for the radio, because
 a reboot does not power-cycle the radio and a stuck chip survives it. A decode
 arriving after a soft re-init marks the recovery confirmed and resets the

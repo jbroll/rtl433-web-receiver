@@ -312,10 +312,14 @@ static int radioTemperature() {
 #endif
 }
 
-// Re-runs the radio config path. Safe from loop(): initReceiver()'s task
-// creation is guarded, so no second receiver task spawns, and the SPI bus
-// mutex serializes the re-init against RSSI sampling.
+// Re-runs the radio config path. The library has no SPI mutex, so the receiver
+// task and the DIO2 interrupt are stopped first: otherwise radio.reset() and the
+// SPI re-config interleave with the task's RSSI reads and the chip can come back
+// mis-registered. initReceiver()'s task creation is guarded, so no second
+// receiver task spawns.
 static void reinitRadio() {
+  rf.disableReceiver();
+  delay(5); // let an RSSI read already on the SPI bus finish
   rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
   rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
   rf.enableReceiver();

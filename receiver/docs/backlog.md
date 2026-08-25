@@ -4,23 +4,6 @@ Known gaps in the receiver, in rough priority order. None break it as it stands;
 found during review or hardware testing and deliberately left. Anything spanning
 sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
-## `reinitRadio()` reconfigures the SPI bus under the running receiver task
-
-The comment above `reinitRadio()` (`WebReceiver.ino:313-315`) says "the SPI bus mutex
-serializes the re-init against RSSI sampling." There is no such mutex: grepping
-`rtl_433_ESP` for `semaphore` or `mutex` returns nothing. `rf.initReceiver()` calls
-`radio.reset()` and `newSPI.begin(SCK, MISO, MOSI, CS)` from `loop()` while
-`rtl_433_ReceiverTask` is still driving the same bus in a tight `_getRSSI()` loop, gated
-only on `_enabledReceiver`, which `reinitRadio()` never clears. `radioTemperature()`
-gets this right: it calls `rf.disableReceiver()` and `delay(5)` first. `initReceiver()`
-also contains `delay(50)` retry paths, which guarantee the receiver task is scheduled
-mid-reconfiguration. When the health monitor fires a soft re-init (`WebReceiver.ino:471`)
-the radio can come back mis-registered — the deaf state the recovery exists to clear,
-now latched until a power cycle. The DIO2 interrupt stays attached across `radio.reset()`
-as well, so `interruptHandler` records garbage edges into `_pulseTrains` during it.
-Disabling the receiver around the re-init, as `radioTemperature()` does, is the fix; the
-comment goes either way.
-
 ## The provisioning portal is an open AP that hands out an OTA token
 
 `WiFi.softAP(ap, nullptr)` (`provisioning.cpp:233`) brings up an unencrypted network, and
