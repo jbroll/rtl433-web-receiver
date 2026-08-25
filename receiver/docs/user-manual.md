@@ -106,7 +106,9 @@ accepted; a page on any other origin is refused.
 A body that fails to parse as JSON, or parses to something other than a
 string, is `400`, body `body must be a JSON string`, and the stored alias is
 unchanged. A body of `""` removes the alias; the next `GET` of that topic is
-then `404`.
+then `404`. Every save is also published, retained, to each configured MQTT
+bridge, and replayed to a bridge that connects later; a `""` body clears the
+bridge's retained copy the same way.
 
     POST /rtl433-a1b2c3/Acurite-5n1/1234/$alias
     ""

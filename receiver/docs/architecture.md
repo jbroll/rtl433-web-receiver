@@ -246,10 +246,9 @@ anything a fire-and-forget publish missed.
 id. An alias topic already carries the source segment, and `handleAliasPost`
 refuses one outside the receiver's own source, so it is published as it
 stands. A cleared alias goes out as a zero-length retained publish, which is
-what makes a bridge drop its retained copy rather than serve a name that no
-longer exists. `replayAll()` walks all `ALIAS_SLOTS` on connect for the same
-reason it replays the four stores: a bridge that restarts loses its retained
-set, and nothing else would put the names back.
+what makes a bridge drop its retained copy. `replayAll()` walks all
+`ALIAS_SLOTS` on connect for the same reason it replays the four stores: a
+bridge that restarts loses its retained set.
 
 ## Boot order
 

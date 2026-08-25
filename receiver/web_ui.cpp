@@ -397,8 +397,10 @@ static void handleAliasPost(const char* path) {
     sendStatus(503, "alias store full");
     return;
   }
-  web_ui::broadcastAlias(path, name);
-  mqtt_publish::publishAlias(path, name);
+  const char* stored = alias_store::get(path);
+  if (stored == NULL) stored = "";
+  web_ui::broadcastAlias(path, stored);
+  mqtt_publish::publishAlias(path, stored);
   sendCors();
   _server.sendHeader("Cache-Control", "no-store");
   _server.send(204, "text/plain", "");
