@@ -7,12 +7,14 @@ boards on one network do not collide. It is printed at startup along with the
 IP address: `mDNS started: rtl433-a1b2c3.local`.
 
 At boot the device tries to connect WiFi (stored credentials, or the `.env`
-macros if there are none) for up to 20 seconds. If that fails — no
-credentials, bad `.env` macros, or a network that doesn't come up in time —
-it opens a `rtl433-receiver-XXXX` SoftAP with a captive-portal setup page
-instead of decoding, so the setup page stays reachable rather than the device
-sitting on a dead connection; the receiver's normal UI, routes, and SSE are
-not up during provisioning. Holding the BOOT button ~3 seconds at boot clears
+macros if there are none), up to 5 attempts of 20 seconds each, so a router
+that is still booting after a power outage has time to come up. If every
+attempt fails, or there are no credentials, it opens a `rtl433-receiver-XXXX`
+SoftAP with a captive-portal setup page instead of decoding; the receiver's
+normal UI, routes, and SSE are not up during provisioning. When credentials
+are stored, the portal restarts the device after 10 minutes without a request
+so it tries the network again; a board that has never been provisioned stays
+in the portal. Holding the BOOT button ~3 seconds at boot clears
 stored credentials and returns to this state — unless the build has `.env`
 present, in which case it reconnects with the compiled-in credentials and
 re-persists them on the same boot, never reaching the portal. See

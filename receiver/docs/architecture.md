@@ -171,7 +171,11 @@ when OTA has never been configured.
 when no stored or `.env` credentials connect. It runs its own `WebServer` on
 port 80, separate from `web_ui.cpp`'s: `provisioning::run()` always ends in a
 reboot before `web_ui::begin()` ever runs, so there is no port conflict
-between the two. `run()` scans for nearby networks in STA mode before
+between the two. The reboot comes from `handleSave()`, or, when
+`wifi_store::hasCredentials()` is true, from `PROVISIONING_IDLE_MS` (10
+minutes) passing with no HTTP request, so a board that fell into the portal
+because its network was slow retries it instead of waiting for a person. A
+never-provisioned board stays in the portal. `run()` scans for nearby networks in STA mode before
 `WiFi.softAP()` brings the AP up, because `WiFi.scanNetworks()` forces the
 radio through STA-mode channel-hopping that would otherwise briefly
 destabilize an already-joined client. The scanned list, deduplicated and
@@ -244,7 +248,9 @@ WiFi connection is tried in three steps, each a fallback for the one before:
 stored credentials from `wifi_store` first, then the `.env`-supplied
 `WIFI_SSID`/`WIFI_PASSWORD` build macros if there were no stored credentials,
 persisting them to `wifi_store` on a successful connect so later boots skip
-straight to the stored path. If neither connects within the boot window, the
+straight to the stored path. Each of those runs `connectWiFi()` up to
+`WIFI_BOOT_ATTEMPTS` (5) times, `WIFI_CONNECT_MS` (20 s) each, because after a
+power outage the router boots slower than the ESP32. If none connects, the
 device falls back to `provisioning::run()`, the SoftAP captive portal, as the
 final step.
 

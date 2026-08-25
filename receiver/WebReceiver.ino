@@ -55,6 +55,7 @@
 
 #define JSON_MSG_BUFFER   512
 #define WIFI_CONNECT_MS   20000
+#define WIFI_BOOT_ATTEMPTS 5
 #define WIFI_RETRY_MS     30000
 
 #ifndef RECEIVER_TELEMETRY_MS
@@ -449,6 +450,16 @@ static bool fakeSignalTick() {
 }
 #endif
 
+// After a power outage the router comes up well after the ESP32, so one
+// WIFI_CONNECT_MS window is not enough to tell a slow network from a wrong
+// password.
+static void bootConnect(const char* ssid, const char* pass) {
+  for (int attempt = 1; attempt <= WIFI_BOOT_ATTEMPTS && !wifiReady(); attempt++) {
+    Log.notice(F("WiFi boot attempt %d of %d" CR), attempt, WIFI_BOOT_ATTEMPTS);
+    connectWiFi(ssid, pass);
+  }
+}
+
 // The radio health monitor, run once per telemetry cycle. Recovery happens
 // here; a soft re-init is logged and carried out immediately.
 static void monitorRadioHealth() {
@@ -514,11 +525,11 @@ void setup() {
              (unsigned long)health_store::bootCount(),
              (unsigned long)ESP.getFreeHeap(), bootCoredumpPending ? 1 : 0);
   if (wifi_store::hasCredentials()) {
-    connectWiFi(wifi_store::ssid(), wifi_store::password());
+    bootConnect(wifi_store::ssid(), wifi_store::password());
   }
 #if defined(WIFI_SSID) && defined(WIFI_PASSWORD)
   else {
-    connectWiFi(WIFI_SSID, WIFI_PASSWORD);
+    bootConnect(WIFI_SSID, WIFI_PASSWORD);
     if (wifiReady()) {
       wifi_store::set(WIFI_SSID, WIFI_PASSWORD);
     }

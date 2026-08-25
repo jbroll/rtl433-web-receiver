@@ -21,25 +21,12 @@ as well, so `interruptHandler` records garbage edges into `_pulseTrains` during 
 Disabling the receiver around the re-init, as `radioTemperature()` does, is the fix; the
 comment goes either way.
 
-## A single failed boot-time connect strands the device in the portal
-
-`connectWiFi()` waits `WIFI_CONNECT_MS` (20 s) once (`WebReceiver.ino:526-528`), and on
-expiry enters `provisioning::run()`, whose `for(;;)` (`provisioning.cpp:246`) only exits
-through `ESP.restart()` from `handleSave()`. Mains power returns after an outage, the
-ESP32 boots in about two seconds while the router takes a minute to bring up its radio,
-and the device drops into the SoftAP portal and stays there. `serviceWiFi()`'s 30 s
-reconnect never runs, because `loop()` is never reached. Recovery means reprovisioning
-the board by hand. `architecture.md` documents the fallback as intended but not the
-no-retry consequence. Retrying the stored credentials a few times before falling back, or
-rebooting out of the portal after an idle timeout, would both close it.
-
 ## The provisioning portal is an open AP that hands out an OTA token
 
 `WiFi.softAP(ap, nullptr)` (`provisioning.cpp:233`) brings up an unencrypted network, and
 `handleRoot()` (`:108-110`) generates a fresh token with `randomToken()` and renders it
 into the form on every GET; `handleSave()` (`:201`) stores whatever the form returns.
-Anyone in range of a board sitting in the portal — which the entry above makes reachable
-after an ordinary power outage — can join, submit their own SSID and a token they chose,
+Anyone in range of a board sitting in the portal can join, submit their own SSID and a token they chose,
 and take the board onto their network with an OTA credential they control. `POST /$update`
 then accepts arbitrary firmware. A WPA2 password on the SoftAP, printed on the device or
 derived from the chip ID, is the smallest fix.

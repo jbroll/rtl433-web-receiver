@@ -18,6 +18,9 @@ static DNSServer _dns;
 static WebServer _server(80);
 
 #define PROVISIONING_SCAN_MAX 16
+#define PROVISIONING_IDLE_MS (10UL * 60UL * 1000UL)
+
+static unsigned long _lastRequestAt = 0;
 
 // Populated once by run(), before _server.begin(); handleRoot() renders from
 // this cache instead of scanning on every request (see scanSorted()).
@@ -105,6 +108,7 @@ static int scanSorted(String outSsid[], int32_t outRssi[], int maxOut) {
 }
 
 static void handleRoot() {
+  _lastRequestAt = millis();
   char token[OTA_TOKEN_STORE_MAX];
   randomToken(token, sizeof(token));
 
@@ -151,6 +155,7 @@ static void handleRoot() {
 }
 
 static void handleSave() {
+  _lastRequestAt = millis();
   String manual = _server.arg("ssid_manual");
   manual.trim();
   String ssid = manual.length() > 0 ? manual : _server.arg("ssid");
@@ -219,9 +224,18 @@ void run() {
   _server.onNotFound(handleRoot);
   _server.begin();
 
+  // A board with stored credentials most likely landed here because the
+  // network was slow to come up; a never-provisioned board has nowhere else
+  // to go and stays.
+  bool  restartWhenIdle = wifi_store::hasCredentials();
+  _lastRequestAt = millis();
   for (;;) {
     _dns.processNextRequest();
     _server.handleClient();
+    if (restartWhenIdle && millis() - _lastRequestAt > PROVISIONING_IDLE_MS) {
+      Log.notice(F("provisioning: idle, restarting to retry stored WiFi" CR));
+      ESP.restart();
+    }
   }
 }
 
