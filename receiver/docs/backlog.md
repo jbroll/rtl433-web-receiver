@@ -195,11 +195,8 @@ a gap for anyone who wants to disable OTA after enabling it.
   of an extra_script, naming no line — and silently takes only the first token of
   an unquoted multi-word one, so `WIFI_PASSWORD=my pass` compiles the password as
   `my` and the board just fails to associate.
-- `tools/fetch_coredump.sh:10` writes `core.bin` into `receiver/tools/`, which
-  `.gitignore` does not cover, so a `git add -A` would commit a flash dump holding
-  the WiFi password and OTA token that `load_env.py` compiled in. The same script
-  (`:8-11`) executes `$HOME/.platformio` paths with no existence check and
-  hardcodes the `0xFF0000 0x10000` offset rather than reading `partitions.csv`, so
+- `tools/fetch_coredump.sh` executes `$HOME/.platformio` paths with no existence
+  check and hardcodes the `0xFF0000 0x10000` offset rather than reading `partitions.csv`, so
   a re-laid-out partition table reads the wrong 64 KiB and reports a corrupt dump.
 - `tools/flash-ota.js:65` calls `main()` with no `.catch()`, so an unreachable
   host prints a raw `TypeError: fetch failed` stack instead of a message, and
