@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "alias_store.h"
 #include "layout_store.h"
 #include "location_store.h"
 #include "units_store.h"
@@ -145,6 +146,17 @@ static void setupConnection(Connection& c, const char* url, const char* token) {
              c.broker.host, c.broker.port, c.broker.tls ? "TLS" : "plain");
 }
 
+// Every one of ALIAS_NAME_MAX characters can escape to \u00xx, plus two
+// quotes and the terminator.
+#define ALIAS_PAYLOAD_MAX (ALIAS_NAME_MAX * 6 + 3)
+
+static size_t aliasPayload(char* out, size_t outSize, const char* name) {
+  JsonDocument doc;
+  doc.set(name);
+  size_t n = serializeJson(doc, out, outSize);
+  return n > 0 && n < outSize ? n : 0;
+}
+
 static void replayAll(Connection& c) {
   uint8_t sent = 0;
   for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
@@ -171,6 +183,14 @@ static void replayAll(Connection& c) {
     char topic[80];
     int  n = snprintf(topic, sizeof(topic), "%s/$units", _clientId);
     if (n > 0 && (size_t)n < sizeof(topic) && c.mqtt.publish(topic, units, true)) sent++;
+  }
+  for (uint8_t i = 0; i < ALIAS_SLOTS; i++) {
+    const char* topic = alias_store::topicAt(i);
+    const char* name  = alias_store::nameAt(i);
+    if (topic == nullptr || name == nullptr || name[0] == '\0') continue;
+    char   payload[ALIAS_PAYLOAD_MAX];
+    size_t pn = aliasPayload(payload, sizeof(payload), name);
+    if (pn > 0 && c.mqtt.publish(topic, payload, true)) sent++;
   }
   {
     char payload[8];
@@ -300,6 +320,21 @@ void publishUnits(const char* blob) {
   for (uint8_t i = 0; i < _connCount; i++) {
     Connection& c = _conn[i];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
+  }
+}
+
+void publishAlias(const char* topic, const char* name) {
+  if (_connCount == 0) return;
+  if (topic == nullptr || topic[0] == '\0') return;
+  char payload[ALIAS_PAYLOAD_MAX];
+  // A cleared alias is a zero-length retained publish, the only thing that
+  // drops the bridge's retained copy.
+  payload[0] = '\0';
+  if (name != nullptr && name[0] != '\0'
+      && aliasPayload(payload, sizeof(payload), name) == 0) return;
+  for (uint8_t i = 0; i < _connCount; i++) {
+    Connection& c = _conn[i];
+    if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, payload, true);
   }
 }
 

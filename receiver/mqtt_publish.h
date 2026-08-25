@@ -28,6 +28,11 @@ void publishLocation(const char* blob);
 // Publishes the stored $units, retained, to <clientId>/$units, on every
 // connected connection. Same fire-and-forget behavior as onRecord.
 void publishUnits(const char* blob);
+// Publishes one alias, retained. An alias topic already carries the source
+// segment, so it goes out verbatim rather than under <clientId>. An empty
+// name publishes a zero-length retained message, which is what deletes the
+// bridge's retained copy. Same fire-and-forget behavior as onRecord.
+void publishAlias(const char* topic, const char* name);
 // Publishes the current tz offset, retained, to <clientId>/$tz, on every
 // connected connection. Same fire-and-forget behavior as onRecord.
 void publishTz(int16_t minutes);

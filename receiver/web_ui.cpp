@@ -398,6 +398,7 @@ static void handleAliasPost(const char* path) {
     return;
   }
   web_ui::broadcastAlias(path, name);
+  mqtt_publish::publishAlias(path, name);
   sendCors();
   _server.sendHeader("Cache-Control", "no-store");
   _server.send(204, "text/plain", "");
