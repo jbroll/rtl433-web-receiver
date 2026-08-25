@@ -52,9 +52,9 @@ token in place.
 |---|---|
 | `GET /` | The live page. `200`, `text/html` |
 | `GET /<topic>` | The stored message. `200`, `application/json`, `Cache-Control: no-store`. `404` if there is none |
-| `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success |
-| `POST /$tz` | Store the GMT offset. Body is a JSON number, signed minutes. `204`; `405` unless the topic is `$tz` or under this receiver's source |
-| `POST /$units` | Store the unit preferences. Body is a JSON object. `204`; `405` unless the topic is `$units` or under this receiver's source |
+| `POST /<topic>` | Set an alias. Body is a JSON string. `204` on success, `403` off-origin |
+| `POST /$tz` | Store the GMT offset. Body is a JSON number, signed minutes. `204`; `405` unless the topic is `$tz` or under this receiver's source, `403` off-origin |
+| `POST /$units` | Store the unit preferences. Body is a JSON object. `204`; `405` unless the topic is `$units` or under this receiver's source, `403` off-origin |
 | `POST /$mqtt` | Add or update a bridge to push to. Body `{"url":"...","token":"..."}`. `204` on success, `400` on an invalid url/token or a full table, `403` off-origin |
 | `GET /$mqtt` | This receiver's active push connections. `200`, `application/json`: `[{"url":"...","connected":true}, ...]` — never the token |
 | `POST /$mqtt/remove` | Stop pushing to a bridge. Body `{"url":"..."}`. `204` on success, including if the url wasn't present; `403` off-origin |
@@ -89,7 +89,12 @@ receiver simply hasn't heard yet.
 
 Only a `POST` to an `$alias` topic under this receiver's own source is
 accepted; every other `POST` — a non-`$alias` topic, or an `$alias` topic under
-another source — is `405`, body `not allowed`.
+another source — is `405`, body `not allowed`. Every write route, this one
+and `$tz`, `$layout`, `$location`, `$units`, `$mqtt`, is `403`, body
+`off-origin`, when the request carries an `Origin` header whose host is not
+this receiver's own `Host`. A request with no `Origin` header (curl) is
+accepted; a browser page served by the receiver sends its own origin and is
+accepted; a page on any other origin is refused.
 
     POST /rtl433-a1b2c3/Acurite-5n1/1234/$alias
     Content-Type: application/json
@@ -133,7 +138,8 @@ local midnight. The body is a JSON number, signed minutes west of UTC negative:
 The bare `/$tz` form works when the receiver is the origin the dashboard was
 served from; the source-prefixed `/<source>/$tz` form is equivalent. A body
 that is not a JSON number is `400`, body `body must be a JSON number`. A
-`$tz` topic under another source is `405`. The offset survives a reboot via
+`$tz` topic under another source is `405`, and a browser request from another
+origin is `403`. The offset survives a reboot via
 NVS.
 
 ### `POST /$layout`
@@ -156,7 +162,8 @@ connects later.
 
 The bare `/$layout` form works when the receiver is the origin the dashboard
 was served from; the source-prefixed form is equivalent, and a `$layout` topic
-under another source is `405`. A body that is not a JSON object is `400`, body
+under another source is `405`, and a browser request from another origin is
+`403`. A body that is not a JSON object is `400`, body
 `body must be a JSON object`. A body at or over 5 KB, or one NVS refuses to
 write, is `503`, body `layout store full`, and the stored layout is unchanged.
 5 KB holds all 24 device slots plus the four dashboard-computed cards, at
@@ -185,7 +192,8 @@ own.
 
 The bare `/$units` form works when the receiver is the origin the dashboard
 was served from; the source-prefixed form is equivalent, and a `$units` topic
-under another source is `405`. A body that is not a JSON object is `400`, body
+under another source is `405`, and a browser request from another origin is
+`403`. A body that is not a JSON object is `400`, body
 `body must be a JSON object`. A body at or over 256 bytes, or one NVS refuses
 to write, is `503`, body `units store full`, and the stored units are
 unchanged.

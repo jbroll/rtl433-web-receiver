@@ -168,6 +168,11 @@ function startServer(opts = {}) {
       return;
     }
     if (req.method === "POST") {
+      const origin = req.headers.origin;
+      if (origin && origin.replace(/^[a-z]+:\/\//, "") !== req.headers.host) {
+        res.writeHead(403).end("off-origin");
+        return;
+      }
       const isLayout = topic.endsWith(LAYOUT_SUFFIX) || topic === "$layout";
       if (isLayout) {
         if (!topic.startsWith(source + "/") && topic !== "$layout") {

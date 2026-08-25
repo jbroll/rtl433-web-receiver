@@ -321,8 +321,7 @@ static void streamProgmemBytes(Print& out, const unsigned char* data, size_t tot
   }
 }
 
-// The dashboard is served from a different origin than any receiver it reads,
-// and there is no authentication here for an origin check to protect.
+// Reads are open to any origin; writes are gated by sameOriginOrBare().
 static void sendCors() {
   _server.sendHeader("Access-Control-Allow-Origin", "*");
 }
@@ -346,7 +345,31 @@ static void sendStatus(int code, const char* body) {
   _server.send(code, "text/plain", body);
 }
 
+// Every write route is gated here. The ownSource path check compares against a
+// source the requester chose, so it is not an origin check, and a text/plain
+// POST is a CORS simple request that any page on the LAN could send. A request
+// with no Origin header (curl) is trusted; one whose Origin does not match this
+// receiver's own Host is refused.
+static bool sameOriginOrBare() {
+  String origin = _server.header("Origin");
+  if (origin.length() == 0) {
+    return true;
+  }
+  int    schemeEnd  = origin.indexOf("://");
+  String originHost = schemeEnd >= 0 ? origin.substring(schemeEnd + 3) : origin;
+  return originHost == _server.hostHeader();
+}
+
+static bool refuseOffOrigin() {
+  if (sameOriginOrBare()) {
+    return false;
+  }
+  sendStatus(403, "off-origin");
+  return true;
+}
+
 static void handleAliasPost(const char* path) {
+  if (refuseOffOrigin()) return;
   const char* src = signal_store::source();
   size_t      srcLen = strlen(src);
   bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
@@ -377,9 +400,9 @@ static void handleAliasPost(const char* path) {
 }
 
 static void handleLayoutPost(const char* path) {
-  // Same same-origin-or-bare gating as $tz: the dashboard POSTs a bare
-  // /$layout to its own origin, the source-prefixed form is the documented
-  // curl-able equivalent.
+  if (refuseOffOrigin()) return;
+  // The dashboard POSTs the bare form to its own origin; the source-prefixed
+  // form is the curl-able equivalent.
   const char* src = signal_store::source();
   size_t      srcLen = strlen(src);
   bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
@@ -405,9 +428,9 @@ static void handleLayoutPost(const char* path) {
 }
 
 static void handleLocationPost(const char* path) {
-  // Same same-origin-or-bare gating as $layout and $tz: the dashboard POSTs a
-  // bare /$location to its own origin, the source-prefixed form is the
-  // documented curl-able equivalent.
+  if (refuseOffOrigin()) return;
+  // The dashboard POSTs the bare form to its own origin; the source-prefixed
+  // form is the curl-able equivalent.
   const char* src = signal_store::source();
   size_t      srcLen = strlen(src);
   bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
@@ -433,9 +456,9 @@ static void handleLocationPost(const char* path) {
 }
 
 static void handleUnitsPost(const char* path) {
-  // Same same-origin-or-bare gating as $layout and $location: the dashboard
-  // POSTs a bare /$units to its own origin, the source-prefixed form is the
-  // documented curl-able equivalent.
+  if (refuseOffOrigin()) return;
+  // The dashboard POSTs the bare form to its own origin; the source-prefixed
+  // form is the curl-able equivalent.
   const char* src = signal_store::source();
   size_t      srcLen = strlen(src);
   bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
@@ -461,8 +484,9 @@ static void handleUnitsPost(const char* path) {
 }
 
 static void handleTzPost(const char* path) {
-  // The dashboard POSTs a bare /$tz to its own origin; the source-prefixed
-  // form is the documented curl-able equivalent.
+  if (refuseOffOrigin()) return;
+  // The dashboard POSTs the bare form to its own origin; the source-prefixed
+  // form is the curl-able equivalent.
   const char* src = signal_store::source();
   size_t      srcLen = strlen(src);
   bool        ownSource = strncmp(path, src, srcLen) == 0 && path[srcLen] == '/';
@@ -482,21 +506,6 @@ static void handleTzPost(const char* path) {
   sendCors();
   _server.sendHeader("Cache-Control", "no-store");
   _server.send(204, "text/plain", "");
-}
-
-// $mqtt is receiver-local device configuration (which brokers to push to),
-// not a topic — unlike $tz/$layout/$location it has no source-prefixed
-// form, so a real Origin check stands in for the ownSource convention those
-// use: a request with no Origin header (curl, or same-origin) is trusted;
-// one with an Origin that doesn't match this receiver's own Host is not.
-static bool sameOriginOrBare() {
-  String origin = _server.header("Origin");
-  if (origin.length() == 0) {
-    return true;
-  }
-  int    schemeEnd  = origin.indexOf("://");
-  String originHost = schemeEnd >= 0 ? origin.substring(schemeEnd + 3) : origin;
-  return originHost == _server.hostHeader();
 }
 
 static void handleMqttOptions() {

@@ -14,20 +14,6 @@ and take the board onto their network with an OTA credential they control. `POST
 then accepts arbitrary firmware. A WPA2 password on the SoftAP, printed on the device or
 derived from the chip ID, is the smallest fix.
 
-## No authentication on the state-changing endpoints
-
-`handleTopic()` routes POST to `handleLayoutPost`, `handleLocationPost`, `handleTzPost`
-and `handleAliasPost` with no credential of any kind (`web_ui.cpp:296-298`), and the
-OPTIONS branch (`:503-509`) answers preflight with `Access-Control-Allow-Origin: *`,
-`Access-Control-Allow-Methods: GET, POST, OPTIONS` and `Access-Control-Allow-Headers:
-Content-Type` — exactly what a cross-origin JSON POST needs. The `ownSource` guard in each
-handler compares the request path against `signal_store::source()`, which the requester
-supplies, so it is not an origin check. Any page the user visits while on the same network
-can overwrite the receiver's layout, location, time zone, units and aliases, and read back
-every device payload. `web_ui.cpp:294` states the no-authentication design deliberately,
-but the write surface is what makes it more than a read exposure. Same root cause as the
-bridge's CORS entry; a shared token scheme would settle both.
-
 ## A failed sub claim leaves a device slot allocated
 
 `signal_store::record()` runs `claimSlot()` (which increments `_deviceCount`), copies the
