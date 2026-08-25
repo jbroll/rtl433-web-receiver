@@ -60,7 +60,10 @@ static void loadTable(const char* json) {
   }
   uint8_t i = 0;
   for (JsonPair kv : obj) {
-    if (i >= ALIAS_SLOTS || !kv.value().is<const char*>()) {
+    if (i >= ALIAS_SLOTS) {
+      break;
+    }
+    if (!kv.value().is<const char*>()) {
       continue;
     }
     copyTruncated(_topics[i], ALIAS_TOPIC_MAX, kv.key().c_str());

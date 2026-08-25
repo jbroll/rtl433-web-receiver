@@ -74,7 +74,10 @@ static void loadTable(const char* json) {
   }
   uint8_t i = 0;
   for (JsonObject o : arr) {
-    if (i >= MQTT_PUBLISH_SLOTS || !o["url"].is<const char*>() || !o["token"].is<const char*>()) {
+    if (i >= MQTT_PUBLISH_SLOTS) {
+      break;
+    }
+    if (!o["url"].is<const char*>() || !o["token"].is<const char*>()) {
       continue;
     }
     copyTruncated(_url[i], MQTT_PUBLISH_STORE_URL_MAX, o["url"].as<const char*>());
