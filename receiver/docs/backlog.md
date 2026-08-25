@@ -25,18 +25,6 @@ pending, the store reports one more device than exists, `device()` orders a slot
 `sweepStale()` measures `millis() - 0` past `DEVICE_STALE_HOURS`. Claiming the sub first,
 or releasing the slot on the failure path, fixes it.
 
-## Recovery attempts write NVS without bound
-
-`health_store.h:22` says the recovery counters are "Bounded: once per recovery event," but
-recovery events are themselves unbounded when the radio is permanently deaf.
-`radio_health::decide()` re-arms every `RECOVERY_BACKOFF_MS` (120 s) and
-`monitorRadioHealth()` runs once per 60 s telemetry cycle, so a stuck SX1231 drives a
-`putUInt(recovery_count)` and a `putLong(last_recovery)` every two minutes for as long as
-the board is powered — about 720 entry writes a day. That is under flash endurance at a few
-thousand page erases a year, but it is the case `architecture.md` says the firmware
-deliberately never reboots for, so it runs indefinitely. Either cap the counter writes or
-correct the header.
-
 ## Build-time secrets are readable in the firmware image
 
 `load_env.py` passes `WIFI_PASSWORD`, `OTA_TOKEN` and `MQTT_TOKEN` from `.env` to

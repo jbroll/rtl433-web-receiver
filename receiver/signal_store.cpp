@@ -392,7 +392,6 @@ void sweepSubStale(unsigned long now, unsigned long staleMs) {
     _subs[i].used = false;
     _subs[i].slotIdx = 0xFF;
     _subs[i].seq = 0;
-    // Free the slot if no subs remain.
     bool any = false;
     for (uint8_t j = 0; j < SIGNAL_SUB_TABLE; j++) {
       if (_subs[j].used && _subs[j].slotIdx == slotIdx) { any = true; break; }
