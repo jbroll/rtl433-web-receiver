@@ -87,36 +87,18 @@ bool matchFilter(const char* filter, const char* t) {
   }
 }
 
-bool isAlias(const char* t) {
+static bool lastSegmentIs(const char* t, const char* want) {
   if (t == NULL) {
     return false;
   }
   const char* last = strrchr(t, '/');
-  return strcmp(last != NULL ? last + 1 : t, "$alias") == 0;
+  return strcmp(last != NULL ? last + 1 : t, want) == 0;
 }
 
-bool isTz(const char* t) {
-  if (t == NULL) return false;
-  const char* last = strrchr(t, '/');
-  return strcmp(last != NULL ? last + 1 : t, "$tz") == 0;
-}
-
-bool isLayout(const char* t) {
-  if (t == NULL) return false;
-  const char* last = strrchr(t, '/');
-  return strcmp(last != NULL ? last + 1 : t, "$layout") == 0;
-}
-
-bool isLocation(const char* t) {
-  if (t == NULL) return false;
-  const char* last = strrchr(t, '/');
-  return strcmp(last != NULL ? last + 1 : t, "$location") == 0;
-}
-
-bool isUnits(const char* t) {
-  if (t == NULL) return false;
-  const char* last = strrchr(t, '/');
-  return strcmp(last != NULL ? last + 1 : t, "$units") == 0;
-}
+bool isAlias(const char* t) { return lastSegmentIs(t, "$alias"); }
+bool isTz(const char* t) { return lastSegmentIs(t, "$tz"); }
+bool isLayout(const char* t) { return lastSegmentIs(t, "$layout"); }
+bool isLocation(const char* t) { return lastSegmentIs(t, "$location"); }
+bool isUnits(const char* t) { return lastSegmentIs(t, "$units"); }
 
 } // namespace topic
