@@ -4,6 +4,8 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 
+#include "str_util.h"
+
 namespace mqtt_publish_store {
 
 static char        _url[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_URL_MAX];
@@ -11,11 +13,6 @@ static char        _token[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_TOKEN_MAX];
 static bool        _used[MQTT_PUBLISH_SLOTS] = {false};
 static Preferences _prefs;
 static bool        _open = false;
-
-static void copyTruncated(char* dest, size_t destSize, const char* src) {
-  strncpy(dest, src, destSize - 1);
-  dest[destSize - 1] = '\0';
-}
 
 static int find(const char* url) {
   for (uint8_t i = 0; i < MQTT_PUBLISH_SLOTS; i++) {

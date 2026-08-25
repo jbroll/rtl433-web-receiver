@@ -3,16 +3,13 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 
+#include "str_util.h"
+
 namespace ota_token_store {
 
 static Preferences _prefs;
 static bool        _open = false;
 static char        _stored[OTA_TOKEN_STORE_MAX] = "";
-
-static void copyTruncated(char* dest, size_t destSize, const char* src) {
-  strncpy(dest, src, destSize - 1);
-  dest[destSize - 1] = '\0';
-}
 
 bool begin() {
   if (_open) {

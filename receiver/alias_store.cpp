@@ -4,6 +4,8 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 
+#include "str_util.h"
+
 namespace alias_store {
 
 static char        _topics[ALIAS_SLOTS][ALIAS_TOPIC_MAX];
@@ -11,11 +13,6 @@ static char        _names[ALIAS_SLOTS][ALIAS_NAME_MAX];
 static bool        _used[ALIAS_SLOTS] = {false};
 static Preferences _prefs;
 static bool        _open = false;
-
-static void copyTruncated(char* dest, size_t destSize, const char* src) {
-  strncpy(dest, src, destSize - 1);
-  dest[destSize - 1] = '\0';
-}
 
 static int find(const char* topic) {
   for (uint8_t i = 0; i < ALIAS_SLOTS; i++) {

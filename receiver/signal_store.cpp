@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "device_hooks.h"
+#include "str_util.h"
 
 namespace signal_store {
 
@@ -39,11 +40,6 @@ void reset() {
   _seqCounter = 0;
   _total = 0;
   _dropped = 0;
-}
-
-static void copyTruncated(char* dest, size_t destSize, const char* src) {
-  strncpy(dest, src, destSize - 1);
-  dest[destSize - 1] = '\0';
 }
 
 void setSource(const char* source) {
