@@ -163,6 +163,23 @@ the duration. Worse than the `CHUNK_BUDGET_MS` 1.5 s stall above, which is
 about a slow *reader*; this is about a slow or large *upload*, likely
 several seconds for a ~1.2 MB image over WiFi.
 
+## The stored OTA token is capped shorter than `.env`'s
+
+`ota_token_store`'s `OTA_TOKEN_STORE_MAX` is 32 characters; `.env`'s `OTA_TOKEN`
+is 48. Submitting the provisioning portal's form with that token gets a 400
+("Update token is too long") and nothing is stored, so the board falls back to
+the compiled-in `.env` token for OTA and has no portal-settable token at all.
+Shortening `OTA_TOKEN` to 32 characters or raising `OTA_TOKEN_STORE_MAX` fixes
+it.
+
+## A pending core dump has no ELF to symbolize it
+
+A core dump from an earlier panic is still in flash (`coredump_pending: 1`).
+Fetching it needs USB (`tools/fetch_coredump.sh`), and the ELF of the build
+that panicked is no longer on disk, so the dump may only be useful for its
+backtrace addresses. Keeping the ELF for a build until any coredump it left
+behind is fetched would avoid losing the symbols.
+
 ## No way to clear or disable a set OTA token
 
 `ota_token_store` has no `clear()`, and the SoftAP portal always overwrites
