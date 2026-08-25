@@ -2,11 +2,15 @@
 
 #include <Arduino.h>
 
+#include "signal_store.h"
+
 #define ALIAS_SLOTS     32
-#define ALIAS_TOPIC_MAX 96
+// A device key plus "/$alias".
+#define ALIAS_TOPIC_MAX (SIGNAL_KEY_MAX + 7)
 #define ALIAS_NAME_MAX  32
-// NVS keys are limited to 15 characters and an alias topic runs to 96, so the
-// whole table is one blob under one key rather than an entry per alias.
+// NVS keys are limited to 15 characters and an alias topic runs past 100, so
+// the whole table is one blob under one key rather than an entry per alias.
+// The blob does not hold 32 full-length entries; set() fails once it is full.
 #define ALIAS_BLOB_MAX  2048
 
 namespace alias_store {

@@ -202,13 +202,6 @@ a gap for anyone who wants to disable OTA after enabling it.
   with a TCP handshake per request, jitter swamps a one-byte delta, so this is
   not practically exploitable; it is worth a constant-time compare only because
   it guards the firmware-flash path.
-- `ALIAS_TOPIC_MAX` (96, `alias_store.h:6`) cannot hold a maximum-length device
-  key plus `/$alias`, since a key is capped at `SIGNAL_KEY_MAX` 96 too. A key
-  past 88 characters makes `alias_store::set()` reject the topic
-  (`alias_store.cpp:109`) and `handleAliasPost` report it as 503 "alias store
-  full", which is the wrong reason. Unreachable in practice: rtl_433 model names
-  top out near 30 characters and `mdnsHostname()` yields 13, so keys run to about
-  50. A long `MDNS_PREFIX` or an unusually long model name would reach it.
 - `load_env.py:33` does `shlex.split(value)[0]`, which raises `IndexError` on an
   empty value — a blanked-out `MQTT_TOKEN=` aborts `pio run` with a traceback out
   of an extra_script, naming no line — and silently takes only the first token of

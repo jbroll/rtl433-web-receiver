@@ -384,6 +384,10 @@ static void handleAliasPost(const char* path) {
     return;
   }
   const char* name = doc.as<const char*>();
+  if (strlen(path) >= ALIAS_TOPIC_MAX) {
+    sendStatus(400, "alias too long");
+    return;
+  }
   if (*name == '\0') {
     if (alias_store::get(path) != NULL && !alias_store::remove(path)) {
       sendStatus(503, "alias remove failed");
