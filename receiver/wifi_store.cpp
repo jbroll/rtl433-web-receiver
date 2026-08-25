@@ -16,6 +16,9 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
 }
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _open = _prefs.begin("wifi", false);
   if (!_open) {
     Log.warning(F("wifi store: NVS unavailable, credentials will not persist" CR));

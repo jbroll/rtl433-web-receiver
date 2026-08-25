@@ -88,6 +88,9 @@ static bool persist() {
 }
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   memset(_used, 0, sizeof(_used));
   _open = _prefs.begin("alias", false);
   if (!_open) {

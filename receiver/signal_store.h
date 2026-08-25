@@ -11,7 +11,9 @@
 #ifndef SUB_STALE_MS
 #define SUB_STALE_MS        3600000
 #endif
-// A 14 byte source, a 64 byte model, and a 16 byte id.
+// Fits a typical source, model and id; buildKey() rejects a key longer than
+// this rather than truncating it, since SIGNAL_SOURCE_MAX + SIGNAL_MODEL_MAX
+// + 16 exceeds it.
 #define SIGNAL_KEY_MAX      96
 #define SIGNAL_MODEL_MAX    64
 #define SIGNAL_SOURCE_MAX   32

@@ -19,6 +19,9 @@ static uint8_t     _resetReason = 0;
 static uint32_t    _recoveryCount = 0;
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _open = _prefs.begin("health", false);
   _bootCount = _open ? _prefs.getUInt(kBootCount, 0) : 0;
   _resetReason = _open ? (uint8_t)_prefs.getUChar(kResetReason, 0) : 0;

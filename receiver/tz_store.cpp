@@ -13,6 +13,9 @@ static int16_t     _offset = -240;
 static const char* kOffset = "offset";
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _open = _prefs.begin("tz", false);
   _offset = _open ? (int16_t)_prefs.getShort(kOffset, -240) : -240;
   device_hooks::setTzOffset(_offset);

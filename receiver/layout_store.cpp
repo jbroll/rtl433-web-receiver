@@ -37,6 +37,9 @@ static void load() {
 }
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _blob[0] = '\0';
   _open = _prefs.begin("layout", false);
   if (!_open) {

@@ -93,8 +93,8 @@ static bool buildKey(const JsonDocument& doc, char* key, size_t keySize) {
   }
   sanitizeSegment(id);
 
-  snprintf(key, keySize, "%s/%s/%s", _source, model, id);
-  return true;
+  int n = snprintf(key, keySize, "%s/%s/%s", _source, model, id);
+  return n >= 0 && (size_t)n < keySize;
 }
 
 static int findSlot(const char* key) {
@@ -392,6 +392,7 @@ void sweepSubStale(unsigned long now, unsigned long staleMs) {
     if (!_subs[i].used) continue;
     if ((unsigned long)(now - _subs[i].lastSeen) <= staleMs) continue;
     uint8_t slotIdx = _subs[i].slotIdx;
+    if (slotIdx >= SIGNAL_DEVICE_SLOTS) continue;
     _subs[i].used = false;
     _subs[i].slotIdx = 0xFF;
     _subs[i].seq = 0;
@@ -485,6 +486,22 @@ bool selfTest() {
               !record("{\"model\":\"Dev\",\"id\":1,\"humidity\":154}", -70));
   ok &= check("dropped counter advances", droppedCount() == 3);
   ok &= check("dropped payloads leave no device", deviceCount() == 0);
+
+  reset();
+  {
+    char longSource[SIGNAL_SOURCE_MAX];
+    memset(longSource, 's', sizeof(longSource) - 1);
+    longSource[sizeof(longSource) - 1] = '\0';
+    char longModel[SIGNAL_MODEL_MAX];
+    memset(longModel, 'm', sizeof(longModel) - 1);
+    longModel[sizeof(longModel) - 1] = '\0';
+    setSource(longSource);
+    snprintf(buf, sizeof(buf), "{\"model\":\"%s\",\"id\":123456789012}", longModel);
+    record(buf, -70);
+    ok &= check("a key that would not fit is rejected, not truncated",
+                !record(buf, -70) && deviceCount() == 0);
+    setSource("rtl433-a1b2c3");
+  }
 
   reset();
   char note[SIGNAL_PAYLOAD_MAX]; // valid JSON, but longer than a slot holds

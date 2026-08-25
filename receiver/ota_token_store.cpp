@@ -15,6 +15,9 @@ static void copyTruncated(char* dest, size_t destSize, const char* src) {
 }
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _open = _prefs.begin("ota", false);
   if (!_open) {
     Log.warning(F("ota token store: NVS unavailable, token will not persist" CR));

@@ -11,6 +11,9 @@ static bool        _open = false;
 static char        _blob[UNITS_STORE_MAX] = "";
 
 bool begin() {
+  if (_open) {
+    return true;
+  }
   _blob[0] = '\0';
   _open = _prefs.begin("units", false);
   if (!_open) {

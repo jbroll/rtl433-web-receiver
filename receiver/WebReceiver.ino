@@ -243,7 +243,10 @@ static void drainSignalQueue() {
     return;
   }
   SignalQueueItem item;
-  while (xQueueReceive(rtl433Queue, &item, 0) == pdTRUE) {
+  // Bounded so a burst that refills the queue as fast as it drains cannot
+  // starve the rest of loop().
+  for (int n = 0; n < RTL433_QUEUE_LEN &&
+                  xQueueReceive(rtl433Queue, &item, 0) == pdTRUE; n++) {
     if (signal_store::record(item.payload, item.rssi)) {
       web_ui::broadcast(signal_store::device(0));
     }
