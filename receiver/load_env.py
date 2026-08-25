@@ -30,4 +30,10 @@ if os.path.isfile(path):
             if "=" not in line:
                 continue
             key, value = line.split("=", 1)
-            env.Append(CPPDEFINES=[(key.strip(), '\\"%s\\"' % shlex.split(value)[0])])
+            value = " ".join(shlex.split(value))
+            if not value:
+                continue
+            # The macro rides through SCons' double-quoted shell argument, so
+            # each byte the compiler must see escaped is escaped twice.
+            value = value.replace("\\", "\\\\\\\\").replace('"', '\\\\\\"')
+            env.Append(CPPDEFINES=[(key.strip(), '\\"%s\\"' % value)])

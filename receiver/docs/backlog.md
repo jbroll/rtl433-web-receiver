@@ -190,11 +190,6 @@ a gap for anyone who wants to disable OTA after enabling it.
   with a TCP handshake per request, jitter swamps a one-byte delta, so this is
   not practically exploitable; it is worth a constant-time compare only because
   it guards the firmware-flash path.
-- `load_env.py:33` does `shlex.split(value)[0]`, which raises `IndexError` on an
-  empty value — a blanked-out `MQTT_TOKEN=` aborts `pio run` with a traceback out
-  of an extra_script, naming no line — and silently takes only the first token of
-  an unquoted multi-word one, so `WIFI_PASSWORD=my pass` compiles the password as
-  `my` and the board just fails to associate.
 - `tools/fetch_coredump.sh` executes `$HOME/.platformio` paths with no existence
   check and hardcodes the `0xFF0000 0x10000` offset rather than reading `partitions.csv`, so
   a re-laid-out partition table reads the wrong 64 KiB and reports a corrupt dump.
