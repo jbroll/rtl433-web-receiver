@@ -6,9 +6,9 @@ sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 
 ## The provisioning portal is an open AP that hands out an OTA token
 
-`WiFi.softAP(ap, nullptr)` (`provisioning.cpp:233`) brings up an unencrypted network, and
-`handleRoot()` (`:108-110`) generates a fresh token with `randomToken()` and renders it
-into the form on every GET; `handleSave()` (`:201`) stores whatever the form returns.
+`WiFi.softAP(ap, nullptr)` in `provisioning.cpp` brings up an unencrypted network, and
+`handleRoot()` generates a fresh token with `randomToken()` and renders it
+into the form on every GET; `handleSave()` stores whatever the form returns.
 Anyone in range of a board sitting in the portal can join, submit their own SSID and a token they chose,
 and take the board onto their network with an OTA credential they control. `POST /$update`
 then accepts arbitrary firmware. A WPA2 password on the SoftAP, printed on the device or
@@ -17,7 +17,7 @@ derived from the chip ID, is the smallest fix.
 ## A failed sub claim leaves a device slot allocated
 
 `signal_store::record()` runs `claimSlot()` (which increments `_deviceCount`), copies the
-key, and sets `used = true` at `:254-258`, before `claimSub()` can fail at `:266-272`. When
+key, and sets `used = true` at `:252-254`, before `claimSub()` can fail at `:268-272`. When
 it does, `record()` does `_dropped++; return false;` and leaves a slot with `lastSeen == 0`,
 `count == 0` and no sub. With 32 subs already allocated and a new device promoted from
 pending, the store reports one more device than exists, `device()` orders a slot whose
@@ -85,7 +85,7 @@ the `JsonDocument` constructor) removes it without touching the parse.
 
 ## Heap allocation on the decode path
 
-`signal_store::record()` builds a `JsonDocument` (`signal_store.cpp:116`) and
+`signal_store::record()` builds a `JsonDocument` (`signal_store.cpp:207`) and
 calls `.as<String>()` on `doc["id"]`, `doc["channel"]` and `doc["message_type"]`
 (`:87`, `:89`, `:263`) for every decode — plus once per BMP280 sample and once
 per telemetry cycle. Each one heap-allocates a `String` only to copy it into a
@@ -100,7 +100,7 @@ and falling back only when it is genuinely a string.
 ## A slow HTTP client can still stall the receive path
 
 `ChunkedResponse::flush()` waits up to `CHUNK_WAIT_US` 150 ms per chunk with a
-`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:111-112`) before dropping the
+`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:118-119`) before dropping the
 client. That bound exists because aborting on the first not-ready probe
 truncated the page and left the browser running no script at all. The cost is
 that a genuinely slow reader can hold `loop()` for up to 1.5 s, and the
@@ -171,6 +171,14 @@ the stored token with a freshly generated one on every provisioning pass
 "OTA disabled" (`404`) state short of erasing NVS entirely. Not a bug, just
 a gap for anyone who wants to disable OTA after enabling it.
 
+## Three stores are one template written out three times
+
+`units_store`, `location_store` and `layout_store` are the same
+begin/get/set-a-JSON-blob-in-NVS module with different sizes and namespace
+names, and every store's `selfTest()` carries its own copy of the
+`check(what, ok)` PASS/FAIL logger (eight copies). One blob-store template and
+one shared check helper would remove both.
+
 ## Smaller items
 
 - `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test
@@ -181,12 +189,12 @@ a gap for anyone who wants to disable OTA after enabling it.
   the cursor steps it takes: a subscriber whose filters match nothing walks all
   64 indices in one pass. Bounded and cheap, but it is the loop's worst case
   and nothing states it.
-- The keepalive's write-failure path (`web_ui.cpp:519`) is the one place a
+- The keepalive's write-failure path (`web_ui.cpp:985`) is the one place a
   stopped client is not routed through `releaseSlot()`, so its filters and
   replay cursor stay set. Inert, because every reader gates on `_sse[i]` first
   and `handleEvents()` overwrites both when the slot is reused.
 - The OTA token is compared with Arduino `String::operator==`
-  (`web_ui.cpp:444-445`), which returns on the first differing byte. Over a LAN
+  (`web_ui.cpp:593-598`), which returns on the first differing byte. Over a LAN
   with a TCP handshake per request, jitter swamps a one-byte delta, so this is
   not practically exploitable; it is worth a constant-time compare only because
   it guards the firmware-flash path.
@@ -195,7 +203,7 @@ a gap for anyone who wants to disable OTA after enabling it.
   a re-laid-out partition table reads the wrong 64 KiB and reports a corrupt dump.
 - `tools/flash-ota.js:65` calls `main()` with no `.catch()`, so an unreachable
   host prints a raw `TypeError: fetch failed` stack instead of a message, and
-  `readEnvToken` (`:20`) does not strip a leading `export ` the way
+  `readEnvToken` (`:14`) does not strip a leading `export ` the way
   `load_env.py:28-29` does, so a `.env` the firmware build accepts makes
   flash-ota report "no OTA_TOKEN in the environment or receiver/.env".
 - `monitor.py:80-91` declares `--reset/-r` as `action="store_true",
@@ -210,7 +218,7 @@ a gap for anyone who wants to disable OTA after enabling it.
   broker, a self-signed LAN broker) will fail its handshake silently, showing
   only a dot that never turns green.
 - `mqtt_publish::begin()` tears down and reconnects every configured
-  connection on every `POST /$mqtt`/`/$mqtt/remove` (`mqtt_publish.cpp:203-217`),
+  connection on every `POST /$mqtt`/`/$mqtt/remove` (`mqtt_publish.cpp:207-221`),
   not just the one that changed, so adding or removing one bridge drops and
   re-handshakes every other already-working bridge too — up to ~15 s per TLS
   connection, plus a full `replayAll()` re-publish to each. Diffing the table
