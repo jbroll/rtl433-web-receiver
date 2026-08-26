@@ -48,9 +48,6 @@
   guard on the broker's `error` handler in `src/broker.js` is untested for
   the same kind of reason: removing it fails no test, and the out-of-process
   timing it guards against could not be reproduced to write one.
-- The package is not published to a registry, so there is no `npx` or
-  `npm install -g` path; it runs from a clone. `package.json` declares a
-  `bin` entry for a command nothing installs.
 - A foreign publisher's non-retained empty message caches like any other
   message, so `GET` answers `404` for a topic whose retained message the
   broker still holds. It stays masked until the next reconnect rebuilds the
@@ -91,11 +88,12 @@
   `src/sse.js`'s keepalive timer is never exercised, so nothing would notice it stop
   emitting and let an idle proxy drop every stream; and `test/rotate.test.js` covers wrong,
   missing, non-JSON and empty-string tokens but not a non-object body.
-- `scripts/build-dashboard.js` imports `../../dashboard/build.js`, which imports `esbuild`,
-  and `esbuild` is in neither `dependencies` nor `devDependencies`. `npm ci && npm run build`
-  fails with `ERR_MODULE_NOT_FOUND` anywhere `dashboard/node_modules` was not installed
-  separately, and from an npm-installed copy the relative path does not exist at all. The
-  package also declares a `bin` with no `files` field.
+- `scripts/build-dashboard.js` reaches into `../../dashboard` to build, which only works
+  with both projects checked out side by side. The bridge does not otherwise know the
+  dashboard exists, and `DASHBOARD_HTML` is a path rather than a build step, so the
+  dashboard's own build writing directly into `bridge/public/` would be the cleaner shape.
+  Deferred here because it moves a documented workflow (`docs/development.md`) across two
+  projects rather than changing one.
 - `POST` validates a different byte sequence than it publishes. `src/server.js` parses
   `body.toString('utf8')`, which substitutes U+FFFD for invalid bytes rather than failing,
   and then publishes the raw `body`. A body with invalid UTF-8 inside a JSON string literal

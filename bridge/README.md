@@ -6,6 +6,8 @@ script that needs MQTT but would rather speak HTTP. One of three sub-projects
 in this repo, alongside the [receiver](../receiver/README.md) and the
 [dashboard](../dashboard/README.md).
 
+Not published to a registry; install from a clone.
+
     cd bridge && npm install
     MQTT_URL=mqtt://broker.local:1883 node bin/mqtt-http-bridge.js
 

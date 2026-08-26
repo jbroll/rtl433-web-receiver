@@ -97,10 +97,14 @@ else.
 
 `npm run build` (`scripts/build-dashboard.js`) builds `../dashboard` in place
 and writes `public/index.html`, the same self-contained artifact
-`dashboard/build.js` produces for the receiver firmware. It requires
-`dashboard/node_modules` (`npm install` in `dashboard/`) and needs `dashboard/`
-checked out alongside `bridge/` — it is not resolvable from a `bridge/`-only
-deploy.
+`dashboard/build.js` produces for the receiver firmware. It needs `dashboard/`
+checked out alongside `bridge/` and `dashboard/node_modules` installed
+(`npm install` in `dashboard/`) for the dashboard's own runtime dependencies
+(`preact` and the rest) — it is not resolvable from a `bridge/`-only deploy.
+`esbuild` itself, the one dependency `dashboard/build.js` needs before it gets
+that far, is pinned in the bridge's own `devDependencies` too, so `npm run
+build` doesn't fail on a missing `esbuild` even before `dashboard/`'s own
+`npm install` has run.
 
 ## Deploying to weather.rkroll.com
 
