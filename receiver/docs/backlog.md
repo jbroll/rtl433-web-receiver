@@ -272,6 +272,14 @@ invariant, is a stronger guarantee and drops the memset. `handleTopic()` compoun
 putting a full `FrameBuffer` on the stack to escape an alias name capped at 32 characters,
 where `mqtt_publish.cpp`'s `ALIAS_PAYLOAD_MAX` of 195 already names the worst case.
 
+## The deployed device needs this firmware before its dashboard can clear aliases
+
+`handleAliasPost` now accepts a zero-length body as an alias clear, matching
+`dashboard/src/alias.js`, which sends one. The device updates over OTA
+(`POST /$update`), not by reflashing, so a board still running older firmware
+answers `400 "body must be a JSON string"` to that clear and the alias comes
+back on the next `$alias` frame until it receives this build.
+
 ## Smaller items
 
 - `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test

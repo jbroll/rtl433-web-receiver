@@ -159,11 +159,11 @@ export function connectBroker({
 // docs/architecture.md, "Payloads stay bytes"). Either way the cache holds
 // the empty payload, not a missing entry, so GET still 404s.
 export function cacheMessage(cache, topic, payload, packet) {
-  const hadMessage = cache.get(topic)?.length > 0
   if (payload.length === 0 && packet?.retain) {
     cache.delete(topic)
     return 'deleted'
   }
+  const hadMessage = cache.get(topic)?.length > 0
   cache.set(topic, payload)
   return payload.length === 0 && hadMessage ? 'deleted' : 'set'
 }

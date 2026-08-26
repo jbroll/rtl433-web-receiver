@@ -4,7 +4,7 @@ import net from 'node:net'
 
 import mqtt from 'mqtt'
 
-import { readEvents, startBridge, waitFor } from './helpers/bridge.js'
+import { closeStream, readEvents, startBridge, waitFor } from './helpers/bridge.js'
 
 // Reads raw `data: ...` frame text rather than parsed JSON, so a test can
 // compare wire bytes across clients instead of just decoded values.
@@ -49,11 +49,7 @@ test('retained messages arrive on connect, live ones after', async () => {
         { topic: 'src/Acurite/2', payload: { t: 2 } },
       ])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()
@@ -76,11 +72,7 @@ test('repeated f delivers from every filter, and a topic matching two arrives on
         { topic: 'src/Other/1', payload: { t: 2 } },
       ])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()
@@ -123,11 +115,7 @@ test('a retained delete seen live carries deleted: true, an ordinary empty messa
         { topic: 'src/Marker/1', payload: '' },
       ])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await foreign.endAsync()
@@ -163,11 +151,7 @@ test('an alias reaches a subscriber like any other topic', async () => {
 
       assert.deepEqual(await reading, [{ topic: 'src/Acurite/1/$alias', payload: 'Back fence' }])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()
@@ -230,11 +214,7 @@ test('a retained topic matching two filters is replayed once', async () => {
         { topic: 'src/Other/1', payload: { t: 2 } },
       ])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()
@@ -282,11 +262,7 @@ test('replay follows cache insertion order, not filter order', async () => {
       const events = await readEvents(stream, 2)
       assert.deepEqual(events.map((e) => e.topic), ['src/Other/1', 'src/Acurite/1'])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()
@@ -312,16 +288,8 @@ test('a request opening one more than MAX_SSE_CLIENTS streams gets 503, and the 
       assert.deepEqual(eventsA, [{ topic: 'src/Acurite/1', payload: { t: 1 } }])
       assert.deepEqual(eventsB, [{ topic: 'src/Acurite/1', payload: { t: 1 } }])
     } finally {
-      try {
-        await a.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
-      try {
-        await b.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(a)
+      await closeStream(b)
     }
   } finally {
     await bridge.close()
@@ -397,11 +365,7 @@ test('a subscriber connecting after a POST is sent that message once', async () 
       const events = await readEvents(stream, 2, { timeoutMs: 400 })
       assert.deepEqual(events, [{ topic: 'src/Acurite/1', payload: { t: 1 } }])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()

@@ -103,6 +103,16 @@ export async function readEvents(response, count, { timeoutMs } = {}) {
   return events
 }
 
+// readEvents already cancelled the reader when it read the stream to
+// completion, so a second cancel from a test's cleanup throws; swallow it.
+export async function closeStream(stream) {
+  try {
+    await stream.body.cancel()
+  } catch {
+    // readEvents already cancelled the reader
+  }
+}
+
 function untilDeadline(promise, deadline) {
   let timer
   const expiry = new Promise((resolve) => {

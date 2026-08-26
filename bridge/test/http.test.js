@@ -6,7 +6,7 @@ import mqtt from 'mqtt'
 
 import { createCache } from '../src/cache.js'
 import { BODY_LIMIT_BYTES, createBridge } from '../src/server.js'
-import { readEvents, startBridge, waitFor, withTimeout } from './helpers/bridge.js'
+import { closeStream, readEvents, startBridge, waitFor, withTimeout } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
 test('a POST without a token is 401 when AUTH_TOKEN is set, and the topic is left alone', async () => {
@@ -374,11 +374,7 @@ test('an empty-body POST to a $alias topic deletes it: 204, then 404, and no rep
     try {
       assert.deepEqual(await readEvents(stream, 1, { timeoutMs: 300 }), [])
     } finally {
-      try {
-        await stream.body.cancel()
-      } catch {
-        // readEvents already cancelled the reader
-      }
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()

@@ -37,9 +37,11 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
   verbatim, byte for byte, including bytes that are not valid UTF-8.
 - `404` if nothing has been published to that topic, if its retained message
   was deleted by a zero-length publish on the broker, or if the last message
-  on it is empty. A deletion the bridge sees live arrives as an empty message,
-  because the broker clears the retain flag on what it forwards; one it sees
-  at reconnect removes the topic. Both answer `404`.
+  on it is empty. A deletion the bridge sees live is cached as an empty
+  message, because the broker clears the retain flag on what it forwards, and
+  its SSE event carries `deleted: true` (see
+  [GET /events](#get-events--subscribe)); one the bridge sees at reconnect
+  removes the topic from the cache entirely. Both answer `404` here.
 - `400` if the topic is malformed (empty, contains a space, contains an
   MQTT wildcard `+` or `#`, or has an empty segment).
 - `503` if the bridge is not currently connected to the broker.

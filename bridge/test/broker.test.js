@@ -138,7 +138,6 @@ test('cacheMessage reports what it did: set or deleted', () => {
   // Live-forwarded messages always arrive with retain cleared, so an empty
   // payload following a cached message is the only signal a live delete has.
   assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: false }), 'deleted')
-  // A topic with no prior message is an ordinary empty message, not a delete.
   assert.equal(cacheMessage(cache, 'src/Acurite/2', Buffer.alloc(0), { retain: false }), 'set')
   assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.from('{"t":2}'), { retain: false }), 'set')
   assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: true }), 'deleted')

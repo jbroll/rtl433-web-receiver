@@ -378,12 +378,17 @@ static void handleAliasPost(const char* path) {
     return;
   }
   String body = _server.arg("plain");
+  const char* name;
   JsonDocument doc;
-  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<const char*>()) {
-    sendStatus(400, "body must be a JSON string");
-    return;
+  if (body.length() == 0) {
+    name = "";
+  } else {
+    if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<const char*>()) {
+      sendStatus(400, "body must be a JSON string");
+      return;
+    }
+    name = doc.as<const char*>();
   }
-  const char* name = doc.as<const char*>();
   if (strlen(path) >= ALIAS_TOPIC_MAX) {
     sendStatus(400, "alias too long");
     return;

@@ -111,6 +111,14 @@ test("an empty alias body removes the alias", async () => {
   expect((await server.get(topic)).status).toBe(404);
 });
 
+test("a zero-length alias body removes the alias", async () => {
+  server = await startServer({ devices: [ACURITE] });
+  const topic = topicOf(ACURITE) + "/$alias";
+  await server.post(topic, JSON.stringify("Back fence"));
+  expect((await server.post(topic, "")).status).toBe(204);
+  expect((await server.get(topic)).status).toBe(404);
+});
+
 test("+ matches one segment and # matches the remainder", async () => {
   server = await startServer({ devices: [ACURITE, OREGON] });
   const one = await openStream(server.url, "?f=" + encodeURIComponent(SOURCE + "/+/396"));

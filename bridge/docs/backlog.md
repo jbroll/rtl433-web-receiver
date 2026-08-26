@@ -29,6 +29,19 @@
   message comes back and matches the bytes still waiting.
 - A `500` is still possible for an error the bridge does not foresee. The
   binding defines no such status; reaching it is a bug, not a contract.
+- A retained message deleted while the bridge is connected stays in the cache
+  as an empty message until the next reconnect, because the broker clears the
+  retain flag on what it forwards and the delete is indistinguishable from an
+  ordinary empty message. `GET` correctly 404s either way, but the cache holds
+  the empty payload rather than a missing entry until the next reconnect
+  rebuilds it from the broker's actual retained set.
+- `cacheMessage` in `src/broker.js` marks any non-retained empty message that
+  follows real content as `deleted: true`, the same as a genuine retained
+  delete, because the only signal it has is whether the cache held content
+  just before. An ordinary empty message in that position is mislabeled a
+  deletion on the wire; MQTT 5's retain-as-published subscription option
+  would tell them apart, at the cost of requiring an MQTT 5 broker (`aedes`
+  is MQTT 3.1.1 only).
 - `test/helpers/bridge.js` builds the bridge in one synchronous step, so it
   cannot reproduce the startup ordering the `bridge?.broadcast` guard in
   `bin/mqtt-http-bridge.js` exists for. That guard is untested. The `ending`

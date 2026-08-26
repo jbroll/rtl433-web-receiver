@@ -106,7 +106,8 @@ which `bin/mqtt-http-bridge.js` passes to `broadcast` to mark the SSE frame
 for a topic going away (see "Broadcasting to SSE clients" above). A
 zero-length payload whose packet carries the retain flag is an explicit MQTT
 delete: the entry is removed from the cache and `cacheMessage` returns
-`'deleted'`. A broker never stores or replays a zero-length message as
+`'deleted'`. A broker replays every non-empty retained message with the
+retain flag set, but it never stores or replays a zero-length message as
 retained, so this branch only fires from a direct `cacheMessage` call, not
 from a live broker.
 

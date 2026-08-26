@@ -249,7 +249,11 @@ function startServer(opts = {}) {
       }
       const body = await readBody(req);
       let value;
-      try { value = JSON.parse(body); } catch (e) { value = undefined; }
+      if (body.length === 0) {
+        value = "";
+      } else {
+        try { value = JSON.parse(body); } catch (e) { value = undefined; }
+      }
       if (typeof value !== "string") {
         res.writeHead(400).end("body must be a JSON string");
         return;
