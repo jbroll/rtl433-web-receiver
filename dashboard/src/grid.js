@@ -39,10 +39,8 @@ export function measureGrid() {
   const height = window.innerHeight - top
                  - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
   const widthCols = Math.max(1, Math.min(Math.floor((width + colGap) / (MIN_CELL + colGap)), g.cols))
-  // A short window fits fewer rows at MIN_CELL than the card count needs, so
-  // the width-only column count would leave rows off the bottom of the
-  // screen and the page scrolls. Raise cols, up to what's saved, so the
-  // actual card count's rows fit the height instead.
+  // A short window fits fewer rows at MIN_CELL than needed, so raise cols,
+  // up to what's saved, to keep the card count's rows within the height.
   const cardCount = grid.children.length
   const maxRowsForHeight = Math.max(1, Math.floor((height + rowGap) / (MIN_CELL + rowGap)))
   const heightCols = cardCount > 0 ? Math.min(g.cols, Math.ceil(cardCount / maxRowsForHeight)) : 1
@@ -164,9 +162,8 @@ export function fitValues() {
     if (fit < global) global = fit
     boxes.push(f.node)
   }
-  // A single crowded box would otherwise set the size for the whole page.
-  // Floor it at PAGE_FLOOR_RATIO of the median instead, so that box ellipsizes
-  // on its own rather than shrinking every other card to match it.
+  // A single crowded box would otherwise set the size for the whole page;
+  // floor it at PAGE_FLOOR_RATIO of the median so that box ellipsizes alone.
   if (fits.length) {
     const sorted = [...fits].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)

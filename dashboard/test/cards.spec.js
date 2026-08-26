@@ -525,10 +525,8 @@ test("the page's tightest reading fills its box, except one outlier that floors 
     }));
   expect(fills.length).toBeGreaterThan(1);
   const sorted = [...fills].sort((a, b) => b - a);
-  // LONGNAME's pressure_hPa sits in a narrow last-row cell far tighter than
-  // the page's other boxes; the 0.6-of-median floor (architecture.md, "Value
-  // fit") sizes the page off the rest and lets that one box overflow rather
-  // than shrinking everything else down to it.
+  // LONGNAME's pressure_hPa is far tighter than the page's other boxes; the
+  // 0.6-of-median floor (architecture.md, "Value fit") lets it overflow alone.
   expect(sorted[0]).toBeGreaterThan(1);
   expect(sorted[1]).toBeGreaterThan(0.9);
   expect(sorted[1]).toBeLessThanOrEqual(1);

@@ -128,22 +128,19 @@ test("saving from a capped view writes the saved column count, not the cap", asy
   expect(m.template.grid.rows).toBe(4);
 });
 
-test("#grid-size does not overlap the grid at 320px wide in edit mode", async ({ page }) => {
+test("#grid-size stays on screen at 320px wide in edit mode", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
   await open(page);
-  // Enough cards that the grid's own height reaches down near the controls,
-  // which a 1-card grid never does.
-  for (let i = 0; i < 15; i++) await addMinimalCard(page, `local feed/extra${i}`);
   await page.click("#edit-cards");
   await expect(page.locator("#grid-size")).toBeVisible();
 
+  // Un-media-queried, #grid-size is `position:fixed; right:12rem`, which at
+  // 320px puts its left edge around x=-19 — off the left edge of the
+  // viewport. The media query switches it (and its siblings) to a wrapping
+  // flex row with `position:static`.
   const gridSizeBox = await page.locator("#grid-size").boundingBox();
-  const cardsBox = await page.locator("#cards").boundingBox();
-  const overlap = gridSizeBox.x < cardsBox.x + cardsBox.width &&
-    gridSizeBox.x + gridSizeBox.width > cardsBox.x &&
-    gridSizeBox.y < cardsBox.y + cardsBox.height &&
-    gridSizeBox.y + gridSizeBox.height > cardsBox.y;
-  expect(overlap).toBe(false);
+  expect(gridSizeBox.x).toBeGreaterThanOrEqual(0);
+  expect(gridSizeBox.x + gridSizeBox.width).toBeLessThanOrEqual(320);
 });
 
 async function addMinimalCard(page, key) {

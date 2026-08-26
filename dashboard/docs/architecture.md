@@ -59,6 +59,14 @@ left to `grid-auto-rows`. Fewer columns means more rows than a phone screen
 holds, and shrinking the cell until they all fit is what made cards illegible in
 the first place. The page scrolls instead.
 
+When the height-derived count instead raises `cols` up to the saved `grid.cols`,
+the cell falls into the other branch, `min(usableWidth/cols, usableHeight/g.rows)`,
+which carries no 110px floor — only the 20px legibility minimum noted below. A
+short, wide window (a landscape phone, a resized desktop window) can still land
+a cell under 110px there: raising columns to avoid scrolling and keeping every
+cell legible are in tension, and this branch resolves it in favor of not
+scrolling. That is a deliberate exception to the 110px floor, not a bug.
+
 Both cell-size formulas subtract the grid's `column-gap`/`row-gap` from the
 usable width and height before dividing by column and row counts — `(cols-1)`
 and `(rows-1)` gaps sit between cells, not around them.
@@ -234,6 +242,12 @@ chosen to still let a page of genuinely similar-sized readings track its true
 minimum closely (a bound at, say, 0.9 would fight the legitimate case where
 every card is about equally tight), while stopping a single pathological box
 from pulling the whole page down to a fraction of what the rest can show.
+
+The median needs no minimum sample size to apply: with only one or two tracked
+boxes, "median" and "the tight one" can be the same value, and the 0.6 floor
+then does nothing to protect against that box overflowing its own cell — there
+is no second box for it to be an outlier against. A page with that few cards
+has no crowding problem the floor exists to solve in the first place.
 
 `fitValues()` is the only writer of `.fv` font size. Setting an initial size in
 the JSX as well would let a re-render put the unfitted size back, which is what
