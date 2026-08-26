@@ -55,7 +55,7 @@ Consumers already know how to read it: the page drops `model`, `id`, `channel`,
 | Method and path | Behaviour |
 |---|---|
 | `GET /<topic>` | The last message published to that topic. `404` if there is none. `Content-Type: application/json` |
-| `POST /<topic>` | Publish a message. Body is the JSON. `204` on success |
+| `POST /<topic>` | Publish a message. Body is the JSON. A zero-length body deletes the topic instead. `204` on success |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `Content-Type: text/event-stream` |
 
 `HEAD` is served wherever `GET` is, with the same status and headers and no
@@ -80,6 +80,22 @@ Each SSE event's data is a JSON object:
 
 A subscriber receives the current retained message for every matching topic on
 connect, then each message as it is published.
+
+## Deletion
+
+A topic is deleted by `POST`ing a zero-length body to it, rather than JSON.
+That removes its retained message: a `GET` afterward is `404`, and a
+subscriber connecting afterward is not replayed it. A `204` still confirms
+success.
+
+An event for a topic the bridge is deleting carries `deleted: true` alongside
+the usual `topic` and `payload`:
+
+    {"topic": "rtl433-a1b2c3/Acurite-5n1/1234", "payload": "", "deleted": true}
+
+`deleted` is present only on a deletion; an ordinary message never carries it.
+A subscriber that ignores unknown fields sees an unmarked empty message
+instead, which is what every subscriber saw before this field existed.
 
 ## Aliases
 
@@ -204,14 +220,18 @@ The spec is the test list. Both implementations run the same cases:
 - A topic with no message is `404`; after a `POST` the same `GET` returns the
   body byte for byte.
 - A `POST` of a non-JSON body is `400`, and does not change the retained
-  message.
+  message. A `POST` of a zero-length body is `204` and deletes the topic: the
+  next `GET` is `404`, and a subscriber connecting afterward is not replayed
+  it.
 - `+` matches exactly one segment and `#` matches the remainder; a filter
   matching nothing yields a stream that opens and stays empty.
 - Repeated `f` delivers from every filter on the one connection, and a topic
   matching two filters is delivered once.
 - A subscriber receives retained messages on connect before any live one.
-- `$alias` round-trips through `GET`, `POST`, and a `#` subscription, and a
-  device with no alias omits the topic rather than returning an empty string.
+- `$alias` round-trips through `GET`, `POST`, and a `#` subscription; a
+  device with no alias omits the topic rather than returning an empty
+  string, and one that is cleared is deleted the same way any other topic
+  is.
 - `$location` and `$tz` round-trip through `GET`, `POST`, and a `#`
   subscription the same way `$layout` does; `$tz`'s `GET` never `404`s, since
   a receiver always has some offset.

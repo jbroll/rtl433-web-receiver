@@ -47,7 +47,7 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
 ## POST to a topic
 
 Publishes a message. The body becomes the new retained message for that
-topic.
+topic. A zero-length body deletes the topic instead.
 
 ```
 curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
@@ -62,8 +62,15 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
   -d '{"temperature_C":21.5}'
 ```
 
+Deleting a topic:
+
+```
+curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 -d ''
+```
+
 - `204` on success, empty body.
-- `400` if the body is not valid JSON, is not valid UTF-8, or the topic is malformed.
+- `400` if the body is non-empty and not valid JSON, is not valid UTF-8, or
+  the topic is malformed. A zero-length body skips JSON validation entirely.
 - `413` if the body exceeds 64 KiB.
 - `408` if the body stalls for 30 seconds without a new byte arriving.
 - `503` if the bridge is not currently connected to the broker, or the broker
@@ -75,6 +82,11 @@ A `204` means the broker has taken the message and sent it back over the
 bridge's own subscription: a `GET` of the same topic immediately after
 returns the body byte for byte, and a subscriber already connected has
 received it. The `POST` is held for the round trip that takes.
+
+Deleting a topic follows the same round trip: a `GET` afterward is `404`, and
+a subscriber connecting after the delete is not replayed it. A subscriber
+already connected receives an event for it with `deleted: true` (see
+[GET /events](#get-events--subscribe) below).
 
 Publishing to a `$alias` topic works the same way; see
 [`docs/binding.md`](binding.md#aliases). `$layout`, the site-default
@@ -98,7 +110,9 @@ request is sent, so it must be percent-encoded as `%23`.
 - `200`, `Content-Type: text/event-stream`. On connect, the current retained
   message for every topic matching a filter is sent first, then each
   message as it is published. Each event's `data` is a JSON object:
-  `{"topic": "...", "payload": {...}}`.
+  `{"topic": "...", "payload": {...}}`. A topic the bridge is deleting
+  carries `deleted: true` alongside `topic` and `payload`; a deleted topic is
+  not replayed to a subscriber connecting afterward.
 - `400` if any filter is malformed, or if more than `MAX_SSE_FILTERS` `f`
   parameters are given.
 - `503` if the bridge is not currently connected to the broker, or if

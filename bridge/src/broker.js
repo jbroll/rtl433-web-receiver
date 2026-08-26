@@ -90,8 +90,8 @@ export function connectBroker({
   })
 
   client.on('message', (topic, payload, packet) => {
-    cacheMessage(cache, topic, payload, packet)
-    onMessage(topic, payload)
+    const result = cacheMessage(cache, topic, payload, packet)
+    onMessage(topic, payload, result === 'deleted')
     // Waking on the topic alone answered a publish with someone else's
     // message. The same bytes from another publisher are still an answer:
     // the cache then holds exactly what this waiter published.
@@ -150,12 +150,20 @@ export function connectBroker({
   }
 }
 
-// Only a zero-length publish carrying the retain flag deletes a retained
-// message. A zero-length publish without it is an ordinary message with an
-// empty body, and is cached like any other: an empty body is never a valid
-// message, and binding.md defines 404 for a topic with no message, so a GET
-// of either answers the same way.
+// A zero-length publish carrying the retain flag deletes a retained message
+// outright. A broker clears the retain flag on anything it forwards to an
+// already-established subscription, so a live-seen delete cannot be told
+// from an ordinary empty message that way; the cached message being
+// non-empty just before is the only signal left, and it is what a foreign
+// publisher's non-retained empty message is mistaken for too (see
+// docs/architecture.md, "Payloads stay bytes"). Either way the cache holds
+// the empty payload, not a missing entry, so GET still 404s.
 export function cacheMessage(cache, topic, payload, packet) {
-  if (payload.length === 0 && packet?.retain) cache.delete(topic)
-  else cache.set(topic, payload)
+  const hadMessage = cache.get(topic)?.length > 0
+  if (payload.length === 0 && packet?.retain) {
+    cache.delete(topic)
+    return 'deleted'
+  }
+  cache.set(topic, payload)
+  return payload.length === 0 && hadMessage ? 'deleted' : 'set'
 }

@@ -107,6 +107,14 @@ test('postAlias posts to the source when it is the serving origin', () => {
   assert.equal(fetches[0].opts.body, JSON.stringify('Back fence'))
 })
 
+test('postAlias clears an alias with a zero-length body, not an empty JSON string', () => {
+  postAlias(K, 'Back fence')
+  postAlias(K, '')
+  assert.equal(fetches.length, 2)
+  assert.equal(fetches[1].opts.method, 'POST')
+  assert.equal(fetches[1].opts.body, undefined)
+})
+
 test('postAlias does not post when the source is not the serving origin', () => {
   fakeLocation(OTHER)
   postAlias(K, 'Back fence')

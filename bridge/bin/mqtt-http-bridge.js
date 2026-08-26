@@ -87,7 +87,7 @@ const broker = connectBroker({
   // A message delivered before `bridge` is assigned is already in the cache,
   // and any subscriber connecting later is replayed from it, so it is safe
   // to drop.
-  onMessage: (topic, payload) => bridge?.broadcast(topic, payload),
+  onMessage: (topic, payload, deleted) => bridge?.broadcast(topic, payload, deleted),
   username: brokerUsername,
   password: brokerPassword,
   onConnect: () => console.log(`broker ${brokerName} connected`),

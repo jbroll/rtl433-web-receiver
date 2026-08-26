@@ -6,7 +6,7 @@ import mqtt from 'mqtt'
 
 import { createCache } from '../src/cache.js'
 import { BODY_LIMIT_BYTES, createBridge } from '../src/server.js'
-import { startBridge, waitFor, withTimeout } from './helpers/bridge.js'
+import { readEvents, startBridge, waitFor, withTimeout } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
 test('a POST without a token is 401 when AUTH_TOKEN is set, and the topic is left alone', async () => {
@@ -356,6 +356,31 @@ test('a retained delete seen live leaves the topic 404, not an empty 200', async
     assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 404)
   } finally {
     await foreign.endAsync()
+    await bridge.close()
+  }
+})
+
+test('an empty-body POST to a $alias topic deletes it: 204, then 404, and no replay to a later subscriber', async () => {
+  const bridge = await startBridge()
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1234/$alias`, { method: 'POST', body: '"Garage"' })
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234/$alias`)).status, 200)
+
+    const cleared = await fetch(`${bridge.base}/src/Acurite/1234/$alias`, { method: 'POST', body: '' })
+    assert.equal(cleared.status, 204)
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234/$alias`)).status, 404)
+
+    const stream = await fetch(`${bridge.base}/events?f=src/%23`)
+    try {
+      assert.deepEqual(await readEvents(stream, 1, { timeoutMs: 300 }), [])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
+  } finally {
     await bridge.close()
   }
 })

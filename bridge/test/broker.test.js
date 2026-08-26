@@ -131,6 +131,19 @@ test('a zero-length publish deletes the cached message only when it is retained'
   assert.equal(cache.get('src/Acurite/1'), undefined)
 })
 
+test('cacheMessage reports what it did: set or deleted', () => {
+  const cache = createCache()
+
+  assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.from('{"t":1}'), { retain: false }), 'set')
+  // Live-forwarded messages always arrive with retain cleared, so an empty
+  // payload following a cached message is the only signal a live delete has.
+  assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: false }), 'deleted')
+  // A topic with no prior message is an ordinary empty message, not a delete.
+  assert.equal(cacheMessage(cache, 'src/Acurite/2', Buffer.alloc(0), { retain: false }), 'set')
+  assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.from('{"t":2}'), { retain: false }), 'set')
+  assert.equal(cacheMessage(cache, 'src/Acurite/1', Buffer.alloc(0), { retain: true }), 'deleted')
+})
+
 test('a broker that refuses the subscription is reported, and is not ready', async () => {
   const broker = await startBroker(0, { refuseSubscribe: true })
   try {

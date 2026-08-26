@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 
+import mqtt from 'mqtt'
+
 import { readEvents, startBridge, waitFor } from './helpers/bridge.js'
 
 // Reads raw `data: ...` frame text rather than parsed JSON, so a test can
@@ -97,6 +99,38 @@ test('a filter matching nothing opens and stays empty', async () => {
     ])
     assert.equal(raced, 'quiet')
   } finally {
+    await bridge.close()
+  }
+})
+
+test('a retained delete seen live carries deleted: true, an ordinary empty message does not', async () => {
+  const bridge = await startBridge()
+  const foreign = await mqtt.connectAsync(bridge.mqttUrl)
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
+
+    const stream = await fetch(`${bridge.base}/events?f=src/%23`)
+    try {
+      const reading = readEvents(stream, 3)
+
+      await foreign.publishAsync('src/Acurite/1', '', { qos: 0, retain: true })
+      await foreign.publishAsync('src/Marker/1', '', { qos: 0, retain: false })
+      const events = await reading
+
+      assert.deepEqual(events, [
+        { topic: 'src/Acurite/1', payload: { t: 1 } },
+        { topic: 'src/Acurite/1', payload: '', deleted: true },
+        { topic: 'src/Marker/1', payload: '' },
+      ])
+    } finally {
+      try {
+        await stream.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+    }
+  } finally {
+    await foreign.endAsync()
     await bridge.close()
   }
 })

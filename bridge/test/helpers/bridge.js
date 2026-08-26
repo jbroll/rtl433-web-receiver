@@ -23,7 +23,7 @@ export async function startBridge({
   const broker = connectBroker({
     url: url ?? mqttBroker.url,
     cache,
-    onMessage: (topic, payload) => bridge.broadcast(topic, payload),
+    onMessage: (topic, payload, deleted) => bridge.broadcast(topic, payload, deleted),
     echoTimeoutMs,
   })
   bridge = createBridge({

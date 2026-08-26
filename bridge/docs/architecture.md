@@ -63,23 +63,33 @@ held open and no status the whole time.
 
 `server.js` builds one frame per broadcast message and one per replayed
 topic, not one per client: `data: ${JSON.stringify({ topic, payload:
-decode(payload) })}\n\n`, using `decode` from `sse.js`. Every matching
-client writes that same string. A client only decides whether it matches;
-`sse.js`'s `matches(topic)` tests the stream's filters against a topic and
-`write(frame)` puts bytes on the wire, so filtering never touches the frame
-and building the frame never touches a client's filters.
+decode(payload), ...(deleted && { deleted: true }) })}\n\n`, using `decode`
+from `sse.js`. Every matching client writes that same string. A client only
+decides whether it matches; `sse.js`'s `matches(topic)` tests the stream's
+filters against a topic and `write(frame)` puts bytes on the wire, so
+filtering never touches the frame and building the frame never touches a
+client's filters.
+
+The `deleted` flag comes from `cacheMessage`'s return value (`src/broker.js`),
+which `bin/mqtt-http-bridge.js`'s `onMessage` passes through to `broadcast`
+alongside the topic and payload it always carried.
 
 A stream's filters are fixed at connect time (see "Filters are fixed per
 connection" below), so `openStream` splits each filter into segments once,
 at construction, instead of on every message.
 
 Replay, on a new subscriber's connect, walks `cache.entries()` once in
-insertion order and writes a frame for each topic the stream matches. That
-replaces a pass per filter with a set tracking which topics had already gone
-out; a topic matching two filters still arrives once, because it is visited
-once. Replay order is therefore cache insertion order, not filter order.
-Nothing in `binding.md` promises an order, but this is a behavior change
-from before.
+insertion order and writes a frame for each topic the stream matches, skipping
+any whose cached payload is zero-length. That replaces a pass per filter with
+a set tracking which topics had already gone out; a topic matching two
+filters still arrives once, because it is visited once. Replay order is
+therefore cache insertion order, not filter order. Nothing in `binding.md`
+promises an order, but this is a behavior change from before.
+
+Skipping empty payloads in replay keeps a deleted topic's `GET` answer and its
+`/events` replay in agreement: both now say the topic does not exist, where
+before a deletion seen live would still be replayed to a later subscriber as
+an empty message.
 
 ## Payloads stay bytes
 
@@ -91,19 +101,38 @@ any byte that is not valid UTF-8 with U+FFFD. The one place a payload
 becomes text is the SSE frame in `src/sse.js`, which is JSON and has no
 other choice.
 
-An incoming message with a zero-length payload deletes the cache entry only
-when its packet carries the retain flag, which is how MQTT removes a
-retained message. Without the flag it is an ordinary message with an empty
-body and is cached like any other: an empty body is never a valid message,
-and `binding.md` defines `404` for a topic with no message, so a `GET` of
-either answers the same way. A foreign publisher's non-retained empty
-message therefore reads as `404` even while the broker still holds that
-topic's own retained message; see [`docs/backlog.md`](backlog.md).
+`cacheMessage` (`src/broker.js`) reports what it did, `'set'` or `'deleted'`,
+which `bin/mqtt-http-bridge.js` passes to `broadcast` to mark the SSE frame
+for a topic going away (see "Broadcasting to SSE clients" above). A
+zero-length payload whose packet carries the retain flag is an explicit MQTT
+delete: the entry is removed from the cache and `cacheMessage` returns
+`'deleted'`. A broker never stores or replays a zero-length message as
+retained, so this branch only fires from a direct `cacheMessage` call, not
+from a live broker.
 
-A broker clears the retain flag on messages it forwards to an established
-subscription, so the bridge does not see a retained delete as a delete: it
-caches the empty payload in place of the message, and the cache entry only
-goes away when the connection is remade and the cache is rebuilt.
+A broker clears the retain flag on messages it forwards to an already
+established subscription, so a retained delete seen live is indistinguishable
+at the packet level from a foreign publisher's ordinary non-retained empty
+message — both arrive as a zero-length payload with the retain flag cleared.
+`cacheMessage` falls back to whether the topic already held a non-empty
+message: a zero-length payload that follows one is treated as `'deleted'`,
+one that doesn't is an ordinary empty message and returns `'set'`. Either way
+the cache is set to the empty payload, not cleared — the topic stays a
+distinct "empty message" entry rather than one the bridge has forgotten.
+
+This fallback misreads a foreign publisher's non-retained empty message that
+happens to follow real content as a deletion, the same ambiguity that masks a
+topic's retained message below; it cannot be resolved by caching alone.
+
+An empty body is never a valid message, and `binding.md` defines `404` for a
+topic with no message, so a `GET` of either an actual delete or an ordinary
+empty message answers the same way. A foreign publisher's non-retained empty
+message therefore reads as `404` even while the broker still holds that
+topic's own retained message, until a later message overwrites the cache
+entry or the connection is remade and the cache is rebuilt from the broker's
+actual retained set. The bridge cannot see that set without resubscribing, so
+this is a standing gap, not just a stale-until-reconnect one; see
+[`docs/backlog.md`](backlog.md).
 
 A `GET` of a topic whose cached payload is empty is `404`, not a `200` with an
 empty body, because an empty body is not the JSON a `200` promises and a

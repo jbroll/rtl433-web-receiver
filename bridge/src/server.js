@@ -53,8 +53,8 @@ export function createBridge({
       })
     }),
     clients,
-    broadcast(topic, payload) {
-      const frame = buildFrame(topic, payload)
+    broadcast(topic, payload, deleted) {
+      const frame = buildFrame(topic, payload, deleted)
       for (const client of clients) {
         if (client.matches(topic)) client.write(frame)
       }
@@ -64,8 +64,10 @@ export function createBridge({
   return bridge
 }
 
-function buildFrame(topic, payload) {
-  return `data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`
+function buildFrame(topic, payload, deleted) {
+  const frame = { topic, payload: decode(payload) }
+  if (deleted) frame.deleted = true
+  return `data: ${JSON.stringify(frame)}\n\n`
 }
 
 async function handle(
@@ -180,10 +182,15 @@ async function handle(
     } catch (err) {
       return respondToBodyError(req, res, err)
     }
-    try {
-      parseJson(body)
-    } catch (err) {
-      return send(res, 400, err.message)
+    // A zero-length body is the retained-delete primitive over HTTP, not
+    // JSON to validate: parsing it would reject the one body that means
+    // "remove this topic."
+    if (body.length > 0) {
+      try {
+        parseJson(body)
+      } catch (err) {
+        return send(res, 400, err.message)
+      }
     }
     try {
       // This resolves when the broker has echoed the publish back, which is
@@ -217,7 +224,10 @@ function subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBy
   })
 
   for (const [topic, payload] of cache.entries()) {
-    if (client.matches(topic)) client.write(buildFrame(topic, payload))
+    // An empty cached payload is a topic GET already answers 404 for
+    // (deleted, or an empty message masking a retained one); replaying it
+    // would show a new subscriber a topic that does not exist.
+    if (payload.length > 0 && client.matches(topic)) client.write(buildFrame(topic, payload))
   }
 }
 

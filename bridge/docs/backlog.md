@@ -29,17 +29,6 @@
   message comes back and matches the bytes still waiting.
 - A `500` is still possible for an error the bridge does not foresee. The
   binding defines no such status; reaching it is a bug, not a contract.
-- A retained message deleted by a zero-length publish reaches SSE
-  subscribers as an event with an empty payload. Nothing marks it as a
-  deletion, so a subscriber cannot tell it apart from an empty message.
-- A retained message deleted while the bridge is connected stays in the
-  cache as an empty message until the next reconnect, because the broker
-  clears the retain flag on what it forwards and the delete is
-  indistinguishable from an ordinary empty message. `GET` answers `404` for
-  both, but an SSE subscriber is sent the empty message and a `#` replay to a
-  later subscriber carries the topic. MQTT 5's retain-as-published
-  subscription option would tell them apart, at the cost of requiring an
-  MQTT 5 broker; `aedes` is MQTT 3.1.1 only, so the suite could not cover it.
 - `test/helpers/bridge.js` builds the bridge in one synchronous step, so it
   cannot reproduce the startup ordering the `bridge?.broadcast` guard in
   `bin/mqtt-http-bridge.js` exists for. That guard is untested. The `ending`
@@ -54,15 +43,6 @@
   broker still holds. It stays masked until the next reconnect rebuilds the
   cache from the broker's actual retained set. See
   [`docs/architecture.md`](architecture.md#payloads-stay-bytes).
-- `binding.md`'s test list says a device with no alias omits the topic
-  rather than returning an empty string, but the bridge does not do that. A
-  retained delete of a `$alias` topic seen live is cached as an empty
-  message, the same as any other retained delete a live connection sees (see
-  the broker clearing the retain flag, above): `GET` answers `404`, but a
-  subscriber that connects afterward is replayed the topic with
-  `payload: ""`. A client resolving aliases has to treat an empty `$alias`
-  payload from `/events` the same as a missing one, since the HTTP and SSE
-  paths disagree about whether the topic exists.
 - `Access-Control-Allow-Origin: *` means a page on any site the user visits can read a
   reachable bridge and publish to it. Authentication is the fix; an origin allowlist
   alone is not, since a non-browser client sends whatever origin it likes.
@@ -103,11 +83,6 @@
   fails with `ERR_MODULE_NOT_FOUND` anywhere `dashboard/node_modules` was not installed
   separately, and from an npm-installed copy the relative path does not exist at all. The
   package also declares a `bin` with no `files` field.
-- Clearing an alias does not clear it. `dashboard/src/alias.js` clears an alias by
-  posting an empty string (2 JSON bytes, `""`), expecting the bridge to treat it as a
-  delete. The bridge instead caches it as an ordinary non-empty retained message, so a
-  later `GET` returns `200 ""` instead of `404`, and the retained message survives a
-  broker restart indefinitely.
 - `POST` validates a different byte sequence than it publishes. `src/server.js` parses
   `body.toString('utf8')`, which substitutes U+FFFD for invalid bytes rather than failing,
   and then publishes the raw `body`. A body with invalid UTF-8 inside a JSON string literal

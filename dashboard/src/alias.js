@@ -67,11 +67,12 @@ export function postAlias(key, name) {
   saveAliases()
   if (sourceOf(key) !== location.origin) return
   const url = `${sourceOf(key)}/${topicOf(key)}${ALIAS_SUFFIX}`
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(trimmed),
-  }).then(res => {
+  // A zero-length body is the bridge's retained-delete primitive; a cleared
+  // alias posts one instead of the JSON string "".
+  const options = trimmed
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trimmed) }
+    : { method: 'POST' }
+  fetch(url, options).then(res => {
     if (!res.ok) {
       console.error(`POST ${url} failed: ${res.status}`)
     }
