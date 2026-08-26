@@ -231,3 +231,6 @@
   Playwright spec touches the Bridges panel's rendered UI; `bridges.test.js`
   covers the `bridges.js` module against a fake `fetch`, which is real but
   partial coverage.
+- The view column cap is derived from width alone. A landscape phone gets the same 3
+  columns a portrait one does at the same width, and a very short window still scrolls
+  rather than fitting.

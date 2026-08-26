@@ -32,6 +32,30 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 from `receiver/`, where there is no `node_modules`, and esbuild resolves alias
 targets against the working directory.
 
+## Grid sizing
+
+`measureGrid()` in `grid.js` derives a view column count from the viewport:
+`clamp(1, floor(usableWidth / 110), grid.cols)`. 110px is the width below which
+a cell stops being legible; at any desktop width the clamp lands on the saved
+`grid.cols` and the derived count is inert.
+
+The derived count is separate from the saved `cardState.grid.cols`, and only
+rendering reads it: the card's rendered span, the resize gesture's upper bound,
+and `gridTemplateColumns`. `deriveTemplate()` reads `cardState` directly, so
+saving a layout from a phone writes the same template as saving from a desktop
+rather than pushing 3 columns onto every other browser, and a card moved or
+resized on the phone still applies to the real grid.
+
+When the derived count is below the saved one, the cell is sized from width
+alone rather than from `min(width/cols, height/rows)`, and `gridTemplateRows` is
+left to `grid-auto-rows`. Fewer columns means more rows than a phone screen
+holds, and shrinking the cell until they all fit is what made cards illegible in
+the first place. The page scrolls instead.
+
+`.card`'s bottom padding (`1.2rem`) reserves the band `.btm` and `.age` are
+absolutely placed in. `.body` is `height:100%` of what is left, so the bottom
+row is not drawn through the values at any cell size.
+
 ## Drag zones
 
 `grid.js` builds the drop zones once, when a drag starts, as fixed rectangles
