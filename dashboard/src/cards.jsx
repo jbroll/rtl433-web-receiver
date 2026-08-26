@@ -52,7 +52,10 @@ export function CardsView() {
   // Compute shown keys directly from signals for reactivity
   const order = cardState.value.order
   const hidden = cardState.value.hidden
-  const shown = order.filter(k => devices.value.has(k) && !hidden.includes(k))
+  // Read outside the callback: an empty order would never run it, and the
+  // component would not subscribe to devices at all.
+  const devs = devices.value
+  const shown = order.filter(k => devs.has(k) && !hidden.includes(k))
 
   return (
     <div id="cards" ref={gridRef}>

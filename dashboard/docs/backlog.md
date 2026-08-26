@@ -118,6 +118,11 @@
   layout is unpersisted. With no location set nothing else calls `saveCardState`, so a
   session's worth of new devices' default sizes and hide-on-arrival flags never reach
   `localStorage`.
+- `ensureCard()` in `store.js` mutates `cardState.value` in place — `s.cards[key] = c`,
+  `s.order.push(key)`, and the `hidden` push — and never calls `bump()`, so nothing
+  subscribed to `cardState` is notified. Rendering only recovers because `CardsView` also
+  subscribes to `devices`, which a new device reassigns. Any subscriber that reads
+  `cardState` alone sees a stale value until the next `saveCardState()`.
 - `pruneCardState()` writes `s.order = s.order.filter(...)` back into the live signal value,
   and `bump()` copies `grid` and `cards` but passes `order` and `hidden` through by
   reference (`store.js`), so a consumer holding an earlier `cardState` sees its `order`
