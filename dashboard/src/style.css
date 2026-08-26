@@ -53,7 +53,7 @@ section[hidden] { display:none; }
    .body is height:100% over what is left. .age is on every card. */
 .card { position:relative; margin:.35rem; border:1px solid var(--line); border-radius:.7rem;
         padding:.5rem .45rem 1.2rem; }
-.card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - .9rem);
+.card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
              padding:0 .4rem; background:Canvas; font-size:.75rem;
              display:flex; align-items:baseline; overflow:hidden;
              pointer-events:auto; z-index:1; }
