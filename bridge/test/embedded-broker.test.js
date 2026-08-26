@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import net from 'node:net'
 import path from 'node:path'
 import tls from 'node:tls'
 
@@ -12,7 +13,7 @@ import { connectBroker } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
 import { startEmbeddedBroker } from '../src/embedded-broker.js'
 import { createTokenStore } from '../src/token-store.js'
-import { waitFor } from './helpers/bridge.js'
+import { waitFor, withTimeout } from './helpers/bridge.js'
 
 test('no TLS: aedes listens on loopback, and connectBroker reaches it', async () => {
   const embedded = await startEmbeddedBroker({ mqttPort: 0, mqttsPort: 0 })
@@ -207,6 +208,17 @@ test('TLS: passing a tokenStore, rotating it gates new CONNECTs by the new token
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('a socket that never sends CONNECT does not block close()', async () => {
+  const embedded = await startEmbeddedBroker({ mqttPort: 0, mqttsPort: 0 })
+  const port = new URL(embedded.url).port
+  const socket = net.connect(port, '127.0.0.1')
+  await new Promise((resolve, reject) => {
+    socket.once('connect', resolve)
+    socket.once('error', reject)
+  })
+  await withTimeout(embedded.close(), 2000, 'embedded broker close() with a pre-CONNECT socket open')
 })
 
 test('TLS: overwriting the cert and key files reloads the secure context', async () => {

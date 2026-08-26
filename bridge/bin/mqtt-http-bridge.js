@@ -2,7 +2,7 @@
 import { parseArgs } from 'node:util'
 import { readFileSync } from 'node:fs'
 
-import { connectBroker } from '../src/broker.js'
+import { connectBroker, ECHO_TIMEOUT_MS } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
 import { brokerLabel, readConfig } from '../src/config.js'
 import { startEmbeddedBroker } from '../src/embedded-broker.js'
@@ -101,16 +101,48 @@ bridge.httpServer.listen(config.port, config.host, () => {
   console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${brokerName}`)
 })
 
+// A few seconds past the longest thing shutdown waits on: the grace period
+// below is bounded by ECHO_TIMEOUT_MS, so the watchdog has to clear that
+// plus whatever httpServer.close() and broker.end() take on top of it.
+const SHUTDOWN_TIMEOUT_MS = ECHO_TIMEOUT_MS + 5000
+
+let shuttingDown = false
+
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => {
-    // httpServer.close() never completes while an SSE stream is attached,
-    // so the streams have to be ended first to make the server closable.
-    for (const client of bridge.clients) client.close()
-    bridge.clients.clear()
-    bridge.httpServer.close()
-    broker
-      .end()
-      .then(() => embedded?.close())
-      .then(() => process.exit(0))
+  process.on(signal, async () => {
+    if (shuttingDown) return
+    shuttingDown = true
+
+    // Armed before teardown starts: an await below hanging is exactly the
+    // failure this exists to catch, so it can't depend on teardown reaching
+    // its own end to get scheduled.
+    const watchdog = setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS)
+    watchdog.unref()
+
+    try {
+      // httpServer.close() never completes while an SSE stream is attached,
+      // so the streams have to be ended first to make the server closable.
+      for (const client of bridge.clients) client.close()
+      bridge.clients.clear()
+
+      await new Promise((resolve, reject) => {
+        bridge.httpServer.close((err) => (err ? reject(err) : resolve()))
+      })
+
+      // A POST waiting on broker.publish gets dropped with no status if the
+      // broker ends under it; give it a chance to get its own 503 from the
+      // echo timeout instead.
+      const deadline = Date.now() + ECHO_TIMEOUT_MS
+      while (bridge.waiting() > 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+
+      await broker.end()
+      await embedded?.close()
+      process.exit(0)
+    } catch (err) {
+      console.error('shutdown failed:', err.message)
+      process.exit(1)
+    }
   })
 }

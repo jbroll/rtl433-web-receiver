@@ -198,8 +198,12 @@ life of the project.
 
 ## Shutdown order
 
-On `SIGINT` or `SIGTERM`, `bin/mqtt-http-bridge.js` closes every open SSE
-stream, then the HTTP server, then the broker connection — in that order.
+On `SIGINT` or `SIGTERM`, `bin/mqtt-http-bridge.js` runs one `async`
+handler: close every open SSE stream, `await` the HTTP server closing, wait
+for in-flight publishes to clear, `await broker.end()`, then
+`await embedded?.close()`, and exit `0`. A `shuttingDown` flag makes a
+second signal during that chain a no-op rather than a second teardown
+racing the first.
 
 `httpServer.close()` waits for all open connections to end before its
 callback fires; an SSE stream is a connection held open indefinitely, so
@@ -207,3 +211,30 @@ closing the server first would hang for as long as any client stays
 connected. Closing the streams first is what makes shutdown complete at
 all. Measured with one SSE stream attached, the process exits about 20 ms
 after the signal.
+
+A `POST` still awaiting `broker.publish` when the HTTP server closes is not
+otherwise answered before `broker.end()` cuts the connection its echo needs.
+`createBridge` exposes `waiting()` (`broker.waiting()`, the pending-echo
+count) so the handler can poll it and wait, up to one `ECHO_TIMEOUT_MS`,
+for it to reach zero before ending the broker. A publish still in flight at
+that deadline gets its own `503` from the existing echo-timeout path in
+`src/broker.js` once the broker is gone, rather than the socket being
+dropped with no status.
+
+A `setTimeout(...).unref()` watchdog is armed before any of this starts and
+calls `process.exit(1)` if the chain has not finished within
+`ECHO_TIMEOUT_MS` plus a few seconds of margin. Without it, an `await` that
+never resolves — `httpServer.close()` on a server with an untracked open
+connection, say — turns into a hang instead of a nonzero exit, which is a
+process supervisor's cue to keep the wedged process running rather than
+restart it. `unref()` keeps the timer from being the reason the event loop
+stays alive once the real teardown finishes first.
+
+In `src/embedded-broker.js`, `close()` tracks every socket the `net`/`tls`
+server accepts in a `Set`, removing each on its own `close` event. `close()`
+calls `server.close()` first — which will not call back until every socket
+the server tracks has closed, but does not block on that call itself — then
+`aedes.close()`, then destroys whatever is still in the set once `aedes`
+finishes. A socket that never sends `CONNECT` is not an aedes client, so
+`aedes.close()` alone cannot be relied on to end it, and `server.close()`
+would otherwise wait on it forever.

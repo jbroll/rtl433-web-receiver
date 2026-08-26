@@ -54,10 +54,6 @@
 - The package is not published to a registry, so there is no `npx` or
   `npm install -g` path; it runs from a clone. `package.json` declares a
   `bin` entry for a command nothing installs.
-- `SIGTERM` while a `POST` is waiting for its echo drops the request with no
-  HTTP status at all: the streams and the server are closed and the broker
-  connection ended without waiting for the publish to come back. The client
-  sees the connection go away and cannot tell whether the message was taken.
 - A foreign publisher's non-retained empty message caches like any other
   message, so `GET` answers `404` for a topic whose retained message the
   broker still holds. It stays masked until the next reconnect rebuilds the
@@ -102,11 +98,6 @@
   all start aedes anyway, bind `MQTT_PORT`, overwrite `brokerUrl`, and serve an empty local
   broker while `MQTT_URL` is ignored. `parsePort` rejects garbage loudly; this does not.
   Same family as the `PORT=0x1F90` entry above.
-- The shutdown chain in `bin/mqtt-http-bridge.js` has no `.catch`, so a rejection from
-  `broker.end()` or `embedded.close()` becomes an unhandled rejection, `process.exit(0)` is
-  never reached, and the aedes listener on 8883 is never closed — the supervisor sees a
-  crash rather than a clean stop. `httpServer.close()` is fired in the same block but never
-  awaited.
 - `connected()` in `src/broker.js` reflects CONNACK only, never whether the `#`
   subscription landed, which is at odds with what `docs/architecture.md` says the check is
   for. It does not manifest against aedes, which drops the connection rather than returning
@@ -123,10 +114,10 @@
   Separately, `matchFilter` splits both filter and topic on every call and nothing caches
   the split, even though a stream's filters are fixed for its lifetime, so each broadcast
   costs `clients × filters` splits of the same strings.
-- `bin/mqtt-http-bridge.js` has no test at all. Untested: `parseArgs` wiring, the shared
-  `tokenStore` handoff to both `createBridge` and `startEmbeddedBroker`, `AUTH_TOKEN_PATH`
-  end to end, the TLS-mode `brokerUsername = 'bridge'` self-connection, the dashboard
-  `readFileSync`, and the signal-handler shutdown order `docs/architecture.md` documents.
+- `test/shutdown.test.js` is the only test coverage `bin/mqtt-http-bridge.js` has. Untested:
+  `parseArgs` wiring, the shared `tokenStore` handoff to both `createBridge` and
+  `startEmbeddedBroker`, `AUTH_TOKEN_PATH` end to end, the TLS-mode
+  `brokerUsername = 'bridge'` self-connection, and the dashboard `readFileSync`.
   `src/sse.js`'s keepalive timer is never exercised, so nothing would notice it stop
   emitting and let an idle proxy drop every stream; and `test/rotate.test.js` covers wrong,
   missing, non-JSON and empty-string tokens but not a non-object body.
@@ -186,9 +177,3 @@
   reserves nothing but `/events`. The fix is in the binding: either state which paths an
   implementation may reserve, or move the endpoint under a prefix the binding declares off
   limits.
-- Shutdown may hang on a socket that connected and never sent CONNECT. `close()` in
-  `src/embedded-broker.js` calls `server.close()` from inside the `aedes.close` callback,
-  and `server.close()` fires only once every existing connection has ended. `aedes.close`
-  destroys its own clients first, which is why this normally completes, but a pre-CONNECT
-  socket is not an aedes client. Not reproduced. Distinct from the missing `.catch` on the
-  shutdown chain above.

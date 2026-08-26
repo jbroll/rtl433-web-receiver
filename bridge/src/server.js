@@ -41,6 +41,7 @@ export function createBridge({
     broadcast(topic, payload) {
       for (const client of clients) client.send(topic, payload)
     },
+    waiting: () => broker.waiting(),
   }
   return bridge
 }
