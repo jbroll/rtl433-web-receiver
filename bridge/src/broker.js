@@ -170,7 +170,7 @@ export function connectBroker({
 }
 
 // A username or password echoed into an error message would otherwise reach
-// GET /status, which is unauthenticated.
+// GET /-/status, which is unauthenticated.
 //
 // Two sequential .split/.join passes break when one credential is a
 // substring of the other: replacing the first fractures the second so it no

@@ -124,9 +124,9 @@ async function handle(
     return subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes })
   }
 
-  // Reserved the same way '/events' is: never a topic a source publishes to
-  // in practice, and gated ahead of topic parsing so it can't collide with one.
-  if (url.pathname === '/auth/rotate') {
+  // Under the reserved '/-/' prefix (docs/binding.md), so it can never
+  // collide with a topic path.
+  if (url.pathname === '/-/auth/rotate') {
     if (req.method !== 'POST') return send(res, 405, 'method not allowed', { allow: 'POST' })
     // Nothing to rotate: a deployment with no AUTH_TOKEN has no auth surface
     // to expose here either, so this is "not found," not "not authorized."
@@ -156,7 +156,7 @@ async function handle(
 
   // Unauthenticated: brokerLabel strips credentials from the URL and
   // broker.js redacts them out of the last error too.
-  if (url.pathname === '/status') {
+  if (url.pathname === '/-/status') {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', { allow: 'GET' })
     const body = JSON.stringify({
       connected: broker.connected(),

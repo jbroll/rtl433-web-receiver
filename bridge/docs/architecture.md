@@ -170,7 +170,7 @@ looks ready and caches nothing. Tests await it before publishing so the echo
 they are waiting for cannot be missed.
 
 `connected()` and `ready()` are separate on purpose. `connected()` reflects
-CONNACK alone and answers `GET /status`, where the distinction is the point;
+CONNACK alone and answers `GET /-/status`, where the distinction is the point;
 `ready()` also requires the `#` subscription to have landed, and is what the
 HTTP `503` gates use, since a request that passes a CONNACK-only check can
 still read a cache the bridge knows is stale. `mqtt.connect` is given
@@ -240,7 +240,7 @@ file.
 `src/token-store.js`'s `createTokenStore` is the only mutable piece of
 config: everything else in `src/config.js` is read once at startup and
 never changes. `bin/mqtt-http-bridge.js` builds one store and passes it to
-both `createBridge` (the HTTP bearer check and `POST /auth/rotate`) and
+both `createBridge` (the HTTP bearer check and `POST /-/auth/rotate`) and
 `startEmbeddedBroker` (the MQTT `authenticate` hook), so a rotation through
 either path is visible to both immediately — there is exactly one current
 token, not two copies that can drift. `authenticate` calls `tokens.digest()`

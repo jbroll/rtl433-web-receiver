@@ -50,6 +50,18 @@ Consumers already know how to read it: the page drops `model`, `id`, `channel`,
 `protocol`, `rssi`, `duration`, `mic`, `message_type`, `sequence_num`, `time`,
 `count`, and `build` to find the readings.
 
+## Reserved paths
+
+An implementation may reserve paths of its own outside the topic space, for
+things that are not a topic: this bridge's `/-/status` and `/-/auth/rotate`,
+for instance. It reserves them under a single prefix, declared once, and
+everything not under that prefix is topic space. This bridge declares `/-/`.
+
+`/events` is reserved outside that prefix. It predates the rule above and
+moving it would break the dashboard and the receiver, both of which already
+consume it at that path; it stays there for compatibility, not because the
+rule allows it.
+
 ## Operations
 
 | Method and path | Behaviour |
@@ -57,7 +69,7 @@ Consumers already know how to read it: the page drops `model`, `id`, `channel`,
 | `GET /<topic>` | The last message published to that topic. `404` if there is none. `Content-Type: application/json` |
 | `POST /<topic>` | Publish a message. Body is the JSON. A zero-length body deletes the topic instead. `204` on success |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `Content-Type: text/event-stream` |
-| `GET /status` | Implementation-specific: this bridge's own connection and cache state, not a topic. See `docs/user-manual.md`. |
+| `GET /-/status` | Implementation-specific: this bridge's own connection and cache state, not a topic. See `docs/user-manual.md`. |
 
 `HEAD` is served wherever `GET` is, with the same status and headers and no
 body. A refusal carries `Allow`, naming the methods the path does accept.
@@ -161,6 +173,10 @@ unlike `$location` and `$layout`, it is never unset — a fresh receiver's
 `$tz` defaults to `-240`.
 
     rtl433-a1b2c3/$tz   -420
+
+Open question: the receiver's `web_ui.cpp` rewrites `/$tz` to
+`<source>/$tz` internally, while this binding and the bridge use the literal
+`$tz` topic name above. The two have not been reconciled.
 
 ## Errors
 

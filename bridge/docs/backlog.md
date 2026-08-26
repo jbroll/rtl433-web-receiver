@@ -53,7 +53,7 @@
   broker still holds. It stays masked until the next reconnect rebuilds the
   cache from the broker's actual retained set. See
   [`docs/architecture.md`](architecture.md#payloads-stay-bytes).
-- `/auth/rotate` dereferences `parsed.token` without checking that `parsed` is an object
+- `/-/auth/rotate` dereferences `parsed.token` without checking that `parsed` is an object
   (`src/server.js`), so a body of literal `null` throws and reaches the generic `500`
   handler, where `123`, `"str"`, `[]` and `{"token":{}}` all correctly answer `400`.
 - The embedded broker reads its cert and key once at startup (`src/embedded-broker.js`)
@@ -96,12 +96,7 @@
   where `GET` is supported, which the same rule forbids. A `HEAD /<topic>` falls past the
   `GET` branch onto the trailing `405`. Node strips the body from a `HEAD` response on its
   own, so letting `HEAD` take the `GET` branch needs no special casing.
-- `/auth/rotate` is intercepted before topic parsing but appears nowhere in `binding.md`,
-  so the bridge removes `auth/rotate` from the topic space of a protocol whose spec
-  reserves nothing but `/events`. The fix is in the binding: either state which paths an
-  implementation may reserve, or move the endpoint under a prefix the binding declares off
-  limits.
-- `redact` in `src/broker.js`, which scrubs `lastError` before `GET /status` serves it,
+- `redact` in `src/broker.js`, which scrubs `lastError` before `GET /-/status` serves it,
   can still leak a fragment of a credential. It scans the message left to right and at
   each position replaces the longest credential that matches there, which closes the case
   where one credential contains the other: username `joe` and password `joepass123`

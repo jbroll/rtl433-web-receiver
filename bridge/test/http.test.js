@@ -141,11 +141,11 @@ test('a 405 carries Allow naming the methods that endpoint does offer', async ()
     assert.equal(events.status, 405)
     assert.equal(events.headers.get('allow'), 'GET')
 
-    const rotate = await fetch(`${bridge.base}/auth/rotate`, { method: 'GET' })
+    const rotate = await fetch(`${bridge.base}/-/auth/rotate`, { method: 'GET' })
     assert.equal(rotate.status, 405)
     assert.equal(rotate.headers.get('allow'), 'POST')
 
-    const status = await fetch(`${bridge.base}/status`, { method: 'POST' })
+    const status = await fetch(`${bridge.base}/-/status`, { method: 'POST' })
     assert.equal(status.status, 405)
     assert.equal(status.headers.get('allow'), 'GET')
   } finally {
@@ -153,12 +153,12 @@ test('a 405 carries Allow naming the methods that endpoint does offer', async ()
   }
 })
 
-test('GET /status reports broker and subscription state while connected', async () => {
+test('GET /-/status reports broker and subscription state while connected', async () => {
   const bridge = await startBridge()
   try {
     await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
 
-    const status = await fetch(`${bridge.base}/status`)
+    const status = await fetch(`${bridge.base}/-/status`)
     assert.equal(status.status, 200)
     assert.equal(status.headers.get('content-type'), 'application/json')
     assert.deepEqual(await status.json(), {
@@ -174,10 +174,10 @@ test('GET /status reports broker and subscription state while connected', async 
   }
 })
 
-test('HEAD /status matches GET status with an empty body', async () => {
+test('HEAD /-/status matches GET status with an empty body', async () => {
   const bridge = await startBridge()
   try {
-    const head = await fetch(`${bridge.base}/status`, { method: 'HEAD' })
+    const head = await fetch(`${bridge.base}/-/status`, { method: 'HEAD' })
     assert.equal(head.status, 200)
     assert.equal(await head.text(), '')
   } finally {
@@ -185,13 +185,13 @@ test('HEAD /status matches GET status with an empty body', async () => {
   }
 })
 
-test('GET /status reports the broker down without itself answering 503', async () => {
+test('GET /-/status reports the broker down without itself answering 503', async () => {
   const bridge = await startBridge()
   try {
     await bridge.stopBroker()
-    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).connected === false)
+    await waitFor(async () => (await (await fetch(`${bridge.base}/-/status`)).json()).connected === false)
 
-    const status = await fetch(`${bridge.base}/status`)
+    const status = await fetch(`${bridge.base}/-/status`)
     assert.equal(status.status, 200)
     const body = await status.json()
     assert.equal(body.connected, false)
@@ -201,16 +201,16 @@ test('GET /status reports the broker down without itself answering 503', async (
   }
 })
 
-test('GET /status redacts a password that lands in a real broker connection error', async () => {
+test('GET /-/status redacts a password that lands in a real broker connection error', async () => {
   const mqttBroker = await startBroker()
   const url = mqttBroker.url
   await mqttBroker.close()
 
   const bridge = await startBridge({ url, username: 'someuser', password: 'ECONNREFUSED' })
   try {
-    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).lastError !== null)
+    await waitFor(async () => (await (await fetch(`${bridge.base}/-/status`)).json()).lastError !== null)
 
-    const status = await fetch(`${bridge.base}/status`)
+    const status = await fetch(`${bridge.base}/-/status`)
     const body = await status.json()
     assert.doesNotMatch(body.lastError, /ECONNREFUSED/)
     assert.match(body.lastError, /\*\*\*/)
@@ -219,16 +219,16 @@ test('GET /status redacts a password that lands in a real broker connection erro
   }
 })
 
-test('GET /status redacts a username that lands in a real broker connection error', async () => {
+test('GET /-/status redacts a username that lands in a real broker connection error', async () => {
   const mqttBroker = await startBroker()
   const url = mqttBroker.url
   await mqttBroker.close()
 
   const bridge = await startBridge({ url, username: 'ECONNREFUSED', password: 'somepass' })
   try {
-    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).lastError !== null)
+    await waitFor(async () => (await (await fetch(`${bridge.base}/-/status`)).json()).lastError !== null)
 
-    const status = await fetch(`${bridge.base}/status`)
+    const status = await fetch(`${bridge.base}/-/status`)
     const body = await status.json()
     assert.doesNotMatch(body.lastError, /ECONNREFUSED/)
     assert.match(body.lastError, /\*\*\*/)
@@ -237,20 +237,34 @@ test('GET /status redacts a username that lands in a real broker connection erro
   }
 })
 
-test('GET /status redacts a username that is a prefix of the password, with no fragment left behind', async () => {
+test('GET /-/status redacts a username that is a prefix of the password, with no fragment left behind', async () => {
   const mqttBroker = await startBroker()
   const url = mqttBroker.url
   await mqttBroker.close()
 
   const bridge = await startBridge({ url, username: 'ECONN', password: 'ECONNREFUSED' })
   try {
-    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).lastError !== null)
+    await waitFor(async () => (await (await fetch(`${bridge.base}/-/status`)).json()).lastError !== null)
 
-    const status = await fetch(`${bridge.base}/status`)
+    const status = await fetch(`${bridge.base}/-/status`)
     const body = await status.json()
     assert.doesNotMatch(body.lastError, /ECONNREFUSED/)
     assert.doesNotMatch(body.lastError, /ECONN/)
     assert.match(body.lastError, /\*\*\*/)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('the old status path is an ordinary topic', async () => {
+  const bridge = await startBridge()
+  try {
+    const posted = await fetch(`${bridge.base}/status`, { method: 'POST', body: '{"a":1}' })
+    assert.equal(posted.status, 204)
+
+    const got = await fetch(`${bridge.base}/status`)
+    assert.equal(got.status, 200)
+    assert.equal(await got.text(), '{"a":1}')
   } finally {
     await bridge.close()
   }

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 
 import { startBridge } from './helpers/bridge.js'
 
-test('POST /auth/rotate with no AUTH_TOKEN configured is 404', async () => {
+test('POST /-/auth/rotate with no AUTH_TOKEN configured is 404', async () => {
   const bridge = await startBridge()
   try {
-    const res = await fetch(`${bridge.base}/auth/rotate`, {
+    const res = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: 'new' }),
     })
@@ -16,16 +16,16 @@ test('POST /auth/rotate with no AUTH_TOKEN configured is 404', async () => {
   }
 })
 
-test('POST /auth/rotate with a wrong or missing current token is 401', async () => {
+test('POST /-/auth/rotate with a wrong or missing current token is 401', async () => {
   const bridge = await startBridge({ authToken: 's3cr3t' })
   try {
-    const missing = await fetch(`${bridge.base}/auth/rotate`, {
+    const missing = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: 'new' }),
     })
     assert.equal(missing.status, 401)
 
-    const wrong = await fetch(`${bridge.base}/auth/rotate`, {
+    const wrong = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: 'new' }),
       headers: { authorization: 'Bearer wrong' },
@@ -36,10 +36,10 @@ test('POST /auth/rotate with a wrong or missing current token is 401', async () 
   }
 })
 
-test('GET /auth/rotate is 405', async () => {
+test('GET /-/auth/rotate is 405', async () => {
   const bridge = await startBridge({ authToken: 's3cr3t' })
   try {
-    const res = await fetch(`${bridge.base}/auth/rotate`)
+    const res = await fetch(`${bridge.base}/-/auth/rotate`)
     assert.equal(res.status, 405)
   } finally {
     await bridge.close()
@@ -49,14 +49,14 @@ test('GET /auth/rotate is 405', async () => {
 test('a non-JSON or empty-token body is 400 and does not rotate', async () => {
   const bridge = await startBridge({ authToken: 's3cr3t' })
   try {
-    const notJson = await fetch(`${bridge.base}/auth/rotate`, {
+    const notJson = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: 'not json',
       headers: { authorization: 'Bearer s3cr3t' },
     })
     assert.equal(notJson.status, 400)
 
-    const empty = await fetch(`${bridge.base}/auth/rotate`, {
+    const empty = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: '' }),
       headers: { authorization: 'Bearer s3cr3t' },
@@ -78,14 +78,14 @@ test('a non-JSON or empty-token body is 400 and does not rotate', async () => {
 test('a body of null or a blank token is 400 and does not rotate', async () => {
   const bridge = await startBridge({ authToken: 's3cr3t' })
   try {
-    const isNull = await fetch(`${bridge.base}/auth/rotate`, {
+    const isNull = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: 'null',
       headers: { authorization: 'Bearer s3cr3t' },
     })
     assert.equal(isNull.status, 400)
 
-    const blank = await fetch(`${bridge.base}/auth/rotate`, {
+    const blank = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: '   ' }),
       headers: { authorization: 'Bearer s3cr3t' },
@@ -106,7 +106,7 @@ test('a body of null or a blank token is 400 and does not rotate', async () => {
 test('a valid rotation is 204, and the new token gates POST while the old one 401s', async () => {
   const bridge = await startBridge({ authToken: 's3cr3t' })
   try {
-    const rotated = await fetch(`${bridge.base}/auth/rotate`, {
+    const rotated = await fetch(`${bridge.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: 'n3wt0k3n' }),
       headers: { authorization: 'Bearer s3cr3t' },
@@ -126,6 +126,23 @@ test('a valid rotation is 204, and the new token gates POST while the old one 40
       headers: { authorization: 'Bearer n3wt0k3n' },
     })
     assert.equal(withNew.status, 204)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('the old auth/rotate path is an ordinary topic', async () => {
+  const bridge = await startBridge()
+  try {
+    const posted = await fetch(`${bridge.base}/auth/rotate`, {
+      method: 'POST',
+      body: JSON.stringify({ token: 'new' }),
+    })
+    assert.equal(posted.status, 204)
+
+    const got = await fetch(`${bridge.base}/auth/rotate`)
+    assert.equal(got.status, 200)
+    assert.deepEqual(await got.json(), { token: 'new' })
   } finally {
     await bridge.close()
   }

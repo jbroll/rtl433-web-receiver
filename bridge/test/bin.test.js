@@ -21,7 +21,7 @@ function selfSignedCertFiles() {
   return { certPath, keyPath, dir }
 }
 
-test('POST /auth/rotate gates the next MQTT CONNECT by the new token', async () => {
+test('POST /-/auth/rotate gates the next MQTT CONNECT by the new token', async () => {
   const { certPath, keyPath, dir: certDir } = selfSignedCertFiles()
   const tokenDir = mkdtempSync(path.join(tmpdir(), 'bridge-bin-token-'))
   const tokenPath = path.join(tokenDir, 'token')
@@ -34,7 +34,7 @@ test('POST /auth/rotate gates the next MQTT CONNECT by the new token', async () 
     { authToken: 'orig-token' },
   )
   try {
-    const rotated = await fetch(`${child.base}/auth/rotate`, {
+    const rotated = await fetch(`${child.base}/-/auth/rotate`, {
       method: 'POST',
       body: JSON.stringify({ token: 'new-token' }),
       headers: { authorization: 'Bearer orig-token' },

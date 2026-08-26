@@ -21,7 +21,7 @@ defaults):
 | `EMBED_BROKER` | `false` to dial `MQTT_URL` instead of starting an embedded broker (default: embed). |
 | `TLS_CERT` / `TLS_KEY` | Configuring both switches the embedded broker to public MQTTS and requires `AUTH_TOKEN`. |
 | `AUTH_TOKEN` | Shared secret for `POST` (HTTP) and `CONNECT` (MQTT, TLS mode only). Unset disables both checks. |
-| `AUTH_TOKEN_PATH` | File the current token is persisted to; see [Rotating the token](#post-authrotate--rotate-the-token) below. |
+| `AUTH_TOKEN_PATH` | File the current token is persisted to; see [Rotating the token](#post--authrotate--rotate-the-token) below. |
 | `MAX_SSE_CLIENTS` | Concurrent `/events` streams allowed before a new one is refused. |
 | `MAX_SSE_FILTERS` | `f` parameters allowed on one `/events` subscription before it is refused. |
 
@@ -45,7 +45,7 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
 - `400` if the topic is malformed (empty, contains a space, contains an
   MQTT wildcard `+` or `#`, or has an empty segment).
 - `503` if the bridge is not `ready` (see
-  [GET /status](#get-status--bridge-and-broker-state)): not connected to the
+  [GET /-/status](#get--status--bridge-and-broker-state)): not connected to the
   broker, or connected but without its `#` subscription in place yet.
 
 ## POST to a topic
@@ -138,12 +138,12 @@ every retained message and passes each one on, so an open stream is re-sent
 every topic it matches, unchanged values included. Nothing marks these as a
 replay; a client that acts on each event should be able to act on a repeat.
 
-## POST /auth/rotate — rotate the token
+## POST /-/auth/rotate — rotate the token
 
 Replaces the current `AUTH_TOKEN` with a new one, in place, with no restart.
 
 ```
-curl -i -X POST localhost:8080/auth/rotate \
+curl -i -X POST localhost:8080/-/auth/rotate \
   -H 'Authorization: Bearer <current-token>' \
   -d '{"token":"<new-token>"}'
 ```
@@ -171,14 +171,14 @@ With it set, rotation also overwrites that file, and it is read back at the
 next startup in place of `AUTH_TOKEN`. The file is written mode `0600`; the
 directory holding it should not be world-readable.
 
-## GET /status — bridge and broker state
+## GET /-/status — bridge and broker state
 
 Reports whether the bridge is usable, without publishing or subscribing to
 anything. Always `200`, even while the broker is down — that state is in the
 body, not the status code.
 
 ```
-curl localhost:8080/status
+curl localhost:8080/-/status
 ```
 
 ```json
@@ -205,7 +205,7 @@ reveals a credential.
 
 - `401` — a `POST` with a missing or wrong bearer token, when `AUTH_TOKEN` is configured.
 - `405` — a method other than GET/POST on a topic path, or anything but GET
-  on `/events` or `/status`.
+  on `/events` or `/-/status`.
 - `503` — `GET /events` at the `MAX_SSE_CLIENTS` limit.
 - `400` — `GET /events` with more than `MAX_SSE_FILTERS` `f` parameters.
 

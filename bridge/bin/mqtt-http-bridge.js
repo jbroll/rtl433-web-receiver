@@ -38,7 +38,7 @@ const config = readConfig(process.env, {
 })
 
 // One store shared by the embedded broker's MQTT CONNECT check and the
-// HTTP bridge's bearer check, so a POST /auth/rotate through the HTTP side
+// HTTP bridge's bearer check, so a POST /-/auth/rotate through the HTTP side
 // takes effect for MQTT immediately, with no restart.
 const tokenStore = createTokenStore(config.authToken, { path: config.authTokenPath })
 
@@ -70,7 +70,7 @@ if (config.embedBroker) {
     // mqtt-packet encoder refuses to send a password with no username.
     // This CONNECT happens once at boot, so a later rotation does not
     // reconnect it — the same "leave existing connections alone" rule
-    // POST /auth/rotate applies to every other MQTT client.
+    // POST /-/auth/rotate applies to every other MQTT client.
     brokerUsername = 'bridge'
     brokerPassword = tokenStore.get()
   }
