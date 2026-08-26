@@ -6,7 +6,7 @@ import { connectBroker, ECHO_TIMEOUT_MS } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
 import { brokerLabel, readConfig } from '../src/config.js'
 import { startEmbeddedBroker } from '../src/embedded-broker.js'
-import { createBridge } from '../src/server.js'
+import { BODY_IDLE_TIMEOUT_MS, createBridge } from '../src/server.js'
 import { createTokenStore } from '../src/token-store.js'
 
 const { values } = parseArgs({
@@ -101,10 +101,9 @@ bridge.httpServer.listen(config.port, config.host, () => {
   console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${brokerName}`)
 })
 
-// A few seconds past the longest thing shutdown waits on: the grace period
-// below is bounded by ECHO_TIMEOUT_MS, so the watchdog has to clear that
-// plus whatever httpServer.close() and broker.end() take on top of it.
-const SHUTDOWN_TIMEOUT_MS = ECHO_TIMEOUT_MS + 5000
+// BODY_IDLE_TIMEOUT_MS is the longest wait httpServer.close() can legitimately
+// block on (a request stalled mid-body); pad it for the echo wait and margin.
+const SHUTDOWN_TIMEOUT_MS = BODY_IDLE_TIMEOUT_MS + ECHO_TIMEOUT_MS + 5000
 
 let shuttingDown = false
 
@@ -129,9 +128,9 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
         bridge.httpServer.close((err) => (err ? reject(err) : resolve()))
       })
 
-      // A POST waiting on broker.publish gets dropped with no status if the
-      // broker ends under it; give it a chance to get its own 503 from the
-      // echo timeout instead.
+      // httpServer.close() already waited out any in-flight POST's own 503;
+      // this only still matters for one whose socket was aborted mid-publish,
+      // where the echo wait keeps running unseen by httpServer.close().
       const deadline = Date.now() + ECHO_TIMEOUT_MS
       while (bridge.waiting() > 0 && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 25))

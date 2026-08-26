@@ -10,9 +10,8 @@ import { startBroker } from './helpers/broker.js'
 
 const BIN = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'mqtt-http-bridge.js')
 
-// bin/mqtt-http-bridge.js logs config.port verbatim rather than the port it
-// actually bound, so PORT=0 can't be read back from stdout; picking a free
-// port up front and handing it a fixed value sidesteps that instead.
+// bin/mqtt-http-bridge.js logs config.port verbatim, not the port it bound,
+// so PORT=0 can't be read back from stdout; pick a free one up front instead.
 async function freePort() {
   return new Promise((resolve, reject) => {
     const probe = net.createServer()
@@ -32,6 +31,7 @@ async function startChild(brokerUrl) {
   })
   let stderr = ''
   child.stderr.on('data', (chunk) => { stderr += chunk })
+  const exited = new Promise((resolve) => child.once('exit', resolve))
 
   // The subscription this waits for is what lets a POST's echo ever arrive;
   // without it every publish in the test times out regardless of the code
@@ -46,7 +46,7 @@ async function startChild(brokerUrl) {
 
   return {
     base,
-    exitCode: () => new Promise((resolve) => child.once('exit', resolve)),
+    exitCode: () => exited,
     stderr: () => stderr,
     kill: (signal) => child.kill(signal),
   }

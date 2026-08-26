@@ -212,23 +212,30 @@ connected. Closing the streams first is what makes shutdown complete at
 all. Measured with one SSE stream attached, the process exits about 20 ms
 after the signal.
 
-A `POST` still awaiting `broker.publish` when the HTTP server closes is not
-otherwise answered before `broker.end()` cuts the connection its echo needs.
-`createBridge` exposes `waiting()` (`broker.waiting()`, the pending-echo
-count) so the handler can poll it and wait, up to one `ECHO_TIMEOUT_MS`,
-for it to reach zero before ending the broker. A publish still in flight at
-that deadline gets its own `503` from the existing echo-timeout path in
-`src/broker.js` once the broker is gone, rather than the socket being
-dropped with no status.
+Node keeps a connection open while its request is in progress, so
+`await httpServer.close()` already blocks until a `POST` awaiting
+`broker.publish` gets its own `503` from the handler's echo-timeout path —
+by the time the drain loop below runs, `waiting()` is normally already `0`.
+The loop still matters for a `POST` whose client aborted the socket while
+`broker.publish` was pending: `httpServer.close()` sees that connection end
+and does not wait on it, but the echo wait inside the handler keeps running
+regardless. `createBridge` exposes `waiting()` (`broker.waiting()`, a count
+of topics with a waiter, not of pending requests) so the handler can poll
+it and wait, up to one `ECHO_TIMEOUT_MS`, for it to reach zero before
+ending the broker, so that abandoned publish settles instead of erroring
+out from under `broker.end()`.
 
 A `setTimeout(...).unref()` watchdog is armed before any of this starts and
 calls `process.exit(1)` if the chain has not finished within
-`ECHO_TIMEOUT_MS` plus a few seconds of margin. Without it, an `await` that
-never resolves — `httpServer.close()` on a server with an untracked open
-connection, say — turns into a hang instead of a nonzero exit, which is a
-process supervisor's cue to keep the wedged process running rather than
-restart it. `unref()` keeps the timer from being the reason the event loop
-stays alive once the real teardown finishes first.
+`BODY_IDLE_TIMEOUT_MS` plus `ECHO_TIMEOUT_MS` and a few seconds of margin —
+`BODY_IDLE_TIMEOUT_MS` because a request stalled mid-body is the longest
+wait `httpServer.close()` can legitimately be sitting on. Without the
+watchdog, an `await` that never resolves — `httpServer.close()` on a server
+with an untracked open connection, say — turns into a hang instead of a
+nonzero exit, which is a process supervisor's cue to keep the wedged
+process running rather than restart it. `unref()` keeps the timer from
+being the reason the event loop stays alive once the real teardown
+finishes first.
 
 In `src/embedded-broker.js`, `close()` tracks every socket the `net`/`tls`
 server accepts in a `Set`, removing each on its own `close` event. `close()`

@@ -214,11 +214,15 @@ test('a socket that never sends CONNECT does not block close()', async () => {
   const embedded = await startEmbeddedBroker({ mqttPort: 0, mqttsPort: 0 })
   const port = new URL(embedded.url).port
   const socket = net.connect(port, '127.0.0.1')
-  await new Promise((resolve, reject) => {
-    socket.once('connect', resolve)
-    socket.once('error', reject)
-  })
-  await withTimeout(embedded.close(), 2000, 'embedded broker close() with a pre-CONNECT socket open')
+  try {
+    await new Promise((resolve, reject) => {
+      socket.once('connect', resolve)
+      socket.once('error', reject)
+    })
+    await withTimeout(embedded.close(), 2000, 'embedded broker close() with a pre-CONNECT socket open')
+  } finally {
+    socket.destroy()
+  }
 })
 
 test('TLS: overwriting the cert and key files reloads the secure context', async () => {

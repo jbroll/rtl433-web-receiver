@@ -37,8 +37,7 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
     ? tls.createServer({ cert: fs.readFileSync(tlsCert), key: fs.readFileSync(tlsKey) }, aedes.handle)
     : net.createServer(aedes.handle)
 
-  // 'connection' fires with the raw socket before any CONNECT packet, which
-  // is why a socket that never sends one is not an aedes client and
+  // A socket that never sends CONNECT is not an aedes client, so
   // aedes.close() alone cannot be relied on to clear it for server.close().
   const connections = new Set()
   server.on('connection', (socket) => {
