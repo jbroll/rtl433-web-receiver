@@ -1,4 +1,4 @@
-import { moveCard, moveValue, setCardSize, grid as gridSize } from './store.js'
+import { moveCard, moveValue, setCardSize, grid as gridSize, setGestureHook } from './store.js'
 import { el } from './units.js'
 import { signal } from '@preact/signals'
 
@@ -185,6 +185,11 @@ export function setEditing(v) { editing.value = v }
 export function setRenaming(v) { renaming.value = v }
 
 export function gestureInFlight() { return !!(dragging.value || resizing.value || renaming.value) }
+
+// Excludes renaming.value, unlike gestureInFlight above: this vetoes a rename's
+// own commit only when a second finger is dragging or resizing, not itself.
+export function dragOrResizeInFlight() { return !!(dragging.value || resizing.value) }
+setGestureHook(dragOrResizeInFlight)
 
 export function currentDrag() { return dragging.value }
 

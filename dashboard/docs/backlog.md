@@ -5,13 +5,6 @@
   Every feed tick writes `localStorage` and notifies subscribers even when nothing about
   the card changed.
 - A device seen through two bridges is two cards. Nothing merges them.
-- `setValueMode`, `setCardHidden`, `setGrid`, and a rename committed with Enter all save
-  layout, and all are reachable with a second finger while a resize is in flight, which
-  the project's rules say must not write. No corruption results today: the in-flight
-  resize has written nothing yet, and `endResize` re-renders over whatever the second
-  finger did. The drag and resize entry points already guard against each other; these
-  four do not guard against either. `setValueMode` and `setCardHidden` are now reachable
-  from the device table as well as from a card.
 - A reading that cannot fit even at 11px still ellipsizes.
 - A prior backlog entry claimed every message forced two synchronous layouts in
   `cards.jsx` because neither `useLayoutEffect` nor `useEffect` had a dependency array.
@@ -35,10 +28,6 @@
   clipped text never reaches the `.card`/`.body` scroll metrics it reads. The value-level
   guarantee is covered separately, by "every value in a card shares the size its widest
   reading needs" (`cards.spec.js:1339`), which does fail on that mutation.
-- Nothing drives a card drag and a corner resize in flight at once, the only way to reach
-  the mutual-exclusion guards. It is testable: the suite already dispatches synthetic
-  bubbling events from `page.evaluate`, and Chromium exposes real multi-touch through
-  `Input.dispatchTouchEvent` over a CDP session.
 - `src/main.jsx` exposes page internals on `window` through `exposeForTests()`, because
   tests in `test/cards.spec.js` drive the page through the globals the firmware version had
   at script level. 44 of its 122 tests reach for `window.` or `page.evaluate`. Deliberate

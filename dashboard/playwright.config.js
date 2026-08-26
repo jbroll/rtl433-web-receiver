@@ -10,6 +10,7 @@ const SPECS = [
   "feed-cards.spec.js",
   "feeds.spec.js",
   "fontfit.spec.js",
+  "gestures.spec.js",
   "layout.spec.js",
   "location-propagation.spec.js",
   "location.spec.js",

@@ -17,6 +17,12 @@ const GRID_MIN = 1, GRID_MAX = 24
 let onEdit = () => {}
 export function setEditHook(fn) { onEdit = fn }
 
+// grid.js registers here for the same reason: a drag or resize in flight
+// (a second finger, or the device table reachable mid-gesture) must not
+// interleave a layout write with the gesture's own eventual one.
+let onGesture = () => false
+export function setGestureHook(fn) { onGesture = fn }
+
 function blankState() {
   return { grid: { cols: 6, rows: 4 }, order: [], hidden: [], cards: Object.create(null) }
 }
@@ -175,6 +181,7 @@ export function valueMode(key, field) {
 }
 
 export function setValueMode(key, field, mode) {
+  if (onGesture()) return
   const c = cardState.value.cards[key]
   if (!c) return
   if (!c.bottomValues) c.bottomValues = []
@@ -208,6 +215,7 @@ export function cardFields(key, merged) {
 export function cardHidden(key) { return cardState.value.hidden.indexOf(key) >= 0 }
 
 export function setCardHidden(key, hidden) {
+  if (onGesture()) return
   const s = cardState.value
   const i = s.hidden.indexOf(key)
   if (hidden === (i >= 0)) return
@@ -257,6 +265,7 @@ export function setCardSize(key, w, h) {
 export function grid() { return cardState.value.grid }
 
 export function setGrid(axis, n) {
+  if (onGesture()) return
   const v = gridNum(n, 0)
   if (v) {
     cardState.value = {

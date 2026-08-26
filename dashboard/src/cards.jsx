@@ -7,7 +7,8 @@ import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, cellSignal, viewCols, viewColsSignal,
-         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize } from './grid.js'
+         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize,
+         dragOrResizeInFlight } from './grid.js'
 import { tick } from './tick.js'
 import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
 
@@ -147,6 +148,7 @@ function RenameInput({ rec }) {
         defaultValue={alias}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter') {
+            if (dragOrResizeInFlight()) return
             committed.current = true
             postAlias(key, ev.target.value)
             setRenaming(false)
