@@ -37,7 +37,7 @@ the default.
 | `TLS_CERT` | `--tls-cert` | unset | PEM certificate file. Presence (with `TLS_KEY`) switches the embedded broker from the loopback-plaintext listener to the public-MQTTS one. |
 | `TLS_KEY` | `--tls-key` | unset | PEM key file. |
 | `AUTH_TOKEN` | `--auth-token` | unset | Shared secret gating HTTP `POST` (`401` without it) and, when embedding with TLS, MQTT `CONNECT` (refused without it). Required if `TLS_CERT`/`TLS_KEY` are set — the bridge refuses to start otherwise. Only the initial value: if `AUTH_TOKEN_PATH` names a file that already exists, its contents win instead. |
-| `AUTH_TOKEN_PATH` | `--auth-token-path` | unset | File the current token is read from at startup (if it exists) and written to on every `POST /auth/rotate` (see [user-manual.md](user-manual.md)). Without it, a rotated token lives only in memory and reverts to `AUTH_TOKEN` on restart. |
+| `AUTH_TOKEN_PATH` | `--auth-token-path` | unset | File the current token is read from at startup (if it exists) and written to on every `POST /auth/rotate` (see [user-manual.md](user-manual.md)). Without it, a rotated token lives only in memory and reverts to `AUTH_TOKEN` on restart. Written mode `0600`; the directory holding it should not be world-readable. |
 | `DASHBOARD_HTML` | `--dashboard-html` | unset | Path to a built `dashboard/dist/index.html`. When set, `GET /` serves it instead of being routed as a (malformed, empty) topic. |
 
 ## The embedded broker

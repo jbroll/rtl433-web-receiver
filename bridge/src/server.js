@@ -82,7 +82,7 @@ async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml 
     } catch {
       return send(res, 400, 'body is not JSON')
     }
-    if (typeof parsed.token !== 'string' || parsed.token.length === 0) {
+    if (typeof parsed.token !== 'string' || parsed.token.trim().length === 0) {
       return send(res, 400, 'token must be a non-empty string')
     }
     tokens.rotate(parsed.token)

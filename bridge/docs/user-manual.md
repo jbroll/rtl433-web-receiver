@@ -134,7 +134,8 @@ reconnects because of a rotation.
 Without `AUTH_TOKEN_PATH` configured, a rotated token lives only in the
 running process's memory and is lost on restart, reverting to `AUTH_TOKEN`.
 With it set, rotation also overwrites that file, and it is read back at the
-next startup in place of `AUTH_TOKEN`.
+next startup in place of `AUTH_TOKEN`. The file is written mode `0600`; the
+directory holding it should not be world-readable.
 
 ## Other status codes
 

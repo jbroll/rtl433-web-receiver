@@ -89,24 +89,6 @@
   bridge stalls 5 seconds and fails every time a user sets their location.
   `a/b/$tz`-style source-scoped topics are unaffected; only a topic whose name itself
   starts with `$` is excluded.
-- `rotate()` in `src/token-store.js` assigns `current` before it writes the file, so a
-  failed persist leaves the live token rotated while the caller gets a `500` saying it
-  failed. With `AUTH_TOKEN_PATH` under a directory that does not exist: `POST /auth/rotate`
-  answers `500`, `store.get()` already returns the new token, the old one `401`s, and a
-  restart silently reverts to the value on disk. The operator is locked out of HTTP POST
-  and, in TLS mode, of MQTT CONNECT, believing rotation never happened. Write first, then
-  assign.
-- `writeFileSync` in `src/token-store.js` uses the default mode, so the persisted token
-  lands `0644`. On the `weather.rkroll.com` deploy the process runs as its own user, so
-  any other local account can read the secret that gates HTTP POST and MQTTS CONNECT.
-  `{ mode: 0o600 }` is the fix; neither `docs/install.md` nor `docs/user-manual.md` tells
-  the operator to lock the file down either.
-- `src/token-store.js` trims on read and not on write, so a token with surrounding
-  whitespace changes value across a restart. `{"token":"  tok  "}` passes the length check
-  in `src/server.js`, is persisted verbatim, and every client authenticates with the padded
-  form; after a restart the read path trims it and they all `401`. An all-whitespace token
-  trims to empty, `if (fromFile)` is false, and the store falls back to the `AUTH_TOKEN`
-  env value that was rotated away.
 - `/auth/rotate` dereferences `parsed.token` without checking that `parsed` is an object
   (`src/server.js`), so a body of literal `null` throws and reaches the generic `500`
   handler, where `123`, `"str"`, `[]` and `{"token":{}}` all correctly answer `400`.
@@ -145,11 +127,9 @@
   `tokenStore` handoff to both `createBridge` and `startEmbeddedBroker`, `AUTH_TOKEN_PATH`
   end to end, the TLS-mode `brokerUsername = 'bridge'` self-connection, the dashboard
   `readFileSync`, and the signal-handler shutdown order `docs/architecture.md` documents.
-  `test/token-store.test.js` covers only the happy path, so neither the rotate-before-persist
-  nor the file-mode defect above would be caught; `src/sse.js`'s keepalive timer is never
-  exercised, so nothing would notice it stop emitting and let an idle proxy drop every
-  stream; and `test/rotate.test.js` covers wrong, missing, non-JSON and empty-string tokens
-  but not a non-object body or a whitespace one.
+  `src/sse.js`'s keepalive timer is never exercised, so nothing would notice it stop
+  emitting and let an idle proxy drop every stream; and `test/rotate.test.js` covers wrong,
+  missing, non-JSON and empty-string tokens but not a non-object body.
 - `scripts/build-dashboard.js` imports `../../dashboard/build.js`, which imports `esbuild`,
   and `esbuild` is in neither `dependencies` nor `devDependencies`. `npm ci && npm run build`
   fails with `ERR_MODULE_NOT_FOUND` anywhere `dashboard/node_modules` was not installed
@@ -186,13 +166,6 @@
   expected token throws a `TypeError` from inside an aedes callback rather than returning
   `false`. Latent, not live: every current caller guards first. It is the one function the
   file's comment names as the single place the discipline has to be right.
-- `rotate()` in `src/token-store.js` does not fsync, so the durability its comment promises
-  is not there. Write-then-rename gives atomic visibility, not durability: without an fsync
-  on the temp file before the rename and on the containing directory after it, a power loss
-  can leave the rename visible with the file's data unwritten, or lose the rename entirely.
-  The temp path is also a fixed `${path}.tmp`, so two overlapping rotations would write the
-  same file; nothing can interleave them today because `rotate` is synchronous within one
-  request.
 - Every reconnect issues a duplicate SUBSCRIBE. `src/broker.js` sets `resubscribe: true`
   and also subscribes to `#` by hand inside the `connect` handler, so after the first
   connect each reconnect sends two SUBSCRIBE packets for the same filter. Idempotent at the
