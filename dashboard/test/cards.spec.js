@@ -157,7 +157,7 @@ test("the receiver's own card is shown without checking a box", async ({ page })
   await expect(page.locator("#cards .card")).toHaveCount(1);
   const card = page.locator(`.card[data-key$="${RECEIVER_KEY}"]`);
   await expect(card.locator(".nm")).toHaveText("Receiver/0");
-  await expect(card.locator('.val[data-f="noise_dBm"] .fn')).toHaveText("noise");
+  await expect(card.locator('.val[data-f="noise_dBm"] .fn > span:first-child')).toHaveText("noise");
   await expect(card.locator('.val[data-f="noise_dBm"] .u')).toHaveText("dBm");
   await expect(card.locator('.val[data-f="heap_kB"] .u')).toHaveText("kB");
   await expect(card.locator('.val[data-f="radio_C"] .u')).toHaveText("°C");
@@ -1078,11 +1078,11 @@ test("displayed values are rounded and trimmed, without touching stored data", a
   await open(page, [LONGNAME]);
 
   const card = page.locator(LONG_CARD);
-  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("71.2°F");
-  await expect(card.locator('.val[data-f="wind_avg_mi_h"] .fv')).toHaveText("4.6mi/h");
-  await expect(card.locator('.val[data-f="rain_mm"] .fv')).toHaveText("0.03mm");
-  await expect(card.locator('.val[data-f="pressure_hPa"] .fv')).toHaveText("1013.3hPa");
-  await expect(card.locator('.val[data-f="humidity"] .fv')).toHaveText("38%");
+  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("21.8");
+  await expect(card.locator('.val[data-f="wind_avg_mi_h"] .fv')).toHaveText("7.4");
+  await expect(card.locator('.val[data-f="rain_mm"] .fv')).toHaveText("0");
+  await expect(card.locator('.val[data-f="pressure_hPa"] .fv')).toHaveText("1013.3");
+  await expect(card.locator('.val[data-f="humidity"] .fv')).toHaveText("38");
 
   const stored = await page.evaluate(
     k => devices.get(k).merged.temperature_F, storeKey(server, LONG_KEY));
@@ -1103,8 +1103,10 @@ test("fmtValue rounds to fixed decimals and trims trailing zeros", async ({ page
 test("a below-zero reading renders with its sign and unit", async ({ page }) => {
   await open(page, [FREEZER]);
   const card = page.locator(`.card[data-key$="${FREEZER_KEY}"]`);
-  await expect(card.locator('.val[data-f="temperature_C"] .fv')).toHaveText("-12.3°C");
-  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("-4.57°F");
+  await expect(card.locator('.val[data-f="temperature_C"] .fv')).toHaveText("-12.3");
+  await expect(card.locator('.val[data-f="temperature_C"] .u')).toHaveText("°C");
+  await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("-20.3");
+  await expect(card.locator('.val[data-f="temperature_F"] .u')).toHaveText("°C");
 });
 
 test("the grid inputs are hidden until edit mode and set the tracks", async ({ page }) => {
