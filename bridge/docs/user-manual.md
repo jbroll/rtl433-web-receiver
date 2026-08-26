@@ -104,11 +104,10 @@ request is sent, so it must be percent-encoded as `%23`.
 - `503` if the bridge is not currently connected to the broker, or if
   `MAX_SSE_CLIENTS` streams are already open.
 
-A stream that falls a megabyte behind — `res.write` returning backpressure
-while that much is still unflushed — is dropped: the connection is closed and
-it stops counting against `MAX_SSE_CLIENTS`. A client that sees its stream end
-unexpectedly should assume this and reconnect rather than treat it as an
-error.
+A stream that falls a megabyte behind on reading its events is dropped: the
+connection is closed and it stops counting against `MAX_SSE_CLIENTS`. A client
+that sees its stream end unexpectedly should assume this and reconnect rather
+than treat it as an error.
 
 Filters are fixed for the life of the connection. To change what a client
 watches, it reconnects with new `f` parameters.

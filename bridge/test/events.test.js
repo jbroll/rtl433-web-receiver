@@ -272,9 +272,22 @@ test('a request opening one more than MAX_SSE_CLIENTS streams gets 503, and the 
       const refused = await fetch(`${bridge.base}/events`)
       assert.equal(refused.status, 503)
       assert.equal(bridge.clients.size, 2)
+
+      await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
+      const [eventsA, eventsB] = await Promise.all([readEvents(a, 1), readEvents(b, 1)])
+      assert.deepEqual(eventsA, [{ topic: 'src/Acurite/1', payload: { t: 1 } }])
+      assert.deepEqual(eventsB, [{ topic: 'src/Acurite/1', payload: { t: 1 } }])
     } finally {
-      await a.body.cancel()
-      await b.body.cancel()
+      try {
+        await a.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
+      try {
+        await b.body.cancel()
+      } catch {
+        // readEvents already cancelled the reader
+      }
     }
   } finally {
     await bridge.close()
@@ -330,8 +343,11 @@ test('a slow reader that falls a buffer cap behind is dropped', async () => {
     }
     await Promise.allSettled(posts)
 
-    await waitFor(() => bridge.clients.size === 0)
-    socket.destroy()
+    try {
+      await waitFor(() => bridge.clients.size === 0)
+    } finally {
+      socket.destroy()
+    }
   } finally {
     await bridge.close()
   }

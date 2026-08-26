@@ -25,6 +25,16 @@ export function openStream(res, filters, { maxBufferedBytes = MAX_BUFFERED_BYTES
   // filters never change (see architecture.md, "Filters are fixed per connection").
   const splitFilters = filters.map((filter) => filter.split('/'))
 
+  // Marks the stream closed and stops the keepalive; shared by a normal
+  // close and the overflow drop below, which then still ends the socket
+  // itself since it needs res.destroy() rather than close()'s res.end().
+  function markClosed() {
+    if (closed) return false
+    closed = true
+    clearInterval(keepalive)
+    return true
+  }
+
   const stream = {
     matches(topic) {
       const topicSegments = topic.split('/')
@@ -36,16 +46,11 @@ export function openStream(res, filters, { maxBufferedBytes = MAX_BUFFERED_BYTES
       // res.end() would just queue onto the same backed-up pipe and never
       // flush; a reader this far behind needs the connection dropped outright.
       if (!ok && res.writableLength > maxBufferedBytes) {
-        closed = true
-        clearInterval(keepalive)
-        res.destroy()
+        if (markClosed()) res.destroy()
       }
     },
     close() {
-      if (closed) return
-      closed = true
-      clearInterval(keepalive)
-      res.end()
+      if (markClosed()) res.end()
     },
   }
 

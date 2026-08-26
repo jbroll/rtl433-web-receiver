@@ -2,6 +2,7 @@ import http from 'node:http'
 
 import { digestMatches } from './auth.js'
 import { decode, openStream } from './sse.js'
+import { DEFAULT_MAX_SSE_CLIENTS, DEFAULT_MAX_SSE_FILTERS } from './config.js'
 import { validFilter, validTopic } from './topic.js'
 import { createTokenStore } from './token-store.js'
 
@@ -13,10 +14,6 @@ export const BODY_LIMIT_BYTES = 64 * 1024
 // steady uplink is not punished for taking a while overall.
 export const BODY_IDLE_TIMEOUT_MS = 30_000
 
-// Comfortably above the dashboard's real usage; see docs/install.md.
-export const MAX_SSE_CLIENTS = 64
-export const MAX_SSE_FILTERS = 16
-
 export function createBridge({
   broker,
   cache,
@@ -25,8 +22,8 @@ export function createBridge({
   dashboardHtml,
   bodyLimitBytes = BODY_LIMIT_BYTES,
   bodyIdleTimeoutMs = BODY_IDLE_TIMEOUT_MS,
-  maxSseClients = MAX_SSE_CLIENTS,
-  maxSseFilters = MAX_SSE_FILTERS,
+  maxSseClients = DEFAULT_MAX_SSE_CLIENTS,
+  maxSseFilters = DEFAULT_MAX_SSE_FILTERS,
   maxBufferedBytes,
 }) {
   const clients = new Set()

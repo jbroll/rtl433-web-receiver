@@ -14,24 +14,31 @@ export function brokerLabel(url) {
 }
 
 // Number('') and Number('  ') are both 0, which would otherwise pass
-// validation and silently bind an ephemeral port. Shared by PORT,
-// MQTT_PORT, and MQTTS_PORT, which all take the same kind of value.
+// validation and silently bind an ephemeral port. Shared by parsePort and
+// parseCount, which both parse a digits-only integer and differ only in
+// range and error message.
+function parseDigits(raw) {
+  const digitsOnly = typeof raw === 'string' && /^\d+$/.test(raw.trim())
+  return digitsOnly ? Number(raw.trim()) : NaN
+}
+
 function parsePort(name, raw, defaultValue) {
   if (raw === undefined) return defaultValue
-  const digitsOnly = typeof raw === 'string' && /^\d+$/.test(raw.trim())
-  const value = digitsOnly ? Number(raw.trim()) : NaN
+  const value = parseDigits(raw)
   if (!Number.isInteger(value) || value < 0 || value > 65535) {
     throw new Error(`${name} must be a port number, got ${JSON.stringify(raw)}`)
   }
   return value
 }
 
-// Same digits-only shape as parsePort, without the port-range ceiling: these
-// are counts, not ports.
+// The default itself, not just the parsing, is shared with server.js so the
+// two can't drift: server.js imports these rather than repeating the numbers.
+export const DEFAULT_MAX_SSE_CLIENTS = 64
+export const DEFAULT_MAX_SSE_FILTERS = 16
+
 function parseCount(name, raw, defaultValue) {
   if (raw === undefined) return defaultValue
-  const digitsOnly = typeof raw === 'string' && /^\d+$/.test(raw.trim())
-  const value = digitsOnly ? Number(raw.trim()) : NaN
+  const value = parseDigits(raw)
   if (!Number.isInteger(value) || value < 1) {
     throw new Error(`${name} must be a positive integer, got ${JSON.stringify(raw)}`)
   }
@@ -59,8 +66,8 @@ export function readConfig(env, cli = {}) {
 
   const embedBroker = cli.noEmbedBroker ? false : parseBoolean('EMBED_BROKER', env.EMBED_BROKER, true)
 
-  const maxSseClients = parseCount('MAX_SSE_CLIENTS', env.MAX_SSE_CLIENTS, 64)
-  const maxSseFilters = parseCount('MAX_SSE_FILTERS', env.MAX_SSE_FILTERS, 16)
+  const maxSseClients = parseCount('MAX_SSE_CLIENTS', env.MAX_SSE_CLIENTS, DEFAULT_MAX_SSE_CLIENTS)
+  const maxSseFilters = parseCount('MAX_SSE_FILTERS', env.MAX_SSE_FILTERS, DEFAULT_MAX_SSE_FILTERS)
 
   return {
     mqttUrl: cli.brokerUrl ?? env.MQTT_URL ?? 'mqtt://localhost:1883',

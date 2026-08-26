@@ -39,7 +39,7 @@ environment variable, which takes precedence over the default.
 | `AUTH_TOKEN` | `--auth-token` | unset | Shared secret gating HTTP `POST` (`401` without it) and, when embedding with TLS, MQTT `CONNECT` (refused without it). Required if `TLS_CERT`/`TLS_KEY` are set — the bridge refuses to start otherwise. Only the initial value: if `AUTH_TOKEN_PATH` names a file that already exists, its contents win instead. |
 | `AUTH_TOKEN_PATH` | `--auth-token-path` | unset | File the current token is read from at startup (if it exists) and written to on every `POST /auth/rotate` (see [user-manual.md](user-manual.md)). Without it, a rotated token lives only in memory and reverts to `AUTH_TOKEN` on restart. Written mode `0600`; the directory holding it should not be world-readable. |
 | `DASHBOARD_HTML` | `--dashboard-html` | unset | Path to a built `dashboard/dist/index.html`. When set, `GET /` serves it instead of being routed as a (malformed, empty) topic. |
-| `MAX_SSE_CLIENTS` | — | `64` | Concurrent `/events` streams allowed; a request past this is `503`. Must be a positive integer, digits only, same validation as `PORT`. Set comfortably above the dashboard's real usage — too low turns a working deployment into a refusing one. |
+| `MAX_SSE_CLIENTS` | — | `64` | Concurrent `/events` streams allowed; a request past this is `503`. Must be a positive integer, digits only, same validation as `PORT`. Set comfortably above the dashboard's real usage. |
 | `MAX_SSE_FILTERS` | — | `16` | `f` parameters allowed on one `/events` subscription; a request over this is `400`. Same validation as `PORT`. |
 
 ## The embedded broker
