@@ -144,13 +144,10 @@
   `store.js`, `cacheDrop` in `feeds/cache.js`, the `const alias` in `Label` and the no-op
   `onPointerDown` in `cards.jsx`. `err.retryAfter` in `feeds/nws.js` is assigned and never
   read, which means the backoff ladder ignores `Retry-After` entirely.
-- Both Android smoke steps are stale after the gear-panel split. `test/android-smoke.js`
-  clicks `#settings summary`, but `settings.jsx` replaced `<details><summary>` with a plain
-  `<div id="settings">`, so the click hangs to the Playwright timeout; and it clicks
-  `#tab-devices` and waits for `#devices tr[data-key]`, but `main.jsx` already sets
-  `settingsTab='settings'` and `devices-table.jsx` gates rows on
-  `settingsTab.value === 'devices'`, so the rows never render. They want `#subtab-settings`
-  and `#subtab-devices`.
+- `test/android-smoke.js` was updated for the gear-panel split (dropped the dead
+  `#settings summary` click, switched to `#subtab-devices`) without a run against the
+  tablet — no device was attached to verify it. Needs one manual run to confirm the
+  selectors.
 
 - The devices table renders a rich value as the literal text "undefined". `ValueRow` in
   `devices-table.jsx` is passed `r.merged.value[f]` straight through to

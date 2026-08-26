@@ -31,7 +31,6 @@ try {
 
   // The app should land on the Devices/Settings tab with no sources configured.
   await page.waitForSelector("#tab-devices[aria-selected='true']", { timeout: 15000 });
-  await page.click("#settings summary");
   await page.waitForSelector("#source-list li", { state: "detached", timeout: 5000 });
 
   // Add the mock source.
@@ -45,7 +44,7 @@ try {
   await expect(dot).toHaveAttribute("data-state", "live", { timeout: 10000 });
 
   // Receiver data should show in the device table.
-  await page.click("#tab-devices");
+  await page.click("#subtab-devices");
   await page.waitForSelector("#devices tr[data-key]", { timeout: 10000 });
   const rows = await page.locator("#devices tr[data-key]:not(.vrow)").count();
   if (rows !== 1) throw new Error(`expected 1 device row, got ${rows}`);
