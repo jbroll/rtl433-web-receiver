@@ -182,8 +182,28 @@
   real moonset as `null` on both 2027-11-06 and 2027-11-07, the DST transition day and the
   one before it. Self-corrects the day after; happens twice a year per zone, at its DST
   transitions.
-- Sun events degrade above about 60° latitude, where the sun grazes the horizon
-  and a truncated series loses precision. The tests relax to five minutes there.
+- `sunEvents` in `astro.js` solves each event at an anchor and, when the result falls
+  outside the requested zone's local day, re-solves at a shifted anchor; if that re-solve
+  lands on the wrong day or returns null where the first solve found an event, it falls
+  back to translating the original answer by 86,400,000 ms. That fallback fires on about
+  0.68% of shifted solves (25 of 3,669 across 1,656 `sunEvents` calls) and carries the
+  translation error; the other 99.3% are exact to about a second. Worst measured error is
+  1,951 s (about 32.5 minutes) at Svalbard 78.22N for `nauticalDawn` on 2026-09-24, well
+  past the five minutes the tests relax to above 60° latitude. Three cases below 60° also
+  exceed 60 s: Denver 39.74N sunset 2026-10-30 at 69.6 s, Kathmandu 27.72N `civilDawn`
+  2026-03-20 at 69.7 s, Punta Arenas 53.16S `civilDusk` 2026-03-08 at 146.4 s. The card
+  renders HH:MM, so these shift the displayed minute by one or two. Solving directly
+  within the local-day window, rather than solving at an anchor and correcting, would fix
+  it.
+- The same fallback is not unconditionally day-safe. On a spring-forward day the local day
+  is 23 hours long, and the fallback's fixed 86,400,000 ms shift overshoots local midnight
+  by 10 to 21 minutes. That produces an `astroDusk` dated one day late in three cases
+  across a two-year, 277,193-event sweep: America/Nuuk 2026-03-28 and 2027-03-27, and
+  America/Anchorage 71.29N 2027-03-14. In all three the correct answer is null: an
+  independent bisection confirms none of those local days contains a true -18° falling
+  crossing, so the emitted event is spurious. This predates the current implementation;
+  the same three appear in commit 2edde71. Day selection is otherwise correct across a
+  12,096-event sweep with zero wrong-day results.
 - "Use my location" cannot work on the page the receiver serves, because plain
   http on a LAN address is not a secure context. The automated suite cannot
   cover that branch, since the harness serves on 127.0.0.1, which counts as
