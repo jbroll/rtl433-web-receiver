@@ -108,6 +108,16 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
   }
 });
 
+test("letter-spacing on .fv does not overflow the value box", async ({ page }) => {
+  await open(page);
+  await page.addStyleTag({ content: ".fv { letter-spacing: .2em; }" });
+  await page.evaluate(() => fitValues());
+
+  const fillRatios = () => page.locator(`${CARD} .fv`).evaluateAll(
+    nodes => nodes.map(n => n.scrollWidth / n.closest(".val").clientWidth));
+  for (const r of await fillRatios()) expect(r).toBeLessThanOrEqual(1.02);
+});
+
 test("hiding and showing a card repeatedly does not leak fitting entries", async ({ page }) => {
   await open(page);
   for (let i = 0; i < 50; i++) {

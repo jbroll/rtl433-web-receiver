@@ -6,7 +6,7 @@ import { aliasOf, displayName, postAlias } from './alias.js'
 import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
-         measureGrid, fitValues, textWidthEm, cellSignal, viewCols, viewColsSignal,
+         measureGrid, fitValues, cellSignal, viewCols, viewColsSignal,
          trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize } from './grid.js'
 import { tick } from './tick.js'
 import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
@@ -219,7 +219,7 @@ function Value({ rec, field, cardKey }) {
 
   // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
   useLayoutEffect(() => {
-    if (valRef.current) trackFit(valRef.current, textWidthEm(d.num))
+    if (valRef.current) trackFit(valRef.current, d.num)
   }, [d.num, d.unit])
 
   return (

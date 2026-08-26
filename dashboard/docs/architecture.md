@@ -53,6 +53,10 @@ left to `grid-auto-rows`. Fewer columns means more rows than a phone screen
 holds, and shrinking the cell until they all fit is what made cards illegible in
 the first place. The page scrolls instead.
 
+Both cell-size formulas subtract the grid's `column-gap`/`row-gap` from the
+usable width and height before dividing by column and row counts — `(cols-1)`
+and `(rows-1)` gaps sit between cells, not around them.
+
 `.card`'s bottom padding (`1.2rem`) reserves the band `.btm` and `.age` are
 absolutely placed in. `.body` is `height:100%` of what is left, so the bottom
 row is not drawn through the values at any cell size.
@@ -185,11 +189,19 @@ card re-renders with the updated numbers and units.
 
 ## Value fit
 
-`fitValues()` in `grid.js` sets the type size of every `.fv`. It measures the
-number on a canvas at 100px once, in `textWidthEm()`, and stores the result as a
-width in ems against the node; the width the box allows is then `box ÷ em` at
-any later size, with no re-measure. The unit is not in that width because it
-renders in the `.fn` header, not beside the number.
+`fitValues()` in `grid.js` sets the type size of every `.fv`. For each tracked
+node it measures the displayed number on a canvas, in `textWidthEm()`, and
+divides the box width by that to get the size the box allows. `trackFit()`
+stores the number, not a precomputed width, so the measurement is fresh on
+every `fitValues()` run rather than fixed at mount — a CSS-only change to
+`.fv` (letter-spacing, font-feature-settings) is picked up without a
+re-render. The probe font comes off a tracked `.fv` node's own computed style,
+not `document.body`, so it matches what is actually on screen. The unit is not
+in that width because it renders in the `.fn` header, not beside the number.
+
+`.card .val` publishes its line-height as the custom property
+`--val-line-height`; `fitValues()` reads it once per run with
+`getComputedStyle` rather than duplicating the number as a JS constant.
 
 Every reading on the page takes one size. Each value bounds it twice: by width,
 at `box ÷ em`, and by height, at what its box leaves under the field name

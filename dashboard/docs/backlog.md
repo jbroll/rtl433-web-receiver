@@ -12,12 +12,9 @@
   finger did. The drag and resize entry points already guard against each other; these
   four do not guard against either. `setValueMode` and `setCardHidden` are now reachable
   from the device table as well as from a card.
-- `fitValues()` measures on a canvas at the font family `getComputedStyle(document.body)`
-  reports, ignoring letter-spacing and font-feature settings, so a style change to `.fv`
-  could bring the ellipsis back. A reading that cannot fit even at 11px still
-  ellipsizes.
 - One size for the page means one crowded card sets it for every other. Nothing caps
   how far a single card can pull the rest down short of the 11px floor.
+- A reading that cannot fit even at 11px still ellipsizes.
 - A prior backlog entry claimed every message forced two synchronous layouts in
   `cards.jsx` because neither `useLayoutEffect` nor `useEffect` had a dependency array.
   Measured call counts before commit 6125356 disproved that: a repeat message to an
@@ -31,11 +28,6 @@
   the rest of the card empty. A 2-wide Clock card showing only the time fills the left half
   and nothing else, at any type size. Sizing the columns from the visible value count would
   fix it, and would change every card, scalar ones included.
-- `LINE_HEIGHT` in `grid.js` repeats the `line-height` on `.card .val` in CSS. Changing
-  one without the other leaves the height fit off by that ratio.
-- `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid has no `gap`.
-  Re-adding one would overflow the grid by `(cols-1) × gap`. Nothing in the file says so,
-  and no test guards it.
 - `#grid-size` is fixed at `right:12rem` and about 7rem wide, so below roughly 320px of
   viewport width it reaches the left edge and overlaps the grid in edit mode.
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the Escape path

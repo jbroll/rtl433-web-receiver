@@ -31,6 +31,8 @@ export function measureGrid() {
   if (!grid || grid.clientWidth <= 0) return
   const g = gridSize()
   const cs = getComputedStyle(grid)
+  const colGap = parseFloat(cs.columnGap) || 0
+  const rowGap = parseFloat(cs.rowGap) || 0
   const width = grid.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
   // rect.top is viewport-relative, so scroll position would shift the fit.
   const top = grid.getBoundingClientRect().top + window.scrollY
@@ -39,15 +41,17 @@ export function measureGrid() {
   const cols = Math.max(1, Math.min(Math.floor(width / MIN_CELL), g.cols))
   viewColsN = cols
   viewColsSignal.value = cols
+  const usableWidth = width - (cols - 1) * colGap
+  const usableHeight = height - (g.rows - 1) * rowGap
   if (cols < g.cols) {
     // Fewer columns means more rows than the screen holds. Fitting them all is
     // what produced the unreadable cell; the page scrolls instead.
-    cell = width / cols
+    cell = usableWidth / cols
   } else {
     // The 20px floor is a legibility minimum, not a guarantee: honoring it when
     // the viewport can't fit g.cols at 20px would overflow the page sideways.
-    const fit = Math.min(width / cols, height / g.rows)
-    cell = width / cols >= 20 ? Math.max(20, fit) : fit
+    const fit = Math.min(usableWidth / cols, usableHeight / g.rows)
+    cell = usableWidth / cols >= 20 ? Math.max(20, fit) : fit
   }
   cellSignal.value = cell
   grid.style.setProperty("--cell", cell + "px")
@@ -59,32 +63,49 @@ const FONT_MIN = 11
 const FONT_MAX = 200
 export { FONT_MIN }
 
-let textProbe = null, probeFont = ""
+let fitting = new Map()
+
+let textProbe = null
+// A tracked .fv node carries the real letter-spacing and font-feature
+// settings; probing document.body would miss a change scoped to .fv.
+function probeNode() {
+  const tracked = fitting.values().next().value
+  return (tracked && tracked.node) || document.querySelector(".card .fv")
+}
+
 // The unit renders in the .fn header, not beside the number, so only the
 // number's width bounds the type size.
 export function textWidthEm(num) {
-  if (!textProbe) {
-    textProbe = document.createElement("canvas").getContext("2d")
-    probeFont = getComputedStyle(document.body).fontFamily
-  }
-  textProbe.font = "100px " + probeFont
-  return textProbe.measureText(num).width / 100
+  if (!textProbe) textProbe = document.createElement("canvas").getContext("2d")
+  const cs = getComputedStyle(probeNode() || document.body)
+  // cs.font (the shorthand) serializes to "" once a Level 3 font-variant
+  // longhand like tabular-nums is non-initial, so build it from parts.
+  textProbe.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+  const hasCtxSpacing = "letterSpacing" in textProbe
+  if (hasCtxSpacing) textProbe.letterSpacing = cs.letterSpacing
+  if ("fontStretch" in textProbe) textProbe.fontStretch = cs.fontStretch
+  if ("fontFeatureSettings" in textProbe) textProbe.fontFeatureSettings = cs.fontFeatureSettings
+  const extraPerChar = hasCtxSpacing ? 0 : (parseFloat(cs.letterSpacing) || 0)
+  const fontSizePx = parseFloat(cs.fontSize) || 100
+  const width = textProbe.measureText(num).width + extraPerChar * num.length
+  return width / fontSizePx
 }
 
-let fitting = new Map()
-
-export function trackFit(node, em) {
-  fitting.set(node, { node: node, em: em })
+// num, not a precomputed em: textWidthEm() runs fresh in fitValues() so a
+// CSS-only change (letter-spacing, font-feature-settings) is picked up
+// without needing a re-render to recompute it.
+export function trackFit(node, num) {
+  fitting.set(node, { node: node, num: num })
 }
 
 export function fittingSize() { return fitting.size }
 
-// Mirrors line-height on .card .val: the drawn line is taller than its font.
-const LINE_HEIGHT = 1.05
+const DEFAULT_LINE_HEIGHT = 1.05
 
 export function fitValues() {
   fitValuesCalls++
   let global = FONT_MAX
+  let lineHeight = null
   const boxes = []
   for (const f of fitting.values()) {
     if (!f.node.isConnected) { fitting.delete(f.node); continue }
@@ -95,9 +116,15 @@ export function fitValues() {
     // A hidden tab measures zero. Fitting to that would drop every value to the
     // floor, and nothing re-measures when the tab comes back.
     if (box <= 0 || rowH <= 0) continue
+    // .card .val publishes --val-line-height; read it once per run rather
+    // than per node, since it's the same custom property everywhere.
+    if (lineHeight === null) {
+      lineHeight = parseFloat(getComputedStyle(parent).getPropertyValue("--val-line-height"))
+        || DEFAULT_LINE_HEIGHT
+    }
     const fn = parent.querySelector(".fn")
-    const availH = Math.floor((rowH - (fn ? fn.offsetHeight : 0)) / LINE_HEIGHT)
-    const fits = Math.min(Math.floor(box / f.em), availH)
+    const availH = Math.floor((rowH - (fn ? fn.offsetHeight : 0)) / lineHeight)
+    const fits = Math.min(Math.floor(box / textWidthEm(f.num)), availH)
     if (fits < global) global = fits
     boxes.push(f.node)
   }

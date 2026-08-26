@@ -70,9 +70,7 @@ section[hidden] { display:none; }
 .card .btm .bn { text-transform:uppercase; letter-spacing:.05em; margin-right:.2em; }
 .card .btm .bv { font-variant-numeric:tabular-nums; }
 .card .body { display:grid; align-items:stretch; gap:.2rem .6rem; height:100%; overflow:hidden; }
-.card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
-             min-width:0; min-height:0; align-self:stretch; overflow:hidden; }
-.card .fn { 
+.card .fn {
   font-size:.75rem; 
   text-transform:uppercase; 
   letter-spacing:.05em; 
@@ -99,7 +97,8 @@ section[hidden] { display:none; }
   overflow:hidden; 
   text-align:center; 
 }
-.card .val { display:flex; flex-direction:column; justify-content:center; line-height:1.05;
+.card .val { display:flex; flex-direction:column; justify-content:center; --val-line-height:1.05;
+             line-height:var(--val-line-height);
              min-width:0; min-height:0; align-self:stretch; overflow:hidden; align-items:center; }
 #edit-cards, #forget-cards, #grid-size, #save-layout, #load-layout {
   position:fixed; bottom:1rem; z-index:2; cursor:pointer;
