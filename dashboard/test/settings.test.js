@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecimals, setCustomField,
          setLocation, clearLocation, hasLocation, activeZone, localZone, refreshTz,
          locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources,
-         unitsBySource, onUnitsFrame, unitsForSources, publishUnits } from '../src/settings.js'
+         unitsBySource, onUnitsFrame, unitsForSources, publishUnits,
+         TZ_RETRY_THROTTLE_MS } from '../src/settings.js'
 import { sources } from '../src/sources.js'
 import { tokens, setToken } from '../src/auth.js'
 import { toast } from '../src/toast.js'
@@ -526,10 +527,11 @@ test('refreshTz posts once when the clock crosses a DST boundary, and not again 
   }
 })
 
-test('a failed $tz POST does not latch, so a later tick retries the same offset', async () => {
+test('a failed $tz POST does not latch, so a later tick retries the same offset once the retry throttle clears', async () => {
   mock.timers.enable({ apis: ['Date'] })
   try {
-    mock.timers.setTime(Date.UTC(2026, 2, 8, 9, 30, 0)) // 03:30 MDT, UTC-06:00
+    const base = Date.UTC(2026, 2, 8, 9, 30, 0) // 03:30 MDT, UTC-06:00
+    mock.timers.setTime(base)
     const posted = []
     globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return { ok: false, status: 503 } }
     sources.value = ['http://receiver.test']
@@ -537,13 +539,104 @@ test('a failed $tz POST does not latch, so a later tick retries the same offset'
     await flush()
     posted.length = 0
 
+    // setLocation's own attempt above just failed and started its throttle;
+    // clear it so this first tick's attempt is the one under test.
+    mock.timers.setTime(base + TZ_RETRY_THROTTLE_MS)
     refreshTz()
     await flush()
+    // A retry within the throttle window must not fire a second POST.
+    refreshTz()
+    await flush()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 1)
+
+    mock.timers.setTime(base + 2 * TZ_RETRY_THROTTLE_MS)
     refreshTz()
     await flush()
 
     const tzPosts = posted.filter(p => p[0].endsWith('/$tz'))
     assert.deepEqual(tzPosts.map(p => p[1]), ['-360', '-360'])
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
+})
+
+test('a second tick does not start another $tz POST while one is in flight', async () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    mock.timers.setTime(Date.UTC(2026, 2, 8, 9, 30, 0))
+    sources.value = ['http://receiver.test']
+    onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
+
+    const posted = []
+    const resolvers = []
+    globalThis.fetch = (url, opts) => {
+      posted.push([url, opts.body])
+      return new Promise(resolve => resolvers.push(resolve))
+    }
+
+    refreshTz()
+    refreshTz()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 1)
+
+    resolvers.forEach(r => r({ ok: true }))
+    await flush()
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
+})
+
+test('on success the throttle and the in-flight flag clear, so the next real change posts immediately', async () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    const base = Date.UTC(2026, 2, 8, 9, 30, 0)
+    mock.timers.setTime(base)
+    sources.value = ['http://receiver.test']
+    onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
+
+    const posted = []
+    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return { ok: false, status: 503 } }
+    refreshTz()
+    await flush()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 1)
+
+    mock.timers.setTime(base + TZ_RETRY_THROTTLE_MS)
+    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return { ok: true } }
+    refreshTz()
+    await flush()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 2)
+
+    // Same instant as the successful retry: a throttle still in effect would
+    // block this. A genuine offset change (new zone) must post right away.
+    onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Los_Angeles', zoom: 11 })
+    refreshTz()
+    await flush()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 3)
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
+})
+
+test('setLocation is not blocked by a pending failure throttle from an earlier tick', async () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    const base = Date.UTC(2026, 2, 8, 9, 30, 0)
+    mock.timers.setTime(base)
+    sources.value = ['http://receiver.test']
+    onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
+
+    const posted = []
+    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return { ok: false, status: 503 } }
+    refreshTz()
+    await flush()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 1)
+
+    // Still within the throttle window from the failed tick above.
+    setLocation({ lat: 39.7, lon: -104.9, zone: 'America/Los_Angeles' })
+    await flush()
+    assert.equal(posted.filter(p => p[0].endsWith('/$tz')).length, 2)
   } finally {
     mock.timers.reset()
     globalThis.fetch = async () => ({})

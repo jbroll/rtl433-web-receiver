@@ -148,17 +148,45 @@ let storageBroken = false
 // actual change. Reset on load along with unitsAuto, both one-way latches.
 let lastPostedTzOffset = null
 
+// The bridge holds an unpublishable POST for ECHO_TIMEOUT_MS (5000ms, see
+// bridge/src/broker.js) before answering 503. 10s gives one full held-POST
+// wait plus margin before a tick is allowed to retry, so a bridge outage
+// costs at most one outstanding $tz POST per tab instead of one per second.
+export const TZ_RETRY_THROTTLE_MS = 10_000
+
+let tzPostInFlight = false
+let tzThrottledUntil = 0
+
 // Latches lastPostedTzOffset only on a confirmed 2xx (204 today): 401 and
 // 503 must NOT latch, or a real unlanded change goes unretried for months.
+// Resolves to whether the POST landed, so callers can drive the in-flight
+// guard and retry throttle without duplicating the fetch.
 function postTz(offset) {
-  fetch(`${location.origin}/$tz`, {
+  return fetch(`${location.origin}/$tz`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
     body: JSON.stringify(offset),
   }).then(res => {
-    if (res.ok) { lastPostedTzOffset = offset; return }
+    if (res.ok) { lastPostedTzOffset = offset; return true }
     if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
-  }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
+    return false
+  }).catch(err => { console.error(`POST $tz failed: ${err.message || err}`); return false })
+}
+
+// The single entry point for a $tz POST. The in-flight guard applies to
+// every caller -- two concurrent POSTs for the same offset is exactly the
+// bug this throttle exists to prevent. The retry throttle applies only to
+// the once-a-second tick (refreshTz): a user-initiated location change
+// (setLocation) must still post promptly even while an earlier tick's
+// failure is still being throttled.
+function requestTz(offset, { userInitiated = false } = {}) {
+  if (tzPostInFlight) return
+  if (!userInitiated && Date.now() < tzThrottledUntil) return
+  tzPostInFlight = true
+  postTz(offset).then(ok => {
+    tzPostInFlight = false
+    tzThrottledUntil = ok ? 0 : Date.now() + TZ_RETRY_THROTTLE_MS
+  })
 }
 
 export function loadSettings() {
@@ -168,6 +196,8 @@ export function loadSettings() {
   storageBroken = false
   unitsAuto = true
   lastPostedTzOffset = null
+  tzPostInFlight = false
+  tzThrottledUntil = 0
   let raw
   try { raw = localStorage.getItem(SETTINGS_KEY) } catch (e) { storageBroken = true; return }
   if (!raw) return
@@ -250,7 +280,7 @@ export function setLocation(next) {
   // fallback, so a blank local edit would publish over the receiver's own
   // stored location.
   if (!zoomOnly && clean.lat !== null && clean.lon !== null && sources.value.includes(location.origin)) {
-    postTz(offsetMinutes(new Date(), clean.zone || localZone()))
+    requestTz(offsetMinutes(new Date(), clean.zone || localZone()), { userInitiated: true })
     fetch(`${location.origin}/$location`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
@@ -289,5 +319,5 @@ export function refreshTz() {
   if (!sources.value.includes(location.origin)) return
   const offset = offsetMinutes(new Date(), activeZone())
   if (offset === lastPostedTzOffset) return
-  postTz(offset)
+  requestTz(offset)
 }
