@@ -17,10 +17,25 @@ export function brokerLabel(url) {
 // validation and silently bind an ephemeral port. Shared by PORT,
 // MQTT_PORT, and MQTTS_PORT, which all take the same kind of value.
 function parsePort(name, raw, defaultValue) {
-  const blank = typeof raw === 'string' && raw.trim() === ''
-  const value = raw === undefined ? defaultValue : Number(raw)
-  if (blank || !Number.isInteger(value) || value < 0 || value > 65535) {
+  if (raw === undefined) return defaultValue
+  const digitsOnly = typeof raw === 'string' && /^\d+$/.test(raw.trim())
+  const value = digitsOnly ? Number(raw.trim()) : NaN
+  if (!Number.isInteger(value) || value < 0 || value > 65535) {
     throw new Error(`${name} must be a port number, got ${JSON.stringify(raw)}`)
+  }
+  return value
+}
+
+const BOOLEAN_WORDS = {
+  true: true, '1': true, yes: true, on: true,
+  false: false, '0': false, no: false, off: false,
+}
+
+function parseBoolean(name, raw, defaultValue) {
+  if (raw === undefined) return defaultValue
+  const value = BOOLEAN_WORDS[String(raw).trim().toLowerCase()]
+  if (value === undefined) {
+    throw new Error(`${name} must be one of true/false/1/0/yes/no/on/off, got ${JSON.stringify(raw)}`)
   }
   return value
 }
@@ -30,7 +45,7 @@ export function readConfig(env, cli = {}) {
   const mqttPort = parsePort('MQTT_PORT', cli.mqttPort ?? env.MQTT_PORT, 1883)
   const mqttsPort = parsePort('MQTTS_PORT', cli.mqttsPort ?? env.MQTTS_PORT, 8883)
 
-  const embedBroker = cli.noEmbedBroker ? false : env.EMBED_BROKER === 'false' ? false : true
+  const embedBroker = cli.noEmbedBroker ? false : parseBoolean('EMBED_BROKER', env.EMBED_BROKER, true)
 
   return {
     mqttUrl: cli.brokerUrl ?? env.MQTT_URL ?? 'mqtt://localhost:1883',

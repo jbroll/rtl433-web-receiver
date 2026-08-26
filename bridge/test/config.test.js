@@ -71,6 +71,10 @@ test('a PORT that is not a number is rejected rather than defaulted', () => {
   assert.throws(() => readConfig({ PORT: '-1' }), /PORT/)
   assert.equal(readConfig({ PORT: '0' }).port, 0)
   assert.equal(readConfig({ PORT: '65535' }).port, 65535)
+  assert.throws(() => readConfig({ PORT: '0x1F90' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '1e3' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: '+80' }), /PORT/)
+  assert.throws(() => readConfig({ PORT: 'Infinity' }), /PORT/)
 })
 
 test('MQTT_PORT and MQTTS_PORT validate the same way PORT does', () => {
@@ -94,6 +98,20 @@ test('CLI flags override the environment, which overrides the default', () => {
 
 test('--no-embed-broker disables embedding even with no other config', () => {
   assert.equal(readConfig({}, { noEmbedBroker: true }).embedBroker, false)
+})
+
+test('EMBED_BROKER accepts false, no, and FALSE as disabling', () => {
+  assert.equal(readConfig({ EMBED_BROKER: '0' }).embedBroker, false)
+  assert.equal(readConfig({ EMBED_BROKER: 'no' }).embedBroker, false)
+  assert.equal(readConfig({ EMBED_BROKER: 'FALSE' }).embedBroker, false)
+})
+
+test('an unrecognized EMBED_BROKER value is rejected rather than treated as true', () => {
+  assert.throws(() => readConfig({ EMBED_BROKER: 'maybe' }), /EMBED_BROKER/)
+})
+
+test('--no-embed-broker wins over EMBED_BROKER set to true', () => {
+  assert.equal(readConfig({ EMBED_BROKER: 'true' }, { noEmbedBroker: true }).embedBroker, false)
 })
 
 test('--broker-url overrides MQTT_URL', () => {

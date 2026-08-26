@@ -27,13 +27,13 @@ the default.
 | Variable | CLI flag | Default | Notes |
 |---|---|---|---|
 | `MQTT_URL` | `--broker-url` | `mqtt://localhost:1883` | Only consulted when `EMBED_BROKER` is `false`. |
-| `PORT` | — | `8080` | Must be an integer 0–65535. An empty string, a non-numeric value, or a value outside that range makes the bridge refuse to start rather than fall back to the default. |
+| `PORT` | — | `8080` | Must be an unsigned integer 0–65535, digits only (no hex, no exponents, no leading `+`). An empty string, any other non-numeric value, or a value outside that range makes the bridge refuse to start rather than fall back to the default. |
 | `HOST` | — | `0.0.0.0` | Interface the HTTP server binds to. |
 | `MQTT_USERNAME` | — | unset | Passed to the broker if set. |
 | `MQTT_PASSWORD` | — | unset | Passed to the broker if set. |
-| `EMBED_BROKER` | `--no-embed-broker` | `true` | `false` (or the flag) disables the embedded broker and dials `MQTT_URL`/`--broker-url` instead, like every version of the bridge before this. |
-| `MQTT_PORT` | `--mqtt-port` | `1883` | The embedded broker's plaintext loopback port, used when no TLS cert/key is configured. |
-| `MQTTS_PORT` | `--mqtts-port` | `8883` | The embedded broker's public TLS port, used when a cert/key is configured. |
+| `EMBED_BROKER` | `--no-embed-broker` | `true` | Accepts `true`/`false`/`1`/`0`/`yes`/`no`/`on`/`off`, case-insensitively; any other value makes the bridge refuse to start. A false value (or the flag, which always wins) disables the embedded broker and dials `MQTT_URL`/`--broker-url` instead, like every version of the bridge before this. |
+| `MQTT_PORT` | `--mqtt-port` | `1883` | The embedded broker's plaintext loopback port, used when no TLS cert/key is configured. Validated the same way as `PORT`. |
+| `MQTTS_PORT` | `--mqtts-port` | `8883` | The embedded broker's public TLS port, used when a cert/key is configured. Validated the same way as `PORT`. |
 | `TLS_CERT` | `--tls-cert` | unset | PEM certificate file. Presence (with `TLS_KEY`) switches the embedded broker from the loopback-plaintext listener to the public-MQTTS one. |
 | `TLS_KEY` | `--tls-key` | unset | PEM key file. |
 | `AUTH_TOKEN` | `--auth-token` | unset | Shared secret gating HTTP `POST` (`401` without it) and, when embedding with TLS, MQTT `CONNECT` (refused without it). Required if `TLS_CERT`/`TLS_KEY` are set — the bridge refuses to start otherwise. Only the initial value: if `AUTH_TOKEN_PATH` names a file that already exists, its contents win instead. |
