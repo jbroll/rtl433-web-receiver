@@ -144,17 +144,6 @@
 - `playwright.config.js` matches `**/*.spec.js`, so an untracked scratch spec dropped into
   `test/` runs under `npm test` right alongside the real suite. A local run and a clean
   checkout run different sets as a result.
-- The fill ratio assertion folded into `fontfit.spec.js` ("a value fills most of the width
-  it is given, at any grid size") cannot fail on a regression: it reads
-  `fv.scrollWidth / fv.clientWidth` on the `.fv` element, but `.fv` is an unstretched flex
-  item holding unbreakable text (a number, no wrap points), so its box always grows to
-  match its own content — `scrollWidth` and `clientWidth` are equal by construction,
-  whatever font size `fitValues()` picks. Confirmed by breaking `fitValues()` four
-  different ways (early return, pinning every value to `FONT_MAX`, pinning to `FONT_MIN`,
-  and using the last box's fit as the global instead of the minimum) — the assertion stayed
-  green under all four. The real overflow this was meant to catch shows up on the parent
-  `.val` (which does clip, via `overflow:hidden` and `min-width:0`) or on the card
-  extending past its grid cell, not on `.fv` itself.
 - Both Android smoke steps are stale after the gear-panel split. `test/android-smoke.js`
   clicks `#settings summary`, but `settings.jsx` replaced `<details><summary>` with a plain
   `<div id="settings">`, so the click hangs to the Playwright timeout; and it clicks
