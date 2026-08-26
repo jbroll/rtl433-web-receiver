@@ -462,8 +462,6 @@ test("an order entry naming a key absent from cards does not crash the page", as
   const errors = [];
   page.on("pageerror", e => errors.push(e));
 
-  // Reproduces a device the store never ran ensureCard for: upserted directly and
-  // ordered by hand, bypassing the path that would normally create its card entry.
   const orphan = storeKey(server, ACURITE_KEY) + "-orphan";
   await page.evaluate((k) => {
     upsert({ key: k, merged: { temperature_F: 1 }, seenAt: 0, flashUntil: 0,

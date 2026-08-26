@@ -4,6 +4,9 @@ import { isFeed } from './alias.js'
 
 export const devices = signal(new Map())
 
+// Single-owner slot, not a list: main.jsx is the only registrant in the app,
+// and a second one would silently replace the first rather than add a
+// listener. Tests that install their own hook must reset it in beforeEach.
 let onEvict = () => {}
 export function setEvictHook(fn) { onEvict = fn }
 
@@ -49,7 +52,7 @@ export function upsert(rec) {
 export function clearSource(base) {
   const next = new Map(devices.value)
   for (const key of next.keys()) {
-    if (!isFeed(key) && key.startsWith(`${base} `)) next.delete(key)
+    if (!isFeed(key) && key.startsWith(`${base} `)) { next.delete(key); onEvict(key) }
   }
   devices.value = next
 }

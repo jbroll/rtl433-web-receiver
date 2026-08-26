@@ -37,6 +37,7 @@ function flash(key) {
   // Looked up by key, not closed over: an eviction that outlives the timer
   // must not write to a record trim() already dropped.
   flashTimers.set(key, setTimeout(() => {
+    flashTimers.delete(key)
     const cur = devices.value.get(key)
     if (cur) cur.flashing.value = false
   }, 1000))

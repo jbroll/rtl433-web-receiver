@@ -8,7 +8,6 @@ const CARDS_KEY = 'rtl433.dashboard.v1'
 export const cardState = signal(blankState())
 let storageBroken = false
 let hideNewCards = true
-let suppressSave = false
 
 const GRID_MIN = 1, GRID_MAX = 24
 
@@ -26,12 +25,12 @@ export function gridNum(v, fallback) {
   return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback
 }
 
-export function clampGrid(v, fallback) {
+function clampGrid(v, fallback) {
   return Number.isInteger(v) ? Math.min(GRID_MAX, Math.max(GRID_MIN, v)) : fallback
 }
 
-function bump() {
-  const s = cardState.value
+function bump(s) {
+  s = s || cardState.value
   cardState.value = {
     grid: { ...s.grid },
     order: [...s.order],
@@ -104,10 +103,10 @@ function pruneCardState(s) {
 
 export function saveCardState() {
   if (storageBroken) return
-  cardState.value = pruneCardState(cardState.value)
-  try { localStorage.setItem(CARDS_KEY, JSON.stringify(cardState.value)) }
+  const pruned = pruneCardState(cardState.value)
+  try { localStorage.setItem(CARDS_KEY, JSON.stringify(pruned)) }
   catch (e) { storageBroken = true }
-  bump()
+  bump(pruned)
 }
 
 export function ensureCard(key, merged, opts) {
@@ -134,7 +133,7 @@ export function ensureCard(key, merged, opts) {
       s.hidden.push(key)
     }
   } else {
-    if (!c.bottomValues) c.bottomValues = []
+    if (!c.bottomValues) { c.bottomValues = []; changed = true }
     for (const f of fields) {
       if (c.valueOrder.indexOf(f) >= 0) continue
       c.valueOrder.push(f)
@@ -155,7 +154,8 @@ export function ensureCard(key, merged, opts) {
     changed = true
   }
   if (s.order.indexOf(key) < 0) { s.order.push(key); changed = true }
-  if (changed && !suppressSave) saveCardState()
+  const save = !opts || opts.save !== false
+  if (changed && save) saveCardState()
   return c
 }
 
@@ -273,15 +273,14 @@ export function forgetLayouts() {
   try { localStorage.removeItem(CARDS_KEY) } catch (e) { storageBroken = true }
   const hideNew = hideNewCards
   hideNewCards = false
-  // ensureCard's own save would immediately re-write the storage this just cleared.
-  suppressSave = true
   try {
     cardState.value = blankState()
-    for (const rec of devices.value.values()) ensureCard(rec.key, rec.merged.value)
+    // ensureCard's own save would immediately re-write the storage this just
+    // cleared, so each call opts out and bump() below installs the result once.
+    for (const rec of devices.value.values()) ensureCard(rec.key, rec.merged.value, { save: false })
     bump()
   } finally {
     hideNewCards = hideNew
-    suppressSave = false
   }
 }
 

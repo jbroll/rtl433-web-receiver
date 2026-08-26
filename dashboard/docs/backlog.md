@@ -1,5 +1,9 @@
 # Backlog
 
+- `feeds/feed.js`'s `publish()` calls `saveCardState()` unconditionally on every feed
+  run, on top of the save `ensureCard()` already makes when the card actually changed.
+  Every feed tick writes `localStorage` and notifies subscribers even when nothing about
+  the card changed.
 - A device seen through two bridges is two cards. Nothing merges them.
 - `setValueMode`, `setCardHidden`, `setGrid`, and a rename committed with Enter all save
   layout, and all are reachable with a second finger while a resize is in flight, which

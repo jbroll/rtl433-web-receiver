@@ -168,14 +168,29 @@ test('a value hidden by default can be shown, and stays shown', () => {
   assert.deepEqual(store.cardEntry(FEED).hiddenValues, [])
 })
 
-test('ensureCard for a new key persists and notifies subscribers', () => {
+test('ensureCard for a new key persists and notifies subscribers exactly once', () => {
   let fired = 0
   const stop = effect(() => { store.cardState.value; fired++ })
   fired = 0
   store.ensureCard(K, READ)
   stop()
-  assert.ok(fired > 0)
+  assert.equal(fired, 1)
   assert.ok(JSON.parse(localStorage.getItem('rtl433.dashboard.v1')).cards[K])
+})
+
+test('saveCardState notifies subscribers exactly once, even when pruning changes something', () => {
+  store.ensureCard(K, READ)
+  store.setCardHidden(K, true)
+  const junk = `${BASE} src/Noise/1`
+  store.ensureCard(junk, { humidity: 154 })
+  let fired = 0
+  const stop = effect(() => { store.cardState.value; fired++ })
+  fired = 0
+  const live = `${BASE} src/Nexus-TH/2`
+  devices.value.set(live, { key: live, merged: READ })
+  store.saveCardState()
+  stop()
+  assert.equal(fired, 1)
 })
 
 test('a second ensureCard for an existing key does not save or notify', () => {
@@ -199,6 +214,46 @@ test('pruning does not mutate an earlier snapshot\'s order', () => {
   devices.value.set(other, { key: other, merged: READ })
   store.saveCardState()
   assert.deepEqual(snapshotOrder, [K])
+})
+
+// forgetLayouts() rebuilds order/hidden with a series of in-place pushes on its
+// own blankState() array, ahead of the one save at the end (see forgetLayouts).
+// A subscriber that captures that array from the reset, ahead of the reseed,
+// must not see it grow again once a later, unrelated call pushes onto whatever
+// array is live by then -- which is only true if bump() copies rather than
+// carries the array forward by reference.
+test('a snapshot taken during forgetLayouts\'s reset is not mutated by a later ensureCard call', () => {
+  const other = `${BASE} src/Other/9`
+  let fire = 0
+  let snapshotOrder
+  const stop = effect(() => {
+    const order = store.cardState.value.order
+    if (fire === 1) snapshotOrder = order
+    fire++
+  })
+  devices.value.set(K, { key: K, merged: READ })
+  store.forgetLayouts()
+  stop()
+  devices.value.set(other, { key: other, merged: READ })
+  store.ensureCard(other, READ, { autoShow: true })
+  assert.deepEqual(snapshotOrder, [K])
+  assert.deepEqual(store.cardState.value.order, [K, other])
+})
+
+test('a snapshot taken during forgetLayouts\'s reset is not mutated by a later hide', () => {
+  let fire = 0
+  let snapshotHidden
+  const stop = effect(() => {
+    const hidden = store.cardState.value.hidden
+    if (fire === 1) snapshotHidden = hidden
+    fire++
+  })
+  devices.value.set(K, { key: K, merged: READ })
+  store.forgetLayouts()
+  stop()
+  store.setCardHidden(K, true)
+  assert.deepEqual(snapshotHidden, [])
+  assert.deepEqual(store.cardState.value.hidden, [K])
 })
 
 test('a stored width or height outside 1-24 is clamped rather than discarded', () => {
