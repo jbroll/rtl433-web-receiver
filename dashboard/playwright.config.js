@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 // A new spec needs one line added here, or it never runs.
 const SPECS = [
   "auth.spec.js",
+  "bridges.spec.js",
   "cards.spec.js",
   "devices-table.spec.js",
   "devicesort.spec.js",

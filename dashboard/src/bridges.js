@@ -6,14 +6,19 @@ import { signal } from '@preact/signals'
 // cache client-side.
 export const bridges = signal(null)
 
+// A newer loadBridges() call can have its fetch settle before an older one's,
+// so a stale response arriving last would otherwise clobber the fresh one.
+let seq = 0
+
 export async function loadBridges() {
+  const id = ++seq
   try {
     const res = await fetch(`${location.origin}/$mqtt`)
-    if (!res.ok) { bridges.value = null; return }
+    if (!res.ok) { if (id === seq) bridges.value = null; return }
     const list = await res.json()
-    bridges.value = Array.isArray(list) ? list : null
+    if (id === seq) bridges.value = Array.isArray(list) ? list : null
   } catch (e) {
-    bridges.value = null
+    if (id === seq) bridges.value = null
   }
 }
 

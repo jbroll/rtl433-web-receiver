@@ -19,6 +19,12 @@ async function open(page) {
   await page.waitForTimeout(300);
 }
 
+test("a rich value's row shows its brief text instead of an empty cell", async ({ page }) => {
+  await open(page);
+  const cell = page.locator('#devices tr.vrow[data-key="local feed/Sun"][data-f="sun"] td').nth(1);
+  await expect(cell).toHaveText(/\d{1,2}:\d{2} \/ \d{1,2}:\d{2}/);
+});
+
 // Changing a select re-renders the table while that select still has focus.
 // The table used to answer that by rendering an empty tbody, which removed
 // every row until something else happened to re-render it.

@@ -73,8 +73,15 @@ function DeviceRow({ r }) {
   )
 }
 
-function ValueRow({ rowKey, field, value }) {
+function ValueRow({ rowKey, field, raw }) {
   const mode = valueMode(rowKey, field)
+  let value
+  if (isRich(raw)) {
+    value = briefOf(raw)
+  } else {
+    const d = displayValue(field, raw, settings.value)
+    value = d.num + d.unit
+  }
 
   return (
     <tr class="vrow" data-key={rowKey} data-f={field}>
@@ -100,26 +107,13 @@ function SortHeader({ col, children }) {
     if (sortable(col)) sortBy(col)
   }
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      if (sortable(col)) sortBy(col)
-    }
-  }
-
   if (!sortable(col)) {
     return <th>{children}</th>
   }
 
   return (
-    <th
-      data-sort={col}
-      aria-sort={ariaSort}
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-    >
-      {children}
+    <th data-sort={col} aria-sort={ariaSort}>
+      <button type="button" onClick={handleClick}>{children}</button>
     </th>
   )
 }
@@ -129,7 +123,7 @@ function Rows() {
   for (const r of sortDevices(devices.value.values())) {
     rows.push(<DeviceRow key={r.key} r={r} />)
     for (const f of cardFields(r.key, r.merged.value)) {
-      rows.push(<ValueRow key={`${r.key} ${f}`} rowKey={r.key} field={f} value={r.merged.value[f]} />)
+      rows.push(<ValueRow key={`${r.key} ${f}`} rowKey={r.key} field={f} raw={r.merged.value[f]} />)
     }
   }
   return rows

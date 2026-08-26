@@ -47,6 +47,22 @@ test('loadBridges treats a non-array body as unavailable', async () => {
   assert.equal(br.bridges.value, null)
 })
 
+test('overlapping loadBridges calls resolve out of order and the later one wins', async () => {
+  const deferred = []
+  globalThis.fetch = () => new Promise(resolve => deferred.push(resolve))
+
+  const first = br.loadBridges()
+  const second = br.loadBridges()
+
+  // The first call's fetch settles last, after the second call's already has.
+  deferred[1]({ ok: true, status: 200, json: async () => [{ url: 'second', connected: true }] })
+  await second
+  deferred[0]({ ok: true, status: 200, json: async () => [{ url: 'first', connected: true }] })
+  await first
+
+  assert.deepEqual(br.bridges.value, [{ url: 'second', connected: true }])
+})
+
 test('addBridge posts the url and token, then reloads', async () => {
   const calls = fakeFetch({
     'POST http://receiver.local/$mqtt': { ok: true },

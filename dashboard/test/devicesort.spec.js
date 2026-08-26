@@ -74,10 +74,11 @@ test("the sort survives a reload", async ({ page }) => {
 test("a header sorts from the keyboard as well as the mouse", async ({ page }) => {
   await open(page, THREE);
   const head = page.locator('th[data-sort="name"]');
-  await head.focus();
-  await head.press("Enter");
+  const button = head.locator("button");
+  await button.focus();
+  await button.press("Enter");
   await expect(head).toHaveAttribute("aria-sort", "descending");
-  await head.press(" ");
+  await button.press(" ");
   await expect(head).toHaveAttribute("aria-sort", "ascending");
 });
 

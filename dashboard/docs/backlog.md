@@ -54,11 +54,6 @@
   and endorsed, since rewriting them would destroy the evidence that the extraction lost
   nothing, but it is debt: delete the hook when the suite drives the DOM instead.
   `store.js`'s `getCardState`/`setCardState` exist only to serve it.
-- A sortable column header carries no accessible name for the action it performs. It is a
-  `th` with `aria-sort` and a `tabIndex`, so a screen reader announces the column and its
-  sort state but nothing says the header can be activated to change it. Nesting a
-  `<button>` inside the `th` is the usual shape, and it would also drop the hand-wired
-  Enter/Space handling in `table.js`.
 - `test/fixtures.js` started as a copy of `receiver/test/fixtures.js` and has already
   drifted: the receiver's copy moved to CommonJS `module.exports` and gained
   `ACURITE_WIND`/`ACURITE_RAIN` fixtures the dashboard's ESM `export const` copy lacks.
@@ -97,20 +92,6 @@
   tablet — no device was attached to verify it. Needs one manual run to confirm the
   selectors.
 
-- The devices table renders a rich value as the literal text "undefined". `ValueRow` in
-  `devices-table.jsx` is passed `r.merged.value[f]` straight through to
-  `<td colSpan={3}>{value}</td>`, and `cardFields()` returns the `$r`-tagged values (`sun`,
-  `moon`, `now`, `day0`, `local_time_12`) along with the scalars. A plain object as a Preact
-  child falls through every branch of child normalisation and is treated as a VNode with
-  `type === undefined`, which `diffElementNodes` turns into a text node of `undefined`.
-  Preact also stamps `_parent`, `_depth` and `_index` onto the stored reading. The
-  `reading()` helper twelve lines above handles the same case correctly, which is what makes
-  this look like an oversight. Derived from reading Preact's diff source rather than observed
-  in a browser; a one-line check on `tr.vrow[data-f="sun"] td` would settle it.
-- `loadBridges()` has no request sequencing. It is called from `addBridge`/`removeBridge`
-  and from the settings-tab effect in `main.jsx`, so two overlapping fetches resolve in
-  arbitrary order and the loser wins. Low impact, since the list is small and refetched on
-  the next tab switch, but a monotonic request id is two lines.
 - The log pane re-renders 200 rows on every message, including while it is hidden.
   `addLog()` copies the whole array per message and `LogView` maps all 200 rows, calling
   `toLocaleTimeString()` — an Intl formatter construction — once per row. `app.jsx` only
@@ -222,20 +203,8 @@
   receiver's own published `$location` immediately supplies the fallback, so the
   feed cards stay and the location the user just cleared still resolves. There is
   no delete for the published value.
-- The Bridges panel's remove button has no effect on the build-flag default bridge
-  (matching spec, which put this out of scope), but it fails silently — the row
-  simply reappears after the refetch, with no indication to the user that removal
-  isn't possible for that entry.
-- The Bridges panel gives no failure feedback beyond `aria-invalid` on the url
-  field — a full table, an invalid url, and a network error all look identical to
-  the user, and a failed `removeBridge()` produces no visible signal at all. The
-  codebase already has a toast mechanism (`toast.js`'s `showToast`, used elsewhere)
-  that could surface these.
-- No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly (there's no
-  host-testable seam for `web_ui.cpp` routes at all, receiver-wide) and no
-  Playwright spec touches the Bridges panel's rendered UI; `bridges.test.js`
-  covers the `bridges.js` module against a fake `fetch`, which is real but
-  partial coverage.
+- No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly — there's no
+  host-testable seam for `web_ui.cpp` routes at all, receiver-wide.
 - The view column cap is derived from width alone. A landscape phone gets the same 3
   columns a portrait one does at the same width, and a very short window still scrolls
   rather than fitting.
