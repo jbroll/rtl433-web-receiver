@@ -116,3 +116,14 @@ test("a long field name ellipsizes rather than clipping mid-word", async ({ page
   expect(styles.length).toBeGreaterThan(0);
   expect(styles.every(s => s === "ellipsis")).toBe(true);
 });
+
+test("saving from a capped view writes the saved column count, not the cap", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await page.waitForTimeout(120);
+
+  const m = await page.evaluate(() => ({ view: viewCols, template: deriveTemplate() }));
+  expect(m.view).toBe(3);
+  expect(m.template.grid.cols).toBe(6);
+  expect(m.template.grid.rows).toBe(4);
+});

@@ -4,7 +4,7 @@ import { App, tab, settingsTab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
-import { applyLayoutFrame, autoApply, layouts, disableAutoApply } from './layout_template.js'
+import { applyLayoutFrame, autoApply, layouts, disableAutoApply, deriveTemplate } from './layout_template.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
 import { sources, sourceState, loadSources, setSourcesChanged, storageState, addSource,
@@ -174,7 +174,7 @@ function exposeForTests() {
   Object.assign(window, {
     devices: deviceProxy,
     upsert,
-    measureGrid, fmtValue, fitValues,
+    measureGrid, fmtValue, fitValues, deriveTemplate,
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
