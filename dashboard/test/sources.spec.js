@@ -80,6 +80,13 @@ test("removing a source takes it out of the panel and out of storage", async ({ 
   expect(await storedSources(page)).toEqual([]);
 });
 
+test("the status line reports no sources rather than live when none are configured", async ({ page }) => {
+  const host = await startPage();
+  servers.push(host);
+  await page.goto(host.url);
+  await expect(page.locator("#status")).toHaveText("no sources");
+});
+
 test("an empty configuration lands on Devices/Settings and stores nothing", async ({ page }) => {
   const host = await startPage();
   servers.push(host);
@@ -126,6 +133,32 @@ test("removing the last source and reloading stays on Devices", async ({ page })
   await page.waitForTimeout(2000);
   expect(await storedSources(page)).toEqual([]);
   await expect(page.locator("#tab-devices")).toHaveAttribute("aria-selected", "true");
+});
+
+test("a source whose SSE endpoint stays down backs off, not on a flat 5s timer", async ({ page }) => {
+  test.setTimeout(30000);
+  const host = await startPage();
+  servers.push(host);
+
+  const attempts = [];
+  await page.route("**/events", (route) => {
+    attempts.push(Date.now());
+    route.fulfill({ status: 503, body: "" });
+  });
+
+  await open(page, host.url);
+  await page.fill("#source-url", "http://source.invalid");
+  await page.click("#source-add");
+
+  await expect.poll(() => attempts.length, { timeout: 25000, intervals: [200] }).toBeGreaterThanOrEqual(6);
+
+  const gaps = [];
+  for (let i = 1; i < attempts.length; i++) gaps.push(attempts[i] - attempts[i - 1]);
+  // gaps[0] is the browser's own immediate retry on the first drop, not ours.
+  // n=0's hand-rolled backoff is under 2s; a flat 5s timer never produces that.
+  expect(gaps[1]).toBeLessThan(2000);
+  // n=3's backoff is 6.4-9.6s -- guaranteed past the old flat 5s retry.
+  expect(gaps[gaps.length - 1]).toBeGreaterThan(5000);
 });
 
 test("a second source added from a device-served page keeps both", async ({ page }) => {

@@ -77,11 +77,6 @@
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
   `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
-- `trim()` in `devices.js` ends with `devices.value = devices.value`, and signals skip
-  notification when the new value is `===` the old. It deleted from the same Map `upsert`
-  installed, so once the device count passes `DEVICE_MAX × sources` the evicted card and
-  table row stay on screen until some unrelated signal re-renders the tree, and the Map and
-  the DOM disagree in the meantime.
 - `activeZone()` in `settings.js` reads `resolvedLocation().zone`, and `resolvedLocation()`
   returns the local settings object only when `lat` and `lon` are both non-null. The time
   zone `<select>` in `location.jsx` calls `setLocation({ zone })` without touching
@@ -99,17 +94,6 @@
   deletes; `resetFit()` is exported and called from nowhere in `src/`. Every hide/show,
   every device eviction and every keyed remount leaks an entry holding a detached node, and
   `fitValues()` — which runs after each `CardsView` render — walks the whole accumulated set.
-- The status readout reports "live" when there are no sources at all: `live === states.length`
-  is `0 === 0` on an empty `sourceState` map and that branch is tested first (`app.jsx`), so
-  a fresh browser, or one where the last source was just removed, shows a green header while
-  nothing is connected.
-- `stream.js` reconnects on a fixed 5 s `setTimeout` with no backoff and no jitter, in the
-  case its own comment names ("every slot busy"). Several tabs pointed at a receiver whose
-  SSE slots are full re-open in phase every five seconds indefinitely. The receiver's
-  matching entry is "SSE eviction and auto-reconnect can churn".
-- The row key in `log.jsx` is `entry.at + entry.raw`, which collides for two identical
-  payloads in the same millisecond; Preact warns and may reuse the wrong row. A monotonic
-  counter would fix it.
 - Dead code: `src/render-loop.js` is imported by nothing — `setRender`, `scheduleRender`
   and `startRenderLoop` have no references. So do `resetFit` and `cellSide()` in `grid.js`
   (the latter shadowed by the `window.cellSide` getter the tests use), `orderedKeys` in
@@ -136,12 +120,6 @@
   `reading()` helper twelve lines above handles the same case correctly, which is what makes
   this look like an oversight. Derived from reading Preact's diff source rather than observed
   in a browser; a one-line check on `tr.vrow[data-f="sun"] td` would settle it.
-- `EventSource` error handling in `stream.js` reads the wrong socket after a retry. `es` is
-  a single closure variable that every `connect()` reassigns, and the old socket's `onerror`
-  closes over the variable rather than the instance, so a late error from a superseded
-  socket inspects the current socket's `readyState`. It can schedule a duplicate five-second
-  retry, overwriting `retry` and leaking the earlier timer past `close()`. Capturing the
-  instance in a local fixes it.
 - Reverse geocoding can clobber a newer location pick. `location.jsx` awaits
   `reverseGeocode(latitude, longitude)` and writes the label with `setLocation`, and
   `geocode.js` serialises requests behind a one-second gap, so the write lands at least a

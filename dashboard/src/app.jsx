@@ -19,7 +19,8 @@ const SETTINGS_TABS = ['settings', 'devices', 'log']
 function Status() {
   const states = [...sourceState.value.values()]
   const live = states.filter((s) => s === 'live').length
-  const text = live === states.length ? 'live'
+  const text = states.length === 0 ? 'no sources'
+             : live === states.length ? 'live'
              : live === 0 ? 'reconnecting'
              : `${live}/${states.length} live`
   return <span id="status">{text}</span>

@@ -3,8 +3,10 @@ import { signal } from '@preact/signals'
 const LOG_MAX = 200
 export const log = signal([])
 
+let nextId = 0
+
 export function addLog(at, raw) {
-  const next = [{ at, raw }, ...log.value]
+  const next = [{ id: nextId++, at, raw }, ...log.value]
   if (next.length > LOG_MAX) next.length = LOG_MAX
   log.value = next
 }
@@ -15,7 +17,7 @@ export function LogView() {
       <table id="log">
         <tbody id="logrows">
           {log.value.map(entry => (
-            <tr key={entry.at + entry.raw}>
+            <tr key={entry.id}>
               <td class="nw">{new Date(entry.at).toLocaleTimeString()}</td>
               <td>{entry.raw}</td>
             </tr>

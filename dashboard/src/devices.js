@@ -17,8 +17,9 @@ function trim() {
   const radio = [...devices.value.values()].filter(d => !isFeed(d.key))
   if (radio.length <= cap) return
   const stale = radio.sort((a, b) => b.seenAt.value - a.seenAt.value).slice(cap)
-  for (const d of stale) { devices.value.delete(d.key); onEvict(d.key) }
-  devices.value = devices.value
+  const next = new Map(devices.value)
+  for (const d of stale) { next.delete(d.key); onEvict(d.key) }
+  devices.value = next
 }
 
 export function upsert(rec) {

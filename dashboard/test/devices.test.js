@@ -2,6 +2,7 @@ globalThis.DEVICE_MAX = 24
 
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { effect } from '@preact/signals'
 
 import { devices, upsert, clearSource, setEvictHook } from '../src/devices.js'
 import * as src from '../src/sources.js'
@@ -72,6 +73,26 @@ test('an evicted device is reported through the evict hook', () => {
   }
 
   assert.deepEqual(evicted, ['http://a.b src/Acurite/0'])
+})
+
+test('eviction notifies subscribers as its own change, not folded into the triggering upsert', () => {
+  src.addSource('http://a.b')
+  const snapshots = []
+  const stop = effect(() => { snapshots.push(devices.value) })
+  snapshots.length = 0 // drop the effect's initial subscribe firing
+
+  for (let i = 0; i < DEVICE_MAX + 1; i++) {
+    upsert({ key: `http://a.b src/Acurite/${i}`, seenAt: i })
+  }
+  stop()
+
+  // DEVICE_MAX + 1 new-key upserts, each notifying once, plus one more when
+  // trim evicts the oldest -- a self-assignment that never notifies would
+  // leave this at DEVICE_MAX + 1 even though the final map looks correct.
+  assert.equal(snapshots.length, DEVICE_MAX + 2)
+  const last = snapshots[snapshots.length - 1]
+  assert.ok(!last.has('http://a.b src/Acurite/0'))
+  assert.equal(last.size, DEVICE_MAX)
 })
 
 test('clearing a source leaves feed records alone', () => {
