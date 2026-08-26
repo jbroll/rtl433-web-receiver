@@ -61,17 +61,19 @@ export function sortBy(by) {
   return true
 }
 
+const collator = new Intl.Collator(undefined, { numeric: true })
+
 function compare(a, b, dir) {
   if (a === undefined || a === '') return b === undefined || b === '' ? 0 : 1
   if (b === undefined || b === '') return -1
   if (typeof a === 'number' && typeof b === 'number') return (a - b) * dir
-  return String(a).localeCompare(String(b), undefined, { numeric: true }) * dir
+  return collator.compare(String(a), String(b)) * dir
 }
 
 export function sortDevices(list) {
   const key = KEYS[sort.value.by]
   const dir = sort.value.dir
-  return [...list].sort((x, y) =>
-    compare(key(x), key(y), dir) ||
-    compare(deviceName(x).toLowerCase(), deviceName(y).toLowerCase(), 1))
+  const decorated = [...list].map(r => ({ r, k: key(r), n: deviceName(r).toLowerCase() }))
+  decorated.sort((x, y) => compare(x.k, y.k, dir) || compare(x.n, y.n, 1))
+  return decorated.map(d => d.r)
 }

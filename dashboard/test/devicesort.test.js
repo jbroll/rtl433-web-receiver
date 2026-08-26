@@ -82,6 +82,32 @@ test('the alias column sorts by the published name', () => {
   assert.deepEqual(names([A, O, F]), ['Oregon-THN132N', 'Acurite-5n1', 'Fineoffset-WH2'])
 })
 
+test('names differing only in case sort by the collator, not code point', () => {
+  const lower = dev('acurite-5n1', { id: 1 })
+  const upper = dev('Acurite-5n1', { id: 2 })
+  // Code-point order would put 'Acurite' before 'acurite' ('A' < 'a'); the
+  // locale collator treats the pair as equal and falls through to the tie
+  // break, which is stable insertion order for equal keys.
+  assert.deepEqual(names([lower, upper]), ['acurite-5n1', 'Acurite-5n1'])
+})
+
+test('the collator is constructed once, not per comparison', async () => {
+  const OrigCollator = Intl.Collator
+  let constructions = 0
+  class SpyCollator extends OrigCollator {
+    constructor(...args) { super(...args); constructions++ }
+  }
+  globalThis.Intl.Collator = SpyCollator
+  try {
+    const mod = await import('../src/devicesort.js?spy=' + Date.now())
+    mod.sortDevices([A, O, F])
+    mod.sortDevices([A, O, F])
+  } finally {
+    globalThis.Intl.Collator = OrigCollator
+  }
+  assert.equal(constructions, 1)
+})
+
 test('the choice persists and a corrupt or unknown one falls back', () => {
   sort.sortBy('rssi')
   sort.loadSort()

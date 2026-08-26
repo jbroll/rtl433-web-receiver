@@ -40,7 +40,16 @@ function AliasInput({ r, name }) {
   )
 }
 
+// Call count a test can read to confirm a packet to one device does not
+// re-render another device's row. Rows() re-runs its whole loop on any one
+// device's change (it reads every device's r.merged.value to compute field
+// lists), but @preact/signals already gives DeviceRow its own subscription
+// to the signals it reads, so an unrelated row's function body never runs.
+let deviceRowRenders = 0
+export function deviceRowRenderCount() { return deviceRowRenders }
+
 function DeviceRow({ r }) {
+  deviceRowRenders++
   const obj = r.obj.value
   const name = obj && obj.model ? obj.model : shortKey(r.key)
   const flash = r.flashing.value ? 'flash' : ''

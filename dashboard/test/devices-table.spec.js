@@ -1,8 +1,9 @@
 import { test, expect } from "./pw.js";
 import { startServer, routeWeather } from "./harness.js";
-import { ACURITE, topicOf } from "./fixtures.js";
+import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
+const OREGON_KEY = topicOf(OREGON);
 
 let server;
 
@@ -84,6 +85,23 @@ test("the change reaches the card it was made for", async ({ page }) => {
 
   await page.locator("#tab-cards").click();
   await expect(page.locator(`${sun} .val[data-f="solar_noon"]`)).toHaveCount(0);
+});
+
+test("a packet for one device does not re-render another device's row", async ({ page }) => {
+  server = await startServer({ devices: [ACURITE, OREGON] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.locator("#tab-devices").click();
+  await expect(page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"]`)).toHaveCount(1);
+
+  const before = await page.evaluate(() => deviceRowRenders);
+  server.emit(OREGON);
+  await page.waitForFunction((tail) => {
+    const key = [...devices.keys()].find(k => k.endsWith(tail));
+    return key && devices.get(key).count === 2;
+  }, OREGON_KEY);
+  // Only the row for the device that got a packet should have re-rendered.
+  expect(await page.evaluate(() => deviceRowRenders)).toBe(before + 1);
 });
 
 test("the table fills in on the first render after switching to it", async ({ page }) => {

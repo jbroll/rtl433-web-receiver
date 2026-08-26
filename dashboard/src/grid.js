@@ -83,6 +83,8 @@ export function resetFit() {
   fitting = new Map()
 }
 
+export function fittingSize() { return fitting.size }
+
 // Mirrors line-height on .card .val: the drawn line is taller than its font.
 const LINE_HEIGHT = 1.05
 
@@ -91,8 +93,9 @@ export function fitValues() {
   let global = FONT_MAX
   const boxes = []
   for (const f of fitting.values()) {
+    if (!f.node.isConnected) { fitting.delete(f.node); continue }
     const parent = f.node.parentNode
-    if (!f.node.isConnected || !parent) continue
+    if (!parent) continue
     const box = parent.clientWidth
     const rowH = parent.clientHeight
     // A hidden tab measures zero. Fitting to that would drop every value to the

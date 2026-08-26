@@ -1,11 +1,25 @@
+// Construction is the expensive half of Intl.DateTimeFormat; formatting is
+// cheap. Cache the formatter, not just its output.
+const formatters = new Map()
+
+export function zoneFormatter(zone, opts, locale) {
+  const key = (locale || '') + '|' + zone + '|' + JSON.stringify(opts)
+  let f = formatters.get(key)
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, { timeZone: zone, ...opts })
+    formatters.set(key, f)
+  }
+  return f
+}
+
 // Intl reports a zone's offset only by formatting a date in it, so read the
 // formatted parts back as if they were UTC and difference the two.
 export function offsetMinutes(date, zone) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: zone, hour12: false,
+  const parts = zoneFormatter(zone, {
+    hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(date)
+  }, 'en-US').formatToParts(date)
   const p = Object.create(null)
   for (const { type, value } of parts) p[type] = value
   const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second)
@@ -30,7 +44,7 @@ export function isDST(date, zone) {
 }
 
 export function formatTime(date, zone, opts) {
-  return new Intl.DateTimeFormat(undefined, { timeZone: zone, ...opts }).format(date)
+  return zoneFormatter(zone, opts).format(date)
 }
 
 export function hhmm(date, zone) {

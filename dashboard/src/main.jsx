@@ -14,8 +14,9 @@ import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame,
          onUnitsFrame, refreshTz } from './settings.js'
 import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight,
-         measureGridCallCount, fitValuesCallCount } from './grid.js'
+         measureGridCallCount, fitValuesCallCount, fittingSize } from './grid.js'
 import { addLog } from './log.jsx'
+import { deviceRowRenderCount } from './devices-table.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
 import './renderers.jsx'
@@ -59,16 +60,17 @@ function onMessage(base, topic, obj) {
     else if (obj.build !== build) { location.reload(); return }
   }
   const prev = devices.value.get(key)
-  const raw = JSON.stringify(obj)
   const merged = mergeReadings(prev && prev.merged.value, obj)
   upsert({
-    key, obj, raw, rssi: obj.rssi, count: obj.count, seenAt: at, at,
+    key, obj, rssi: obj.rssi, count: obj.count, seenAt: at, at,
     merged,
     flashUntil: Date.now() + 1000,
   })
   store.ensureCard(key, merged)
   flash(key)
-  if (!isSelf(key)) addLog(at, raw)
+  // Stringified only when the log will actually read it: self-traffic is
+  // filtered out below, and re-serializing it would be wasted work.
+  if (!isSelf(key)) addLog(at, JSON.stringify(obj))
 }
 
 function onAlias(base, topic, payload) {
@@ -179,7 +181,8 @@ function wrapRec(rec) {
     get flashUntil() { return rec.flashUntil.value },
     get flashing() { return rec.flashing.value },
     get obj() { return rec.obj.value },
-    get raw() { return rec.raw.value },
+    // raw isn't kept on the record; only tests read it, so it's rebuilt on demand.
+    get raw() { return rec.obj.value ? JSON.stringify(rec.obj.value) : '' },
     get merged() { return rec.merged.value },
   }
 }
@@ -212,6 +215,8 @@ function exposeForTests() {
     viewCols: { get: () => viewColsSignal.value },
     measureGridCalls: { get: measureGridCallCount },
     fitValuesCalls: { get: fitValuesCallCount },
+    fittingSize: { get: fittingSize },
+    deviceRowRenders: { get: deviceRowRenderCount },
     dragging: { get: () => dragging.value },
     resizing: { get: () => resizing.value },
     gestureInFlight: { get: () => gestureInFlight() },

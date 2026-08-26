@@ -37,3 +37,21 @@ test('a time renders in its zone, and a missing one renders as a dash', () => {
   assert.equal(hhmm(utc(2026, 6, 21, 18), 'America/Denver'), '12:00')
   assert.equal(hhmm(null, 'UTC'), '—')
 })
+
+test('formatters are cached, not constructed per call', async () => {
+  const OrigDTF = Intl.DateTimeFormat
+  let constructions = 0
+  class SpyDTF extends OrigDTF {
+    constructor(...args) { super(...args); constructions++ }
+  }
+  globalThis.Intl.DateTimeFormat = SpyDTF
+  try {
+    const mod = await import('../src/zone.js?spy=' + Date.now())
+    for (let i = 0; i < 10; i++) mod.offsetMinutes(utc(2026, 1, 15), 'America/Denver')
+    for (let i = 0; i < 10; i++) mod.formatTime(utc(2026, 1, 15), 'America/Denver', { hour: '2-digit', minute: '2-digit' })
+  } finally {
+    globalThis.Intl.DateTimeFormat = OrigDTF
+  }
+  // One per distinct (zone, opts) pair used above, not one per call.
+  assert.equal(constructions, 2)
+})

@@ -107,3 +107,20 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
     for (const r of await fillRatios()) expect(r).toBeLessThanOrEqual(1.02);
   }
 });
+
+test("hiding and showing a card repeatedly does not leak fitting entries", async ({ page }) => {
+  await open(page);
+  for (let i = 0; i < 50; i++) {
+    await page.evaluate(() => {
+      const key = [...devices.keys()][0];
+      cardState = { ...cardState, hidden: [key] };
+      saveCardState();
+    });
+    await expect(page.locator(CARD)).toHaveCount(0);
+    await page.evaluate(() => { cardState = { ...cardState, hidden: [] }; saveCardState(); });
+    await expect(page.locator(CARD)).toBeVisible();
+  }
+  // The card holds a handful of tracked value nodes; a leak would have added
+  // one entry per node per cycle instead of settling back down each time.
+  expect(await page.evaluate(() => fittingSize)).toBeLessThan(10);
+});

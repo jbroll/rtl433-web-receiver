@@ -80,10 +80,6 @@
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
   `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
-- `fitting` in `grid.js` grows without bound. `trackFit()` inserts by node and nothing
-  deletes; `resetFit()` is exported and called from nowhere in `src/`. Every hide/show,
-  every device eviction and every keyed remount leaks an entry holding a detached node, and
-  `fitValues()` — which runs after each `CardsView` render — walks the whole accumulated set.
 - Dead code: `src/render-loop.js` is imported by nothing — `setRender`, `scheduleRender`
   and `startRenderLoop` have no references. So do `resetFit` and `cellSide()` in `grid.js`
   (the latter shadowed by the `window.cellSide` getter the tests use), `orderedKeys` in
@@ -100,31 +96,6 @@
   tablet — no device was attached to verify it. Needs one manual run to confirm the
   selectors.
 
-- The log pane re-renders 200 rows on every message, including while it is hidden.
-  `addLog()` copies the whole array per message and `LogView` maps all 200 rows, calling
-  `toLocaleTimeString()` — an Intl formatter construction — once per row. `app.jsx` only
-  sets `hidden` on the pane, never unmounts it, so the cost is paid whichever tab is up.
-  `DevicesView` already establishes the fix by gating its body on visibility, and formatting
-  the timestamp once in `addLog` removes the other 200 Intl calls. Same family as the
-  devices-table entry under Information feeds.
-- The time-zone `<select>` rebuilds its option list on every settings render.
-  `location.jsx` calls `zones()` at module scope through `const TZ = zones()` but
-  `Intl.supportedValuesOf('timeZone')` returns a fresh ~450-entry array, and `TZ.map(...)`
-  builds ~450 `<option>` VNodes on each `LocationView` render — including every keystroke in
-  the Place field, which is `useState`-backed. The list cannot change during a page load.
-- Intl formatters are constructed rather than cached in three places. The `clock` renderer
-  in `renderers.jsx` builds a new `Intl.DateTimeFormat` every second; `formatTime` in
-  `zone.js` builds one per call and `sun.js` calls `hhmm` eleven times per run; and
-  `isDST` builds three. Construction is the expensive half of Intl and formatting is cheap,
-  so a module-level Map keyed on zone and format covers all three.
-- `main.jsx` stringifies every payload, including the ones it discards. The SSE frame
-  arrived as a string and was parsed in `stream.js`; `JSON.stringify(obj)` re-serialises it
-  before the `isSelf(key)` test that decides whether it is logged at all, so Receiver
-  telemetry pays for a string nothing reads.
-- `sortDevices` recomputes its tiebreak key inside the comparator.
-  `deviceName(x).toLowerCase()` allocates twice per comparison and `localeCompare` builds a
-  collator each call, so the sort costs O(n log n) string allocations. Decorate, sort and
-  undecorate with a hoisted `Intl.Collator` gives the same order.
 - `test/card-memo.test.js` tests a function that does not ship. It defines its own
   `areEqual` comparing `props.key`, `props.merged` and `props.alias`; the one in `cards.jsx`
   takes `props.cardKey`, has no `merged` or `alias` props at all, and returns `false`
@@ -191,7 +162,13 @@
   secure.
 - The DST flag is inferred by comparing offsets across the year and is wrong for
   a zone that changed its rules mid-year.
-- The devices table re-renders every row on every packet while the tab is up.
+- A prior backlog entry claimed the devices table re-renders every row on every packet.
+  Measured: `Rows()` in `devices-table.jsx` does re-run its whole loop on any one device's
+  change, since it reads every device's `r.merged.value` to compute field lists, but
+  `@preact/signals` already gives `DeviceRow` its own subscription to the signals it reads,
+  so an unrelated row's function body never runs — confirmed by counting `DeviceRow` calls
+  across a packet to one of two devices. `Rows()`'s own per-packet work (`sortDevices()` and
+  a `cardFields()` call per device) is real but untouched by this correction.
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.

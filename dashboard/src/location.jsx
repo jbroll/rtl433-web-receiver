@@ -21,6 +21,11 @@ function zones() {
   try { return Intl.supportedValuesOf('timeZone') } catch (e) { return [] }
 }
 
+// Intl.supportedValuesOf('timeZone') cannot change during a page load, so the
+// ~450-entry list and its <option> VNodes are built once, not on every render.
+const TZ = zones()
+const TZ_OPTIONS = TZ.map(z => <option key={z} value={z}>{z}</option>)
+
 function num(v) {
   const n = Number(v)
   return v === '' || !Number.isFinite(n) ? null : n
@@ -80,8 +85,6 @@ export function LocationView() {
       (err) => setStatus(err.message || 'Could not get your location'))
   }
 
-  const TZ = zones()
-
   return (
     <div id="settings-location">
       <div class="row">
@@ -123,7 +126,7 @@ export function LocationView() {
           <select id="settings-zone" value={loc.zone}
                   onChange={(e) => setLocation({ zone: e.target.value })}>
             <option value="">{localZone()} (this device)</option>
-            {TZ.map(z => <option key={z} value={z}>{z}</option>)}
+            {TZ_OPTIONS}
           </select>
         </label>
         {hasLocal && <button id="settings-location-clear" onClick={clearLocation}>Clear</button>}

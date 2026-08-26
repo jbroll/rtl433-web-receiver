@@ -87,6 +87,14 @@ test("a message with no time still renders, ages from arrival, and reaches the l
   await expect(logTime).not.toContainText("Invalid");
 });
 
+test("the log pane renders no rows while the cards tab is up", async ({ page }) => {
+  await open(page, [ACURITE]);
+  const before = await page.evaluate(() => devices.size);
+  server.emit(OREGON);
+  await page.waitForFunction(n => devices.size > n, before);
+  await expect(page.locator("#logrows tr")).toHaveCount(0);
+});
+
 test("the page opens on Cards and switches views", async ({ page }) => {
   await open(page, [ACURITE]);
   await expect(page.locator("#view-cards")).toBeVisible();

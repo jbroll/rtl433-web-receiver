@@ -4,6 +4,7 @@ import { displayValue } from './units.js'
 import { settings } from './settings.js'
 import { glyphOf } from './feeds/wx-icons.js'
 import { textWidthEm } from './grid.js'
+import { zoneFormatter } from './zone.js'
 
 // Imported for its registrations, so a renderer is reachable by tag before the
 // first card renders. Components live here rather than beside the registry so
@@ -34,8 +35,7 @@ registerValue('text', ({ v }) => (
 registerValue('clock', ({ v }) => {
   tick.value
   const now = new Date()
-  const parts = new Intl.DateTimeFormat(undefined, {
-    timeZone: v.zone,
+  const parts = zoneFormatter(v.zone, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: v.format === '12',

@@ -30,7 +30,6 @@ export function upsert(rec) {
     existing.seenAt.value = rec.seenAt
     existing.flashUntil.value = rec.flashUntil
     existing.obj.value = rec.obj
-    existing.raw.value = rec.raw
     existing.merged.value = rec.merged
   } else {
     const next = new Map(devices.value)
@@ -42,7 +41,6 @@ export function upsert(rec) {
       flashUntil: signal(rec.flashUntil),
       flashing: signal(false),
       obj: signal(rec.obj),
-      raw: signal(rec.raw),
       merged: signal(rec.merged),
     })
     devices.value = next

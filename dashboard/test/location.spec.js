@@ -30,6 +30,23 @@ async function open(page, route = BOULDER) {
   await expect(page.locator("#settings-location")).toBeVisible();
 }
 
+test("the time zone list is built once, not on every keystroke", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__tzCalls = 0;
+    const orig = Intl.supportedValuesOf;
+    Intl.supportedValuesOf = function (...args) {
+      if (args[0] === "timeZone") window.__tzCalls++;
+      return orig.apply(this, args);
+    };
+  });
+  await open(page);
+  const before = await page.evaluate(() => window.__tzCalls);
+  expect(before).toBe(1);
+
+  await page.locator("#settings-place").pressSequentially("boulder");
+  expect(await page.evaluate(() => window.__tzCalls)).toBe(before);
+});
+
 test("no location is set on first load", async ({ page }) => {
   await open(page);
   await expect(page.locator("#settings-location-status")).toHaveText("No location set");
