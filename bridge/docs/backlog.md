@@ -124,3 +124,14 @@
   reserves nothing but `/events`. The fix is in the binding: either state which paths an
   implementation may reserve, or move the endpoint under a prefix the binding declares off
   limits.
+- `redact` in `src/broker.js`, which scrubs `lastError` before `GET /status` serves it,
+  can still leak a fragment of a credential. It scans the message left to right and at
+  each position replaces the longest credential that matches there, which closes the case
+  where one credential contains the other: username `joe` and password `joepass123`
+  redact `login as joepass123 failed` to `login as *** failed`. It does not close a
+  partial overlap where neither credential contains the other. With username `abc` and
+  password `cde`, the message `abcde` becomes `***de`: `abc` matches first and consumes
+  the `c` that `cde` needed to match. A username and password sharing a fragment without
+  containment, such as `admin2024` and `2024temp`, hits this in practice. Closing it needs
+  an algorithm that considers more than one assignment of credentials to positions, rather
+  than always taking the longest match at the current position.
