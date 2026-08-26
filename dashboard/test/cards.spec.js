@@ -1201,12 +1201,12 @@ test("a resize starting from a clamped render moves relative to the stored size"
   await page.evaluate(() => saveCardState());
   const cell = await page.evaluate(() => cellSide);
 
-  // Drawn width is clamped to 3; dragging left by one cell from a baseline of
-  // the stored 6 still clamps at the grid's 3 columns, not below it.
+  // Drawn width is clamped to 3, but the drag itself moves the stored 6, so
+  // one cell left lands on 5; the render stays capped at 3 regardless.
   await dragHandle(page, CARD, -cell, 0);
 
   const c = (await cardState(page)).cards[storeKey(server, ACURITE_KEY)];
-  expect(c.w).toBe(3);
+  expect(c.w).toBe(5);
   expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span " + c.h + " auto" });
 });
 

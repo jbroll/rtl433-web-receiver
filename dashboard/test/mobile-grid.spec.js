@@ -127,3 +127,35 @@ test("saving from a capped view writes the saved column count, not the cap", asy
   expect(m.template.grid.cols).toBe(6);
   expect(m.template.grid.rows).toBe(4);
 });
+
+async function edit(page) {
+  await page.click("#tab-cards");
+  await page.click("#edit-cards");
+  await expect(page.locator("#view-cards")).toHaveClass(/editing/);
+}
+
+async function dragHandle(page, sel, dx, dy) {
+  const box = await page.locator(sel + " .rz").boundingBox();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + dx, y + dy, { steps: 10 });
+  await page.mouse.up();
+}
+
+test("a vertical-only resize on a capped view does not narrow the stored width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const key = await page.evaluate(() =>
+    Object.keys(cardState.cards).find(k => k.includes("Acurite")));
+  await page.evaluate(k => setCardSize(k, 5, 2), key);
+  await page.waitForTimeout(120);
+
+  await edit(page);
+  const cell = await page.evaluate(() => cellSide);
+  await dragHandle(page, CARD, 0, cell);
+
+  const c = await page.evaluate(k => cardState.cards[k], key);
+  expect(c.w).toBe(5);
+  expect(c.h).toBeGreaterThan(2);
+});
