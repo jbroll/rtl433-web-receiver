@@ -32,12 +32,11 @@ test('brief is the one-line form, and absent unless it is a string', () => {
   assert.equal(briefOf(91), '')
 })
 
-// nws.js sets `now.brief` to `(obs && obs.text) || (lead && lead.text) || ''`,
-// which is '' when both the current observation and the lead forecast period
-// have no text. ValueRow (devices-table.jsx) relies on briefOf() alone
-// collapsing to that same '' rather than 'undefined' or the field name.
-test('a "now"-shaped value with no observation or forecast text has a falsy brief', () => {
-  const now = { $r: 'now', text: '', sky: '', night: false, temp: null, unit: 'F', place: '', brief: '' }
+// nws.js omits `now.brief` entirely when it is unset. ValueRow
+// (devices-table.jsx) relies on briefOf() defaulting an absent brief to ''
+// rather than 'undefined' or the field name.
+test('a "now"-shaped value with brief absent falls back to \'\'', () => {
+  const now = { $r: 'now', text: '', sky: '', night: false, temp: null, unit: 'F', place: '' }
   assert.equal(briefOf(now), '')
 })
 
