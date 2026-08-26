@@ -13,6 +13,10 @@ export const BODY_LIMIT_BYTES = 64 * 1024
 // steady uplink is not punished for taking a while overall.
 export const BODY_IDLE_TIMEOUT_MS = 30_000
 
+// Comfortably above the dashboard's real usage; see docs/install.md.
+export const MAX_SSE_CLIENTS = 64
+export const MAX_SSE_FILTERS = 16
+
 export function createBridge({
   broker,
   cache,
@@ -21,13 +25,27 @@ export function createBridge({
   dashboardHtml,
   bodyLimitBytes = BODY_LIMIT_BYTES,
   bodyIdleTimeoutMs = BODY_IDLE_TIMEOUT_MS,
+  maxSseClients = MAX_SSE_CLIENTS,
+  maxSseFilters = MAX_SSE_FILTERS,
+  maxBufferedBytes,
 }) {
   const clients = new Set()
   const tokens = tokenStore ?? createTokenStore(authToken)
 
   const bridge = {
     httpServer: http.createServer((req, res) => {
-      const ctx = { broker, cache, clients, tokens, dashboardHtml, bodyLimitBytes, bodyIdleTimeoutMs }
+      const ctx = {
+        broker,
+        cache,
+        clients,
+        tokens,
+        dashboardHtml,
+        bodyLimitBytes,
+        bodyIdleTimeoutMs,
+        maxSseClients,
+        maxSseFilters,
+        maxBufferedBytes,
+      }
       handle(req, res, ctx).catch(() => {
         try {
           if (res.headersSent) res.end()
@@ -39,7 +57,7 @@ export function createBridge({
     }),
     clients,
     broadcast(topic, payload) {
-      const frame = `data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`
+      const frame = buildFrame(topic, payload)
       for (const client of clients) {
         if (client.matches(topic)) client.write(frame)
       }
@@ -49,10 +67,25 @@ export function createBridge({
   return bridge
 }
 
+function buildFrame(topic, payload) {
+  return `data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`
+}
+
 async function handle(
   req,
   res,
-  { broker, cache, clients, tokens, dashboardHtml, bodyLimitBytes, bodyIdleTimeoutMs },
+  {
+    broker,
+    cache,
+    clients,
+    tokens,
+    dashboardHtml,
+    bodyLimitBytes,
+    bodyIdleTimeoutMs,
+    maxSseClients,
+    maxSseFilters,
+    maxBufferedBytes,
+  },
 ) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
@@ -86,7 +119,8 @@ async function handle(
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
       return res.end()
     }
-    return subscribe(req, res, { cache, clients, url })
+    if (clients.size >= maxSseClients) return send(res, 503, 'too many streams')
+    return subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes })
   }
 
   // Reserved the same way '/events' is: never a topic a source publishes to
@@ -170,12 +204,15 @@ async function handle(
   return send(res, 405, 'method not allowed', { allow: 'GET, POST' })
 }
 
-function subscribe(req, res, { cache, clients, url }) {
+function subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes }) {
   const filters = url.searchParams.getAll('f')
   if (filters.length === 0) filters.push('#')
+  // Checked before openStream is called, so a rejected request never
+  // registers a stream.
+  if (filters.length > maxSseFilters) return send(res, 400, 'too many filters')
   if (!filters.every(validFilter)) return send(res, 400, 'malformed filter')
 
-  const client = openStream(res, filters)
+  const client = openStream(res, filters, { maxBufferedBytes })
   clients.add(client)
   req.on('close', () => {
     clients.delete(client)
@@ -183,7 +220,7 @@ function subscribe(req, res, { cache, clients, url }) {
   })
 
   for (const [topic, payload] of cache.entries()) {
-    if (client.matches(topic)) client.write(`data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`)
+    if (client.matches(topic)) client.write(buildFrame(topic, payload))
   }
 }
 

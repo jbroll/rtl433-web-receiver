@@ -26,6 +26,18 @@ function parsePort(name, raw, defaultValue) {
   return value
 }
 
+// Same digits-only shape as parsePort, without the port-range ceiling: these
+// are counts, not ports.
+function parseCount(name, raw, defaultValue) {
+  if (raw === undefined) return defaultValue
+  const digitsOnly = typeof raw === 'string' && /^\d+$/.test(raw.trim())
+  const value = digitsOnly ? Number(raw.trim()) : NaN
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${name} must be a positive integer, got ${JSON.stringify(raw)}`)
+  }
+  return value
+}
+
 const BOOLEAN_WORDS = {
   true: true, '1': true, yes: true, on: true,
   false: false, '0': false, no: false, off: false,
@@ -47,6 +59,9 @@ export function readConfig(env, cli = {}) {
 
   const embedBroker = cli.noEmbedBroker ? false : parseBoolean('EMBED_BROKER', env.EMBED_BROKER, true)
 
+  const maxSseClients = parseCount('MAX_SSE_CLIENTS', env.MAX_SSE_CLIENTS, 64)
+  const maxSseFilters = parseCount('MAX_SSE_FILTERS', env.MAX_SSE_FILTERS, 16)
+
   return {
     mqttUrl: cli.brokerUrl ?? env.MQTT_URL ?? 'mqtt://localhost:1883',
     port,
@@ -61,5 +76,7 @@ export function readConfig(env, cli = {}) {
     authToken: cli.authToken ?? env.AUTH_TOKEN,
     authTokenPath: cli.authTokenPath ?? env.AUTH_TOKEN_PATH,
     dashboardHtmlPath: cli.dashboardHtml ?? env.DASHBOARD_HTML,
+    maxSseClients,
+    maxSseFilters,
   }
 }

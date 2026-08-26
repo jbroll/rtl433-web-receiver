@@ -18,6 +18,8 @@ test('an empty environment gives the local defaults', () => {
     authToken: undefined,
     authTokenPath: undefined,
     dashboardHtmlPath: undefined,
+    maxSseClients: 64,
+    maxSseFilters: 16,
   })
 })
 
@@ -36,6 +38,8 @@ test('the environment overrides every field', () => {
     AUTH_TOKEN: 'tok',
     AUTH_TOKEN_PATH: '/var/lib/bridge/auth-token',
     DASHBOARD_HTML: '/opt/bridge/public/index.html',
+    MAX_SSE_CLIENTS: '32',
+    MAX_SSE_FILTERS: '8',
   })
   assert.deepEqual(config, {
     mqttUrl: 'mqtt://broker.local:1883',
@@ -51,6 +55,8 @@ test('the environment overrides every field', () => {
     authToken: 'tok',
     authTokenPath: '/var/lib/bridge/auth-token',
     dashboardHtmlPath: '/opt/bridge/public/index.html',
+    maxSseClients: 32,
+    maxSseFilters: 8,
   })
 })
 
@@ -82,6 +88,15 @@ test('MQTT_PORT and MQTTS_PORT validate the same way PORT does', () => {
   assert.throws(() => readConfig({ MQTT_PORT: '70000' }), /MQTT_PORT/)
   assert.throws(() => readConfig({ MQTTS_PORT: 'x' }), /MQTTS_PORT/)
   assert.throws(() => readConfig({ MQTTS_PORT: '-1' }), /MQTTS_PORT/)
+})
+
+test('MAX_SSE_CLIENTS and MAX_SSE_FILTERS default to 64 and 16, and reject non-positive values', () => {
+  assert.equal(readConfig({}).maxSseClients, 64)
+  assert.equal(readConfig({}).maxSseFilters, 16)
+  assert.throws(() => readConfig({ MAX_SSE_CLIENTS: '0' }), /MAX_SSE_CLIENTS/)
+  assert.throws(() => readConfig({ MAX_SSE_CLIENTS: 'x' }), /MAX_SSE_CLIENTS/)
+  assert.throws(() => readConfig({ MAX_SSE_FILTERS: '-1' }), /MAX_SSE_FILTERS/)
+  assert.throws(() => readConfig({ MAX_SSE_FILTERS: '' }), /MAX_SSE_FILTERS/)
 })
 
 test('CLI flags override the environment, which overrides the default', () => {

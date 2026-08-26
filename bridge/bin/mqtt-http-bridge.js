@@ -95,7 +95,14 @@ const broker = connectBroker({
   onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
 })
 const dashboardHtml = config.dashboardHtmlPath ? readFileSync(config.dashboardHtmlPath, 'utf8') : undefined
-bridge = createBridge({ broker, cache, tokenStore, dashboardHtml })
+bridge = createBridge({
+  broker,
+  cache,
+  tokenStore,
+  dashboardHtml,
+  maxSseClients: config.maxSseClients,
+  maxSseFilters: config.maxSseFilters,
+})
 
 bridge.httpServer.listen(config.port, config.host, () => {
   console.log(`mqtt-http-bridge on http://${config.host}:${config.port}, broker ${brokerName}`)

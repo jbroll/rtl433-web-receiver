@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import net from 'node:net'
 
-import { readEvents, startBridge } from './helpers/bridge.js'
+import { readEvents, startBridge, waitFor } from './helpers/bridge.js'
 
 // Reads raw `data: ...` frame text rather than parsed JSON, so a test can
 // compare wire bytes across clients instead of just decoded values.
@@ -254,6 +254,84 @@ test('replay follows cache insertion order, not filter order', async () => {
         // readEvents already cancelled the reader
       }
     }
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a request opening one more than MAX_SSE_CLIENTS streams gets 503, and the earlier streams stay open', async () => {
+  const bridge = await startBridge({ maxSseClients: 2 })
+  try {
+    const a = await fetch(`${bridge.base}/events`)
+    const b = await fetch(`${bridge.base}/events`)
+    try {
+      assert.equal(a.status, 200)
+      assert.equal(b.status, 200)
+      assert.equal(bridge.clients.size, 2)
+
+      const refused = await fetch(`${bridge.base}/events`)
+      assert.equal(refused.status, 503)
+      assert.equal(bridge.clients.size, 2)
+    } finally {
+      await a.body.cancel()
+      await b.body.cancel()
+    }
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a request with more than MAX_SSE_FILTERS f parameters is 400 and registers no client', async () => {
+  const bridge = await startBridge({ maxSseFilters: 2 })
+  try {
+    const filters = ['f=a/%23', 'f=b/%23', 'f=c/%23'].join('&')
+    const refused = await fetch(`${bridge.base}/events?${filters}`)
+    assert.equal(refused.status, 400)
+    assert.equal(await refused.text(), 'too many filters\n')
+    assert.equal(bridge.clients.size, 0)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a slow reader that falls a buffer cap behind is dropped', async () => {
+  const bridge = await startBridge({ maxBufferedBytes: 1024 })
+  try {
+    const { hostname, port } = new URL(bridge.base)
+
+    // A raw socket that is never read from: fetch()'s body reader would
+    // drain the response itself, defeating the point of a slow reader.
+    const socket = net.connect(Number(port), hostname)
+    await new Promise((resolve, reject) => {
+      socket.once('connect', resolve)
+      socket.once('error', reject)
+    })
+    socket.write(`GET /events HTTP/1.1\r\nHost: ${hostname}\r\nConnection: keep-alive\r\n\r\n`)
+    await new Promise((resolve) => {
+      let buffer = ''
+      socket.on('data', function onData(chunk) {
+        buffer += chunk.toString()
+        if (buffer.includes(':open\n\n')) {
+          socket.off('data', onData)
+          resolve()
+        }
+      })
+    })
+    socket.pause()
+
+    // Under the 64 KiB POST body cap, so each publish itself succeeds; sent
+    // concurrently so they queue on the stalled connection faster than the
+    // kernel can drain them, rather than one at a time with room to flush
+    // between requests.
+    const big = JSON.stringify({ pad: 'x'.repeat(60 * 1024) })
+    const posts = []
+    for (let i = 0; i < 200; i++) {
+      posts.push(fetch(`${bridge.base}/src/Acurite/${i}`, { method: 'POST', body: big }))
+    }
+    await Promise.allSettled(posts)
+
+    await waitFor(() => bridge.clients.size === 0)
+    socket.destroy()
   } finally {
     await bridge.close()
   }

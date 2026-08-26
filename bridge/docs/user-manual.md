@@ -22,6 +22,8 @@ defaults):
 | `TLS_CERT` / `TLS_KEY` | Configuring both switches the embedded broker to public MQTTS and requires `AUTH_TOKEN`. |
 | `AUTH_TOKEN` | Shared secret for `POST` (HTTP) and `CONNECT` (MQTT, TLS mode only). Unset disables both checks. |
 | `AUTH_TOKEN_PATH` | File the current token is persisted to; see [Rotating the token](#post-authrotate--rotate-the-token) below. |
+| `MAX_SSE_CLIENTS` | Concurrent `/events` streams allowed before a new one is refused. |
+| `MAX_SSE_FILTERS` | `f` parameters allowed on one `/events` subscription before it is refused. |
 
 ## GET a topic
 
@@ -97,8 +99,16 @@ request is sent, so it must be percent-encoded as `%23`.
   message for every topic matching a filter is sent first, then each
   message as it is published. Each event's `data` is a JSON object:
   `{"topic": "...", "payload": {...}}`.
-- `400` if any filter is malformed.
-- `503` if the bridge is not currently connected to the broker.
+- `400` if any filter is malformed, or if more than `MAX_SSE_FILTERS` `f`
+  parameters are given.
+- `503` if the bridge is not currently connected to the broker, or if
+  `MAX_SSE_CLIENTS` streams are already open.
+
+A stream that falls a megabyte behind — `res.write` returning backpressure
+while that much is still unflushed — is dropped: the connection is closed and
+it stops counting against `MAX_SSE_CLIENTS`. A client that sees its stream end
+unexpectedly should assume this and reconnect rather than treat it as an
+error.
 
 Filters are fixed for the life of the connection. To change what a client
 watches, it reconnects with new `f` parameters.
@@ -147,6 +157,8 @@ directory holding it should not be world-readable.
 - `401` — a `POST` with a missing or wrong bearer token, when `AUTH_TOKEN` is configured.
 - `405` — a method other than GET/POST on a topic path, or anything but GET
   on `/events`.
+- `503` — `GET /events` at the `MAX_SSE_CLIENTS` limit.
+- `400` — `GET /events` with more than `MAX_SSE_FILTERS` `f` parameters.
 
 `400`, `404`, `405`, `401`, and `503` are the only statuses the binding
 defines. `408` and `413` are this bridge's own answer to a stalled or

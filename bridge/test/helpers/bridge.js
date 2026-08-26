@@ -13,6 +13,9 @@ export async function startBridge({
   dashboardHtml,
   bodyLimitBytes,
   bodyIdleTimeoutMs,
+  maxSseClients,
+  maxSseFilters,
+  maxBufferedBytes,
 } = {}) {
   let mqttBroker = url ? null : await startBroker(0, { delayMs })
   const cache = createCache()
@@ -23,7 +26,17 @@ export async function startBridge({
     onMessage: (topic, payload) => bridge.broadcast(topic, payload),
     echoTimeoutMs,
   })
-  bridge = createBridge({ broker, cache, authToken, dashboardHtml, bodyLimitBytes, bodyIdleTimeoutMs })
+  bridge = createBridge({
+    broker,
+    cache,
+    authToken,
+    dashboardHtml,
+    bodyLimitBytes,
+    bodyIdleTimeoutMs,
+    maxSseClients,
+    maxSseFilters,
+    maxBufferedBytes,
+  })
   // Unbounded, a subscription that never lands hangs `node --test` instead of
   // failing it.
   if (mqttBroker) await withTimeout(broker.subscribed, 5000, 'the # subscription')

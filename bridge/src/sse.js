@@ -2,7 +2,11 @@ import { matchSplit } from './topic.js'
 
 const KEEPALIVE_MS = 15000
 
-export function openStream(res, filters) {
+// A reader this far behind is not going to catch up; holding the buffer
+// costs the process more than the client is worth.
+export const MAX_BUFFERED_BYTES = 1024 * 1024
+
+export function openStream(res, filters, { maxBufferedBytes = MAX_BUFFERED_BYTES } = {}) {
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-store',
@@ -28,7 +32,14 @@ export function openStream(res, filters) {
     },
     write(frame) {
       if (closed || !res.writable) return
-      res.write(frame)
+      const ok = res.write(frame)
+      // res.end() would just queue onto the same backed-up pipe and never
+      // flush; a reader this far behind needs the connection dropped outright.
+      if (!ok && res.writableLength > maxBufferedBytes) {
+        closed = true
+        clearInterval(keepalive)
+        res.destroy()
+      }
     },
     close() {
       if (closed) return

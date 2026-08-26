@@ -9,8 +9,6 @@
   no timeout, so a large or slow-drip POST accumulates in memory.
 - `PORT` is parsed with `Number` in `src/config.js`, which accepts hex, so
   `PORT=0x1F90` silently becomes 8080 instead of being rejected.
-- A slow SSE reader is never dropped; `res.write` in `src/sse.js` buffers
-  without bound.
 - Clearing the cache on reconnect is invisible to an SSE subscriber: it is
   told nothing about the topics that went away, and the ones that come back
   arrive as ordinary messages, so a subscriber is re-sent every matching
@@ -105,9 +103,6 @@
   broker that answers `0x80` and stays connected, `GET /events` would return `200` and
   stream nothing, topic `GET`s would `404` forever, and every `POST` would wait the full
   echo timeout.
-- Nothing caps the number of concurrent SSE streams. Each `GET /events` adds a client with
-  no authentication and no `maxConnections`, plus a 15 s `setInterval` of its own. The
-  unbounded-`res.write` entry above covers one slow reader, not the count of readers.
 - `test/shutdown.test.js` is the only test coverage `bin/mqtt-http-bridge.js` has. Untested:
   `parseArgs` wiring, the shared `tokenStore` handoff to both `createBridge` and
   `startEmbeddedBroker`, `AUTH_TOKEN_PATH` end to end, the TLS-mode
@@ -139,10 +134,6 @@
   re-establishing `#` where the comments describe one. The manual subscribe cannot simply
   be deleted: the `subscribed` promise and the error-clearing both hang off its callback.
   Setting `resubscribe: false` is the way round.
-- Nothing caps the number of filters on one stream. `GET /events` is unauthenticated and
-  takes as many `f` parameters as fit in the request line; each costs a `matchSplit` call
-  per message per client for the life of the connection. The uncapped-stream-count entry
-  above covers the number of readers, not the filters within one.
 - The dashboard is served without a charset. `src/server.js` writes
   `content-type: text/html` for a string read as `utf8` and re-encoded as UTF-8 bytes. The
   shipped `public/index.html` carries `<meta charset="utf-8">` and is pure ASCII, so

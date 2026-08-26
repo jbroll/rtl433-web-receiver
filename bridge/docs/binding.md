@@ -143,13 +143,13 @@ unlike `$location` and `$layout`, it is never unset — a fresh receiver's
 
 | Status | When |
 |---|---|
-| `400` | Malformed topic, malformed filter, or a body that is not JSON |
+| `400` | Malformed topic, malformed filter, a body that is not JSON, or (an implementation that caps them) an `/events` subscription with too many filters |
 | `404` | `GET` of a topic with no retained message |
 | `401` | `POST` with a missing or wrong bearer token, when the implementation has auth enabled |
 | `405` | An operation the implementation does not offer for that topic |
 | `408` | An implementation that enforces an idle timeout on the request body, on a `POST` that stalls |
 | `413` | An implementation that caps the request body size, on a `POST` over that cap |
-| `503` | The bridge's backend is unavailable |
+| `503` | The bridge's backend is unavailable, or (an implementation that caps them) an `/events` subscription past the concurrent-stream limit |
 
 An implementation that refuses an operation returns `405` rather than silently
 accepting it, so a client can tell what will actually happen.
@@ -157,6 +157,11 @@ accepting it, so a client can tell what will actually happen.
 The body cap and any idle timeout on receiving it are implementation-defined;
 the binding names no fixed limit. An implementation may refuse an oversized
 `POST` body outright rather than accept a payload of unbounded size.
+
+The number of concurrent `/events` subscriptions and the number of filters on
+one of them are likewise implementation-defined; the binding names no fixed
+limit. An implementation may refuse either outright rather than accept an
+unbounded number of open streams or filters per stream.
 
 `401` is implementation-specific, the same way CORS is: not every implementation
 of this binding has to gate writes behind a token, and a client should not assume
