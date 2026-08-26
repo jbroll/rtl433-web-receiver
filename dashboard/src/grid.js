@@ -10,6 +10,16 @@ export function cellSide() { return cell }
 
 export const cellSignal = signal(cell)
 
+// The width below which a cell stops being legible: at 110px a 390px phone
+// gets 3 columns rather than the 6 the saved desktop layout asks for.
+const MIN_CELL = 110
+
+let viewColsN = 6
+
+export function viewCols() { return viewColsN }
+
+export const viewColsSignal = signal(viewColsN)
+
 export function measureGrid() {
   const grid = $("cards")
   if (!grid || grid.clientWidth <= 0) return
@@ -20,14 +30,23 @@ export function measureGrid() {
   const top = grid.getBoundingClientRect().top + window.scrollY
   const height = window.innerHeight - top
                  - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
-  // The 20px floor is a legibility minimum, not a guarantee: honoring it when
-  // the viewport can't fit g.cols at 20px would overflow the page sideways.
-  const fit = Math.min(width / g.cols, height / g.rows)
-  cell = width / g.cols >= 20 ? Math.max(20, fit) : fit
+  const cols = Math.max(1, Math.min(Math.floor(width / MIN_CELL), g.cols))
+  viewColsN = cols
+  viewColsSignal.value = cols
+  if (cols < g.cols) {
+    // Fewer columns means more rows than the screen holds. Fitting them all is
+    // what produced the unreadable cell; the page scrolls instead.
+    cell = width / cols
+  } else {
+    // The 20px floor is a legibility minimum, not a guarantee: honoring it when
+    // the viewport can't fit g.cols at 20px would overflow the page sideways.
+    const fit = Math.min(width / cols, height / g.rows)
+    cell = width / cols >= 20 ? Math.max(20, fit) : fit
+  }
   cellSignal.value = cell
   grid.style.setProperty("--cell", cell + "px")
-  grid.style.gridTemplateColumns = "repeat(" + g.cols + ",var(--cell))"
-  grid.style.gridTemplateRows = "repeat(" + g.rows + ",var(--cell))"
+  grid.style.gridTemplateColumns = "repeat(" + cols + ",var(--cell))"
+  grid.style.gridTemplateRows = cols < g.cols ? "" : "repeat(" + g.rows + ",var(--cell))"
 }
 
 const FONT_MIN = 11

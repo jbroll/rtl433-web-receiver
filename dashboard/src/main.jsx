@@ -12,7 +12,7 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
 import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame,
          onUnitsFrame } from './settings.js'
-import { measureGrid, installGestures, cellSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
+import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
@@ -183,6 +183,7 @@ function exposeForTests() {
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
     cellSide: { get: () => cellSignal.value },
+    viewCols: { get: () => viewColsSignal.value },
     dragging: { get: () => dragging.value },
     resizing: { get: () => resizing.value },
     gestureInFlight: { get: () => gestureInFlight() },

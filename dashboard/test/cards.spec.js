@@ -397,7 +397,7 @@ test("the cell side is the smaller of the two divisions and re-measures on resiz
     };
   });
 
-  for (const [w, h] of [[1200, 800], [640, 900], [1400, 500]]) {
+  for (const [w, h] of [[1200, 800], [900, 900], [1400, 500]]) {
     await page.setViewportSize({ width: w, height: h });
     await page.waitForTimeout(120);
     const m = await read();
@@ -406,7 +406,7 @@ test("the cell side is the smaller of the two divisions and re-measures on resiz
   }
 });
 
-test("the 20px floor never overflows the viewport width", async ({ page }) => {
+test("the rendered grid never overflows the viewport width", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.setViewportSize({ width: 360, height: 800 });
   await setGrid(page, 24, 4);
@@ -417,10 +417,12 @@ test("the 20px floor never overflows the viewport width", async ({ page }) => {
     const cs = getComputedStyle(g);
     return {
       cell: cellSide,
+      cols: viewCols,
       width: g.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
     };
   });
-  expect(m.cell * 24).toBeLessThanOrEqual(m.width + 0.5);
+  expect(m.cols).toBeLessThan(24);
+  expect(m.cell * m.cols).toBeLessThanOrEqual(m.width + 0.5);
 });
 
 test("an entry with no stored size is sized from its value count", async ({ page }) => {
