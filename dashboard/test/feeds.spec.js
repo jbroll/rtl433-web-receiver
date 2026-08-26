@@ -269,11 +269,8 @@ test("a composite card opens showing the dial, not the times it already draws", 
   expect(await page.evaluate(() => cardState.cards["local feed/Sun"].valueOrder)).toContain("sunrise");
 });
 
-// A cached entry outlives the code that wrote it. When a rich value gains a
-// field, the entry on disk still lacks it. Moon, sun and clock are computed
-// and no longer cached, so weather is the only feed this can still happen to:
-// this pins that a stale entry still paints, with its temperature intact,
-// rather than blanking or throwing.
+// A cached entry outlives the code that wrote it; weather is the only feed
+// still cached, so it's the only one that can be missing a field like this.
 test("a cache entry written before a field existed still paints", async ({ page }) => {
   await routeWeather(page);
   server = await startServer({ devices: [ACURITE] });

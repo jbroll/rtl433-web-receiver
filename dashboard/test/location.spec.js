@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer } from "./harness.js";
+import { startServer, routeTiles } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 
 const NOMINATIM = "**/nominatim.openstreetmap.org/**";
@@ -19,7 +19,7 @@ let server;
 test.afterEach(async () => { if (server) await server.close(); server = null; });
 
 async function open(page, route = BOULDER) {
-  await page.route(TILES, r => r.fulfill({ status: 200, contentType: "image/png", body: PIXEL }));
+  await routeTiles(page);
   await page.route(NOMINATIM, r =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(route) }));
   server = await startServer({ devices: [ACURITE] });

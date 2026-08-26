@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer, routeWeather } from "./harness.js";
+import { startServer, routeWeather, routeTiles, nwsJson } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 import { OUTSIDE_US } from "./fixtures-nws.js";
 
@@ -10,12 +10,9 @@ let seen;
 
 test.afterEach(async () => { if (server) await server.close(); server = null; });
 
-function json(body, status = 200) {
-  return { status, contentType: "application/geo+json", body: JSON.stringify(body) };
-}
-
 async function open(page, over) {
   seen = await routeWeather(page, over);
+  await routeTiles(page);
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
@@ -80,7 +77,7 @@ test("observations arrive as readings the unit setting converts", async ({ page 
 });
 
 test("a location outside the united states says so and stops asking", async ({ page }) => {
-  await open(page, { "/points/51.5074,-0.1278": json(OUTSIDE_US, 404) });
+  await open(page, { "/points/51.5074,-0.1278": nwsJson(OUTSIDE_US, 404) });
   await setPlace(page, 51.5074, -0.1278);
 
   await expect(page.locator(`${CARD} .val`)).toContainText(/United States only/);
@@ -96,7 +93,7 @@ test("a server error keeps the last good forecast on the card", async ({ page })
 
   await page.unroute("**/api.weather.gov/**");
   await routeWeather(page, {});
-  await page.route("**/api.weather.gov/**/forecast", r => r.fulfill(json({}, 500)));
+  await page.route("**/api.weather.gov/**/forecast", r => r.fulfill(nwsJson({}, 500)));
 
   await page.evaluate(() => expireFeeds());
   await page.waitForTimeout(1500);

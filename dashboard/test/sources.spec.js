@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer, startPage } from "./harness.js";
+import { startServer, startPage, routeTiles } from "./harness.js";
 import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 let servers = [];
@@ -7,6 +7,10 @@ let servers = [];
 test.afterEach(async () => {
   for (const s of servers) await s.close();
   servers = [];
+});
+
+test.beforeEach(async ({ page }) => {
+  await routeTiles(page);
 });
 
 function base(server) { return server.url.replace(/\/$/, ""); }

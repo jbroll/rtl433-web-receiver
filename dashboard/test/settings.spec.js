@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer } from "./harness.js";
+import { startServer, routeTiles } from "./harness.js";
 import { ACURITE, OREGON, LONGNAME, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -9,6 +9,10 @@ const LONG_KEY = topicOf(LONGNAME);
 let server;
 
 test.afterEach(async () => { if (server) await server.close(); server = null; });
+
+test.beforeEach(async ({ page }) => {
+  await routeTiles(page);
+});
 
 async function open(page, devices) {
   server = await startServer({ devices: devices || [] });

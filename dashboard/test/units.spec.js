@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer, startPage } from "./harness.js";
+import { startServer, startPage, routeTiles } from "./harness.js";
 import { OREGON, topicOf } from "./fixtures.js";
 
 const OREGON_KEY = topicOf(OREGON, "srcA");
@@ -14,6 +14,10 @@ let servers = [];
 test.afterEach(async () => {
   for (const s of servers) await s.close();
   servers = [];
+});
+
+test.beforeEach(async ({ page }) => {
+  await routeTiles(page);
 });
 
 function base(server) { return server.url.replace(/\/$/, ""); }
@@ -72,9 +76,13 @@ test("changing units POSTs $units when the serving origin is a configured source
   await page.locator("#settings-units").selectOption("imperial");
   await page.locator("#settings-decimals").selectOption("2");
 
-  await expect.poll(async () => (await server.get(server.source + "/$units")).status).toBe(200);
+  // Two separate POSTs land (one per selectOption), so poll for the second
+  // one's effect rather than just a 200, or a read can catch the first.
+  await expect.poll(async () => {
+    const r = await server.get(server.source + "/$units");
+    return r.status === 200 ? JSON.parse(r.body).decimals : null;
+  }).toBe(2);
   const u = JSON.parse((await server.get(server.source + "/$units")).body);
   expect(u.units).toBe("imperial");
-  expect(u.decimals).toBe(2);
   expect(u.custom).toEqual({ temp: "F", rain: "in", wind: "mi/h", pressure: "hPa" });
 });

@@ -86,11 +86,9 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
   await page.click("#tab-cards");
 
   // .fv is a shrink-to-fit flex item, so its own scrollWidth/clientWidth is
-  // always 1. Measure the text against the box fitValues() actually sized
-  // it for: the .val parent. At extreme aspect ratios (e.g. 2x1) the fit is
-  // height-bound rather than width-bound, so width fill alone legitimately
-  // drops well below 1; take whichever of width or height fill is tighter,
-  // which stays near 1 regardless of which dimension bound the fit.
+  // always 1; measure against the box fitValues() sized it for, the .val
+  // parent. See docs/architecture.md's "Value fit" for why width and height
+  // fill are both checked.
   const fillRatios = () => page.locator(".val .fv").evaluateAll(
     nodes => nodes.map(n => {
       const val = n.closest(".val");

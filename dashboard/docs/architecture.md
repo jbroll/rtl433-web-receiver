@@ -196,6 +196,11 @@ cannot measure rather than fitting it to the floor. `CardsView` watches the grid
 with a `ResizeObserver`, which fires when the tab comes back and the boxes get
 their size, and re-fits then.
 
+At extreme aspect ratios (e.g. a 2x1 card) the fit is height-bound rather than
+width-bound, so measuring width fill alone legitimately reads well below full;
+checking whichever of width or height fill is tighter stays near full
+regardless of which dimension bound the fit.
+
 ## Feed cards
 
 Weather, sun, moon and clock need everything a card already does: ordering,

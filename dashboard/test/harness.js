@@ -251,8 +251,21 @@ function proxyToFixture(req, res, targetPort, body) {
   else proxyReq.end(body);
 }
 
-function nwsJson(body, status = 200) {
+export function nwsJson(body, status = 200) {
   return { status, contentType: "application/geo+json", body: JSON.stringify(body) };
+}
+
+// A 1x1 transparent png, so no tile request ever leaves the machine.
+const TILE_PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64");
+
+// The settings pane always renders its map (src/location.jsx), regardless of
+// whether a location is set, so any test that visits it fetches real OSM
+// tiles unless this is routed too.
+export async function routeTiles(page) {
+  await page.route("**/tile.openstreetmap.org/**", r =>
+    r.fulfill({ status: 200, contentType: "image/png", body: TILE_PIXEL }));
 }
 
 // Every spec that sets a location makes the dashboard fetch api.weather.gov,

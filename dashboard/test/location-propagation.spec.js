@@ -1,17 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { startServer, startPage, routeWeather } from "./harness.js";
+import { startServer, startPage, routeWeather, routeTiles } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
-
-// The settings pane always renders its map (src/location.jsx), regardless of
-// whether a location is set, so any test that visits it fetches real OSM
-// tiles unless this is routed too.
-const PIXEL = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  "base64");
-async function routeTiles(page) {
-  await page.route("**/tile.openstreetmap.org/**", r =>
-    r.fulfill({ status: 200, contentType: "image/png", body: PIXEL }));
-}
 
 let servers = [];
 

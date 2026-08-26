@@ -39,6 +39,11 @@
 - "no card overflows its box at any size or value count" can only catch overflow right
   and below: `scrollWidth`/`scrollHeight` ignore content above or left of the box, and
   `.lbl` sits at `top:-.65em` by design. The name overclaims what the test checks.
+- The same test survives a mutation that makes every value overflow its `.val`:
+  `.card .val` and `.card .fv` both carry `overflow:hidden` (`src/style.css:71, 95`), so
+  clipped text never reaches the `.card`/`.body` scroll metrics it reads. The value-level
+  guarantee is covered separately, by "every value in a card shares the size its widest
+  reading needs" (`cards.spec.js:1339`), which does fail on that mutation.
 - Nothing drives a card drag and a corner resize in flight at once, the only way to reach
   the mutual-exclusion guards. It is testable: the suite already dispatches synthetic
   bubbling events from `page.evaluate`, and Chromium exposes real multi-touch through
@@ -230,13 +235,6 @@
 - The view column cap is derived from width alone. A landscape phone gets the same 3
   columns a portrait one does at the same width, and a very short window still scrolls
   rather than fitting.
-- Any spec that visits the settings tab (`#subtab-settings`) renders `location.jsx`'s
-  map unconditionally, which fetches real `tile.openstreetmap.org` tiles regardless of
-  whether a location is set. `location.spec.js` and `location-propagation.spec.js`
-  route this; `weather.spec.js`'s "observations arrive as readings the unit setting
-  converts" test visits settings too and does not, so it still makes live tile
-  requests. Same shape as the weather.gov hole, same fix (route
-  `**/tile.openstreetmap.org/**`).
 - The Playwright suite has no default network guard: a spec that adds a new call to
   a third-party API and forgets to route it will hit the live service, the same way
   the four weather.gov specs did. A single fixture wrapping `page` that installs a
