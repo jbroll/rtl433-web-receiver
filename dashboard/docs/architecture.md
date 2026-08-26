@@ -364,3 +364,10 @@ message rather than treating it as a delete. Both are filed as bugs in
 [`bridge/docs/backlog.md`](../../bridge/docs/backlog.md). The harness reproduces the
 receiver firmware's actual behavior for both, so the suite's assertions keep meaning what
 they say.
+
+Nothing in the suite reaches the network. Setting a location makes the weather feed
+fetch the National Weather Service, and opening the settings tab makes the map fetch
+OpenStreetMap tiles, so `harness.js` exports `routeWeather()` and `routeTiles()` and
+every spec that does either calls them. A spec that forgets still passes while the
+services are up, which is how a live fetch once masked a mutation that should have
+failed the test.

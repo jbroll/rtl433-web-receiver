@@ -80,17 +80,25 @@ Cards is the tab the page opens on. It lays every device whose card is checked
 in the device table on a grid of square cells. Two number inputs in edit mode
 set the columns and rows, 6 × 4 by default and 1–24 each; the cell side is
 whichever of width ÷ columns and height ÷ rows is smaller, so the grid fits on
-screen with margin on the other axis. Nothing narrows the default for a small
-screen, so a phone gets the full 6 × 4 grid of very small cells until the user
-sets smaller numbers.
+screen with margin on the other axis.
+
+A narrow window draws fewer columns than the setting asks for. Below 110px a
+cell stops being legible, so the page divides the width it has by 110 and draws
+that many columns, never more than the setting. A 390px phone gets 3 columns
+rather than 6. The cell is then sized from the width alone and the page scrolls,
+rather than shrinking every cell until all the rows fit. The setting itself does
+not change: widening the window brings the other columns back, and saving the
+layout from a phone writes the columns you set, not the columns it drew.
 
 A card spans whole cells. On first detection it is sized to hold its visible
 readings one per cell, in the most compact rectangle: one reading gives 1×1,
 three or four give 2×2, seven through nine give 3×3. Dragging the corner
 handle in edit mode resizes it, snapped to whole cells, from 1×1 up to the
-grid's own dimensions. Every reading on the page takes one size: the largest
-that still fits the tightest value box, whether that box runs out of width or
-of height. A card holding two readings reads at the same size as a card of five
+grid's own dimensions, or up to the columns actually drawn if a narrow window
+capped them. A card stored wider than the window draws keeps its stored width
+unless the drag itself narrows it. Every reading on the page takes one size:
+the largest that still fits the tightest value box, whether that box runs out
+of width or of height. A card holding two readings reads at the same size as a card of five
 beside it, so a small card packed with readings sets the size for the page.
 Cards that do not fit in the set number of rows render below the fold.
 
