@@ -70,21 +70,25 @@ async function handle(
   // '/' is never a valid topic (topic.js rejects the empty string), so this
   // cannot shadow any real topic GET, the same way the receiver firmware
   // special-cases "/" for its own embedded dashboard.
-  if (url.pathname === '/' && req.method === 'GET' && dashboardHtml) {
-    res.writeHead(200, { 'content-type': 'text/html' })
-    return res.end(dashboardHtml)
+  if (url.pathname === '/' && (req.method === 'GET' || req.method === 'HEAD') && dashboardHtml) {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    return res.end(req.method === 'HEAD' ? undefined : dashboardHtml)
   }
 
   if (url.pathname === '/events') {
-    if (req.method !== 'GET') return send(res, 405, 'method not allowed')
+    if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', { allow: 'GET' })
     if (!broker.connected()) return send(res, 503, 'broker unavailable')
+    if (req.method === 'HEAD') {
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
+      return res.end()
+    }
     return subscribe(req, res, { cache, clients, url })
   }
 
   // Reserved the same way '/events' is: never a topic a source publishes to
   // in practice, and gated ahead of topic parsing so it can't collide with one.
   if (url.pathname === '/auth/rotate') {
-    if (req.method !== 'POST') return send(res, 405, 'method not allowed')
+    if (req.method !== 'POST') return send(res, 405, 'method not allowed', { allow: 'POST' })
     // Nothing to rotate: a deployment with no AUTH_TOKEN has no auth surface
     // to expose here either, so this is "not found," not "not authorized."
     if (!tokens.get()) return send(res, 404, 'not found')
@@ -123,13 +127,13 @@ async function handle(
 
   if (!broker.connected()) return send(res, 503, 'broker unavailable')
 
-  if (req.method === 'GET') {
+  if (req.method === 'GET' || req.method === 'HEAD') {
     const payload = cache.get(topic)
     // An empty body is not the JSON the binding says a 200 carries, and a
     // retained delete the broker forwarded live is cached as exactly that.
     if (payload === undefined || payload.length === 0) return send(res, 404, 'no message')
-    res.writeHead(200, { 'content-type': 'application/json' })
-    return res.end(payload)
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': payload.length })
+    return res.end(req.method === 'HEAD' ? undefined : payload)
   }
 
   if (req.method === 'POST') {
@@ -159,7 +163,7 @@ async function handle(
     return res.end()
   }
 
-  return send(res, 405, 'method not allowed')
+  return send(res, 405, 'method not allowed', { allow: 'GET, POST' })
 }
 
 function subscribe(req, res, { cache, clients, url }) {
@@ -253,8 +257,8 @@ function parseJson(body) {
   }
 }
 
-function send(res, status, message) {
-  res.writeHead(status, { 'content-type': 'text/plain' })
+function send(res, status, message, headers) {
+  res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', ...headers })
   res.end(`${message}\n`)
 }
 

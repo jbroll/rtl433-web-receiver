@@ -43,6 +43,7 @@ export async function startBridge({
     mqttUrl: url ?? mqttBroker.url,
     broker,
     cache,
+    clients: bridge.clients,
     stopBroker,
     blackhole: (direction) => mqttBroker?.blackhole(direction),
     directUrl: () => mqttBroker?.directUrl,

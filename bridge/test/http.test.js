@@ -110,7 +110,65 @@ test('a wildcard in a topic is 400 and an unsupported method is 405', async () =
   try {
     assert.equal((await fetch(`${bridge.base}/src/+/1234`)).status, 400)
     assert.equal((await fetch(`${bridge.base}/`)).status, 400)
-    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'DELETE' })).status, 405)
+    const deleted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'DELETE' })
+    assert.equal(deleted.status, 405)
+    assert.equal(deleted.headers.get('allow'), 'GET, POST')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a 405 carries Allow naming the methods that endpoint does offer', async () => {
+  const bridge = await startBridge()
+  try {
+    const events = await fetch(`${bridge.base}/events`, { method: 'POST' })
+    assert.equal(events.status, 405)
+    assert.equal(events.headers.get('allow'), 'GET')
+
+    const rotate = await fetch(`${bridge.base}/auth/rotate`, { method: 'GET' })
+    assert.equal(rotate.status, 405)
+    assert.equal(rotate.headers.get('allow'), 'POST')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('HEAD matches GET status for a topic, with an empty body and no stream registered', async () => {
+  const bridge = await startBridge()
+  try {
+    const missing = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'HEAD' })
+    assert.equal(missing.status, 404)
+    assert.equal(await missing.text(), '')
+
+    await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+
+    const got = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'HEAD' })
+    assert.equal(got.status, 200)
+    assert.equal(got.headers.get('content-length'), '7')
+    assert.equal(await got.text(), '')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('HEAD / serves the dashboard headers with an empty body', async () => {
+  const bridge = await startBridge({ dashboardHtml: '<html>dashboard</html>' })
+  try {
+    const head = await fetch(`${bridge.base}/`, { method: 'HEAD' })
+    assert.equal(head.status, 200)
+    assert.equal(head.headers.get('content-type'), 'text/html; charset=utf-8')
+    assert.equal(await head.text(), '')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('HEAD /events does not leave a stream registered', async () => {
+  const bridge = await startBridge()
+  try {
+    const head = await fetch(`${bridge.base}/events`, { method: 'HEAD' })
+    assert.equal(head.status, 200)
+    assert.equal(bridge.clients.size, 0)
   } finally {
     await bridge.close()
   }
@@ -121,7 +179,7 @@ test('GET / serves the dashboard when configured, and topic routing is unaffecte
   try {
     const root = await fetch(`${bridge.base}/`)
     assert.equal(root.status, 200)
-    assert.equal(root.headers.get('content-type'), 'text/html')
+    assert.equal(root.headers.get('content-type'), 'text/html; charset=utf-8')
     assert.equal(await root.text(), '<html>dashboard</html>')
 
     assert.equal((await fetch(`${bridge.base}/`, { method: 'POST', body: '{}' })).status, 400)

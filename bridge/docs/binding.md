@@ -58,6 +58,9 @@ Consumers already know how to read it: the page drops `model`, `id`, `channel`,
 | `POST /<topic>` | Publish a message. Body is the JSON. `204` on success |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `Content-Type: text/event-stream` |
 
+`HEAD` is served wherever `GET` is, with the same status and headers and no
+body. A refusal carries `Allow`, naming the methods the path does accept.
+
 Filters use MQTT wildcards: `+` matches one segment, `#` matches the rest.
 Repeating `f` subscribes to several filters on one connection, which is what
 keeps a dashboard watching many topics inside the browser's per-origin
