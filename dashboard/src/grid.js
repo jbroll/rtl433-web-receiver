@@ -20,7 +20,15 @@ export function viewCols() { return viewColsN }
 
 export const viewColsSignal = signal(viewColsN)
 
+// Call counts a test can read to confirm the effects that invoke these
+// aren't re-running when nothing they depend on changed.
+let measureGridCalls = 0
+let fitValuesCalls = 0
+export function measureGridCallCount() { return measureGridCalls }
+export function fitValuesCallCount() { return fitValuesCalls }
+
 export function measureGrid() {
+  measureGridCalls++
   const grid = $("cards")
   if (!grid || grid.clientWidth <= 0) return
   const g = gridSize()
@@ -79,6 +87,7 @@ export function resetFit() {
 const LINE_HEIGHT = 1.05
 
 export function fitValues() {
+  fitValuesCalls++
   let global = FONT_MAX
   const boxes = []
   for (const f of fitting.values()) {

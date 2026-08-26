@@ -531,6 +531,22 @@ test("a live update flashes the card, clears on its own, and flashes again", asy
   await expect(card).toHaveClass(/flash/);
 });
 
+test("a devices update alone, with the grid, cards, and settings unchanged, doesn't refit", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await settledPageFont(page);
+  const before = await page.evaluate(() => measureGridCalls + fitValuesCalls);
+
+  // CardsView reads devices.value to compute which keys are shown, so it
+  // re-renders on this even though nothing the fit depends on changed.
+  for (let i = 0; i < 10; i++) {
+    await page.evaluate(() => devices.clear());
+    await page.waitForTimeout(20);
+  }
+
+  const after = await page.evaluate(() => measureGridCalls + fitValuesCalls);
+  expect(after - before).toBeLessThan(10);
+});
+
 async function edit(page) {
   await page.click("#tab-cards");
   await page.click("#edit-cards");

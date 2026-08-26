@@ -23,14 +23,13 @@ export function CardsView() {
   // measureGrid on render (synchronous, before paint)
   useLayoutEffect(() => {
     if (gridRef.current) measureGrid()
-  })
+  }, [cellSignal.value, viewColsSignal.value, cardState.value, settings.value])
 
   // fitValues runs after every render, after paint, so values tracked after
   // the last cell change (device arrival, text width change) still get fitted
   useEffect(() => {
-    cellSignal.value
     if (gridRef.current) fitValues()
-  })
+  }, [cellSignal.value, viewColsSignal.value, cardState.value, settings.value])
 
   // The grid measures zero on a hidden tab, so re-fit when it gets its size
   // back as well as on a window resize.

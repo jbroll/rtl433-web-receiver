@@ -99,14 +99,6 @@
   `DevicesView` already establishes the fix by gating its body on visibility, and formatting
   the timestamp once in `addLog` removes the other 200 Intl calls. Same family as the
   devices-table entry under Information feeds.
-- Every message forces two synchronous layouts. Neither the `useLayoutEffect` calling
-  `measureGrid()` nor the `useEffect` calling `fitValues()` in `cards.jsx` has a dependency
-  array, and `CardsView` subscribes to `devices.value`, so both run after every message.
-  `measureGrid` does a `getComputedStyle` plus a `getBoundingClientRect`, and `fitValues`
-  reads `clientWidth`/`clientHeight`/`offsetHeight` per tracked node. Neither depends on the
-  reading that changed; both depend on cell size, grid dimensions and the set of values.
-  (`cellSignal.value` is also read inside the `useEffect` body, which is not a reactive
-  context, so it subscribes to nothing.)
 - The time-zone `<select>` rebuilds its option list on every settings render.
   `location.jsx` calls `zones()` at module scope through `const TZ = zones()` but
   `Intl.supportedValuesOf('timeZone')` returns a fresh ~450-entry array, and `TZ.map(...)`

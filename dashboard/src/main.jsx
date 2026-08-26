@@ -13,7 +13,8 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
 import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame,
          onUnitsFrame, refreshTz } from './settings.js'
-import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
+import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight,
+         measureGridCallCount, fitValuesCallCount } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
@@ -209,6 +210,8 @@ function exposeForTests() {
     cardState: { get: store.getCardState, set: store.setCardState },
     cellSide: { get: () => cellSignal.value },
     viewCols: { get: () => viewColsSignal.value },
+    measureGridCalls: { get: measureGridCallCount },
+    fitValuesCalls: { get: fitValuesCallCount },
     dragging: { get: () => dragging.value },
     resizing: { get: () => resizing.value },
     gestureInFlight: { get: () => gestureInFlight() },
