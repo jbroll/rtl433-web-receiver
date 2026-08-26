@@ -74,14 +74,30 @@ function hourAngle (lat, decl, zenith) {
 // So this re-solves `solve` at an anchor shifted a day earlier or later,
 // rather than adding/subtracting 86400000 from the answer, and returns the
 // result re-based to the original `start` so callers keep using one origin.
-function inLocalDay (start, zone, dayKey, solve) {
-  const m = solve(start)
+//
+// The shifted solve is not trusted blindly: `solveEventMinutes` normalizes
+// its result relative to whatever anchor it is given, so a shift can land
+// close enough to the anchor's own start to wrap onto a third day's crossing,
+// or find no crossing at all. Either way this falls back to the naive
+// 86400000ms translation of the first solve, which is always on the right
+// day (if imprecise), rather than risk returning a wrong day or a spurious
+// null.
+//
+// `m0`, when passed, is the caller's own already-computed `solve(start)` --
+// callers that need that value anyway (e.g. solar noon) pass it to avoid
+// solving twice.
+function inLocalDay (start, zone, dayKey, solve, m0 = solve(start)) {
+  const m = m0
   if (m === null) return null
   const key = zoneDateKey(new Date(start + m * 60000), zone)
   if (key === dayKey) return m
   const shiftMs = key < dayKey ? DAY : -DAY
+  const fallback = m + shiftMs / 60000
   const m2 = solve(start + shiftMs)
-  return m2 === null ? null : m2 + shiftMs / 60000
+  if (m2 === null) return fallback
+  const m2abs = m2 + shiftMs / 60000
+  const key2 = zoneDateKey(new Date(start + m2abs * 60000), zone)
+  return key2 === dayKey ? m2abs : fallback
 }
 
 function solveEventMinutes (start, lat, lon, zenith, dir) {
@@ -117,8 +133,9 @@ export function sunEvents (date, lat, lon, zone = 'UTC') {
     mid -= 1440 * Math.floor(mid / 1440)
     return mid
   }
-  const midday = solarPosition(new Date(start + solveNoon(start) * 60000))
-  const mid = inLocalDay(start, zone, dayKey, solveNoon)
+  const mid0 = solveNoon(start)
+  const midday = solarPosition(new Date(start + mid0 * 60000))
+  const mid = inLocalDay(start, zone, dayKey, solveNoon, mid0)
 
   const rise = eventMinutes(start, lat, lon, 90.833, 1, zone, dayKey)
   const set = eventMinutes(start, lat, lon, 90.833, -1, zone, dayKey)

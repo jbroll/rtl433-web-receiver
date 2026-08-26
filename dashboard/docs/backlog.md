@@ -178,9 +178,9 @@
   offsetMinutes(date, zone) * 60000`, using the offset at the instant passed in rather
   than the offset at true local midnight. Across a DST transition the two differ by an
   hour, so the window can start up to about 24 hours from true local midnight instead of
-  the 14 the comment discloses. Confirmed wrong: New York (`America/New_York`) on
-  2027-11-07 reports a real 01:00 local moonset as `null` because the window already
-  closed by then. Self-corrects the next day; happens twice a year per zone, at its DST
+  the 14 the comment discloses. Confirmed wrong: New York (`America/New_York`) reports a
+  real moonset as `null` on both 2027-11-06 and 2027-11-07, the DST transition day and the
+  one before it. Self-corrects the day after; happens twice a year per zone, at its DST
   transitions.
 - Sun events degrade above about 60° latitude, where the sun grazes the horizon
   and a truncated series loses precision. The tests relax to five minutes there.

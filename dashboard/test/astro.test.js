@@ -183,10 +183,14 @@ function trueAltitude (date, lat, lon) {
   return Math.asin(biSin(lat) * biSin(declination) + biCos(lat) * biCos(declination) * biCos(h)) / BI_RAD
 }
 
-// UTC instant of the zone's local midnight for the given Y-M-D.
+// UTC instant of the zone's local midnight for the given Y-M-D. Takes the
+// offset at that midnight, not at UTC midnight -- the two differ by an hour
+// on a DST transition day, which is the same shortcut docs/backlog.md faults
+// `moonTimes` for.
 function trueLocalMidnight (y, mo, d, zone) {
   const guess = Date.UTC(y, mo - 1, d)
-  return guess - offsetMinutes(new Date(guess), zone) * 60000
+  const near = guess - offsetMinutes(new Date(guess), zone) * 60000
+  return guess - offsetMinutes(new Date(near), zone) * 60000
 }
 
 // Bisects the altitude crossing of -0.833 degrees (the sunrise/sunset
@@ -242,6 +246,40 @@ test('sunset lands within a few seconds of true solar altitude at the Denver equ
   const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
   const trueMs = bisectHorizon(lat, lon, dayStart, -1)
   near(e.sunset, new Date(trueMs), 5000, 'sunset (Denver equinox, vs independent bisection)')
+})
+
+// Reads the zone-local Y-M-D of a Date, independent of astro.js's own
+// zoneDateKey, so these regression checks don't share a bug with the code
+// under test.
+function localDateKey (date, zone) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(date)
+  const p = Object.create(null)
+  for (const { type, value } of parts) p[type] = value
+  return `${p.year}-${p.month}-${p.day}`
+}
+
+// Regression for 3542f66: at Denver, requesting the local day 2026-10-30,
+// the re-solved sunset landed on 2026-10-31 (a third day, past the shifted
+// anchor's own day) instead of falling back to the naive-translation answer,
+// which is on the right day.
+test('sunset on 2026-10-30 in Denver falls on the requested local day', () => {
+  const lat = 39.7392, lon = -104.9903, zone = 'America/Denver'
+  const dayStart = trueLocalMidnight(2026, 10, 30, zone)
+  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
+  assert.equal(localDateKey(e.sunset, zone), '2026-10-30')
+})
+
+// Regression for 3542f66: at Murmansk on 2026-07-23, the re-solved anchor
+// found no crossing at all and returned null, flipping alwaysUp to true even
+// though the sun does rise that day.
+test('sunrise on 2026-07-23 in Murmansk is not dropped', () => {
+  const lat = 68.9585, lon = 33.0827, zone = 'Europe/Moscow'
+  const dayStart = trueLocalMidnight(2026, 7, 23, zone)
+  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
+  assert.ok(e.sunrise instanceof Date, `sunrise was ${e.sunrise}`)
+  assert.equal(e.alwaysUp, false)
+  assert.equal(localDateKey(e.sunrise, zone), '2026-07-23')
 })
 
 const SITES = [
