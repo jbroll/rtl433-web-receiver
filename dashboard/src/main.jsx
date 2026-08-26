@@ -14,7 +14,7 @@ import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame,
          onUnitsFrame, refreshTz } from './settings.js'
 import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight,
-         measureGridCallCount, fitValuesCallCount, fittingSize } from './grid.js'
+         measureGridCallCount, fitValuesCallCount, fittingSize, textWidthEm, trackFit } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
@@ -203,7 +203,7 @@ function exposeForTests() {
   Object.assign(window, {
     devices: deviceProxy,
     upsert,
-    measureGrid, fmtValue, fitValues, deriveTemplate,
+    measureGrid, fmtValue, fitValues, deriveTemplate, textWidthEm, trackFit,
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,

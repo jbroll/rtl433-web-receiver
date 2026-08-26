@@ -287,6 +287,15 @@ joins the page-wide fit. Fixed pixel ceilings used to cap these, which left a
 large card mostly empty. An engine without container queries drops the `min()`
 and falls back to inherited body type, which is legible.
 
+`textWidthEm()`'s probe font is a tracked `.fv` node's computed style, not
+`.cval .big`'s own — the two elements happen to share the body font today, so
+nothing visibly moves, but a rule that touched only `.fv` (letter-spacing, say)
+would resize `.cval .big` without touching what it targets. The em it returns
+also varies with whatever size the probe node is currently fitted to, not a
+fixed reference size. That is harmless for the letter-spacing and
+font-feature-settings terms above, which scale with font size the same way the
+em does, but would be wrong for anything using the em as a fixed pixel budget.
+
 The sun and moon renderers are composites: they draw their rise and set times
 inside the SVG rather than beside it, so the whole thing scales as one unit and
 one cell tells the whole story. Type sizes there are chosen so the longest

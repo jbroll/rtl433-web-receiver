@@ -70,7 +70,14 @@ let textProbe = null
 // settings; probing document.body would miss a change scoped to .fv.
 function probeNode() {
   const tracked = fitting.values().next().value
-  return (tracked && tracked.node) || document.querySelector(".card .fv")
+  // fitValues() purges an unmounted node from `fitting` as it iterates, but a
+  // call outside that loop (every renderer's textWidthEm()) can land between a
+  // card unmounting and the next fitValues() run. getComputedStyle on a
+  // detached node returns all-empty strings, so fall back rather than measure
+  // against nothing: cs.font becomes a no-op assignment and fontSizePx defaults
+  // to 100, giving an em far too small.
+  if (tracked && tracked.node.isConnected) return tracked.node
+  return document.querySelector(".card .fv")
 }
 
 // Sets textProbe's font/letter-spacing/etc. from the probe node's computed
@@ -111,6 +118,8 @@ export function trackFit(node, num) {
 
 export function fittingSize() { return fitting.size }
 
+// Used only when --val-line-height is unreadable (no .val parent mounted
+// yet). Must track the property's value in style.css (.card .val).
 const DEFAULT_LINE_HEIGHT = 1.05
 
 export function fitValues() {

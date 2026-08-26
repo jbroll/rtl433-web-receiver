@@ -138,3 +138,20 @@ test("hiding and showing a card repeatedly does not leak fitting entries", async
   // one entry per node per cycle instead of settling back down each time.
   expect(await page.evaluate(() => fittingSize)).toBeLessThan(10);
 });
+
+test("textWidthEm ignores a detached head entry instead of measuring garbage", async ({ page }) => {
+  await open(page);
+
+  // A card unmount can leave the head fitting entry detached until the next
+  // fitValues() run purges it. textWidthEm() (called outside that loop by
+  // every renderer) must not measure against a node with no computed style:
+  // getComputedStyle on a detached node returns "" for every property, which
+  // used to leave fontSizePx defaulted to 100 and the em far too small.
+  const detachedEm = await page.evaluate(() => {
+    const node = document.querySelector(".card .fv");
+    trackFit(node, "88.8");
+    node.remove();
+    return textWidthEm("88.8");
+  });
+  expect(detachedEm).toBeGreaterThan(1);
+});
