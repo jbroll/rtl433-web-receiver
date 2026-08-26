@@ -1,6 +1,6 @@
 import http from 'node:http'
 
-import { tokenMatches } from './auth.js'
+import { digestMatches } from './auth.js'
 import { openStream } from './sse.js'
 import { validFilter, validTopic } from './topic.js'
 import { createTokenStore } from './token-store.js'
@@ -181,5 +181,5 @@ function send(res, status, message) {
 function authorized(req, expectedDigest) {
   const header = req.headers['authorization']
   if (typeof header !== 'string' || !/^Bearer /i.test(header)) return false
-  return tokenMatches(header.slice('Bearer '.length), expectedDigest)
+  return digestMatches(header.slice('Bearer '.length), expectedDigest)
 }

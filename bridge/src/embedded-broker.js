@@ -5,7 +5,7 @@ import path from 'node:path'
 
 import Aedes from 'aedes'
 
-import { tokenMatches } from './auth.js'
+import { digestMatches } from './auth.js'
 import { createTokenStore } from './token-store.js'
 
 // Only one of these ever runs: a public broker without an authenticate hook
@@ -29,7 +29,7 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
     // tokens.digest() is read per-CONNECT, not captured once, so a rotation
     // gates new connections immediately without restarting the broker.
     aedes.authenticate = (client, username, password, callback) => {
-      callback(null, tokenMatches(password, tokens.digest()))
+      callback(null, digestMatches(password, tokens.digest()))
     }
   }
 

@@ -33,9 +33,8 @@ export function createTokenStore(initialToken, { path: tokenPath } = {}) {
     rotate(newToken) {
       const trimmed = newToken.trim()
       if (trimmed.length === 0) throw new Error('token must not be empty')
-      // The digest is assigned right alongside `current`, after persist()
-      // succeeds: a failed write must leave both the old token and the old
-      // digest live, not one updated and the other stale.
+      // Assigned right alongside `current`, after persist() succeeds: a
+      // failed write must leave both the old token and old digest live.
       if (tokenPath) persist(tokenPath, trimmed, counter++)
       current = trimmed
       currentDigest = digest(trimmed)
