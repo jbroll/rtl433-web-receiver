@@ -2,6 +2,11 @@ import mqtt from 'mqtt'
 
 const RECONNECT_MS = 2000
 
+// '#' never matches a topic whose first segment starts with '$' (src/topic.js
+// enforces the same rule), so a $-leading topic name the binding uses has to
+// be subscribed to explicitly. $tz is the only one today.
+const DOLLAR_TOPICS = ['$tz']
+
 // A broker on the same network echoes a publish back in a millisecond or two.
 // The wait is long enough to cover a dropped connection being remade and the
 // '#' subscription restored — one reconnect interval plus its round trips —
@@ -67,7 +72,7 @@ export function connectBroker({
     // retained set, and anything missing from it no longer exists.
     cache.clear()
     onConnect?.()
-    client.subscribe('#', { qos: 0 }, (err) => {
+    client.subscribe(['#', ...DOLLAR_TOPICS], { qos: 0 }, (err) => {
       if (err) report(err)
       else {
         reported = null

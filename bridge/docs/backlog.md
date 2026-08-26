@@ -40,9 +40,6 @@
   later subscriber carries the topic. MQTT 5's retain-as-published
   subscription option would tell them apart, at the cost of requiring an
   MQTT 5 broker; `aedes` is MQTT 3.1.1 only, so the suite could not cover it.
-- `matchFilter('#', '$SYS/...')` returns `true`, where MQTT excludes topics
-  beginning with `$` from a `#` subscription. Moot against a real broker,
-  which never delivers them, but wrong on its own terms.
 - `test/helpers/bridge.js` builds the bridge in one synchronous step, so it
   cannot reproduce the startup ordering the `bridge?.broadcast` guard in
   `bin/mqtt-http-bridge.js` exists for. That guard is untested. The `ending`
@@ -74,15 +71,6 @@
   any bridge that has `AUTH_TOKEN` set — including the `weather.rkroll.com` deploy this
   branch adds. The dashboard needs its own token-configuration surface before that
   deploy's alias-editing UI can work.
-- `POST /$tz` cannot work against a real bridge. MQTT excludes topic names beginning
-  with `$` from a `#` wildcard subscription. `publish()` in `src/broker.js` waits for its
-  own echo on the bridge's `#` subscription before resolving; for a `$`-leading topic
-  that echo can never arrive, so the publish always times out (`ECHO_TIMEOUT_MS`, 5s) and
-  `src/server.js` answers `503`. The dashboard (`dashboard/src/settings.js`) posts its
-  GMT offset to a bare `${location.origin}/$tz`, so a real dashboard pointed at a real
-  bridge stalls 5 seconds and fails every time a user sets their location.
-  `a/b/$tz`-style source-scoped topics are unaffected; only a topic whose name itself
-  starts with `$` is excluded.
 - `/auth/rotate` dereferences `parsed.token` without checking that `parsed` is an object
   (`src/server.js`), so a body of literal `null` throws and reaches the generic `500`
   handler, where `123`, `"str"`, `[]` and `{"token":{}}` all correctly answer `400`.

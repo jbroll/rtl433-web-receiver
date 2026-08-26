@@ -68,6 +68,12 @@ connection limit and the receiver's four stream slots. Filters are fixed for the
 life of the connection; changing them means reconnecting. Omitting `f`
 subscribes to `#`.
 
+Per MQTT, `#` and `+` never match a topic whose first segment starts with
+`$`: `$tz` needs a filter naming it directly (`$tz` itself, or `$SYS/#`
+against a topic under `$SYS`). An implementation backed by a real broker has
+to subscribe to each such topic name explicitly; `#` alone will not deliver
+it.
+
 Each SSE event's data is a JSON object:
 
     {"topic": "rtl433-a1b2c3/Acurite-5n1/1234", "payload": { ... }}

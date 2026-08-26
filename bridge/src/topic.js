@@ -21,6 +21,10 @@ export function validFilter(filter) {
 }
 
 export function matchSplit(filterSegments, topicSegments) {
+  // MQTT rule: '#' and '+' never match a topic's first segment if it starts
+  // with '$'. A literal first segment, e.g. '$SYS/#', is unaffected.
+  const first = filterSegments[0]
+  if ((first === '#' || first === '+') && topicSegments[0]?.startsWith('$')) return false
   for (let i = 0; i < filterSegments.length; i++) {
     if (filterSegments[i] === '#') return true
     if (i >= topicSegments.length) return false

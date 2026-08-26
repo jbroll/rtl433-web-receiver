@@ -204,6 +204,19 @@ test('an alias round-trips, and a device without one has no alias topic', async 
   }
 })
 
+test('a $-leading topic round-trips, even though # never delivers it', async () => {
+  const bridge = await startBridge()
+  try {
+    const posted = await fetch(`${bridge.base}/$tz`, { method: 'POST', body: '-420' })
+    assert.equal(posted.status, 204)
+
+    const got = await fetch(`${bridge.base}/$tz`)
+    assert.equal(await got.text(), '-420')
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('a malformed percent-escape in the path is 400, and the bridge survives to serve the next request', async () => {
   const bridge = await startBridge()
   try {

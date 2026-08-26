@@ -25,6 +25,12 @@ without a round trip to the broker, and what lets a new SSE subscriber be
 replayed with the current state of every topic it's watching on connect,
 rather than waiting for the next publish.
 
+`#` never matches a topic whose first segment starts with `$` — the same MQTT
+rule `matchFilter` enforces for SSE filters and cache scans. `connectBroker`
+subscribes to `#` plus `DOLLAR_TOPICS`, an explicit list of the `$`-leading
+topic names the binding uses (`$tz` today), in one `subscribe` call so
+`broker.subscribed` resolves only once every topic in it is granted.
+
 The broker is the only writer of the cache. A `POST` publishes and then waits
 for the broker to echo the message back over the `#` subscription before it
 answers `204`, so a `GET` right after a `204` reads what was posted, the

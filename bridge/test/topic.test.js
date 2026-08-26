@@ -38,3 +38,10 @@ test('matchSplit takes pre-split segments and agrees with matchFilter', () => {
   assert.equal(matchSplit(['a', 'b'], ['a', 'b', 'c']), false)
   assert.equal(matchSplit(['a', '+', 'c'], ['a', 'b', 'c']), matchFilter('a/+/c', 'a/b/c'))
 })
+
+test('# and + do not match a $-leading first topic segment', () => {
+  assert.equal(matchFilter('#', '$SYS/broker/uptime'), false)
+  assert.equal(matchFilter('+/x', '$SYS/x'), false)
+  assert.equal(matchFilter('$SYS/#', '$SYS/x'), true)
+  assert.equal(matchSplit(['#'], ['$SYS', 'broker', 'uptime']), false)
+})
