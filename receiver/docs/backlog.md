@@ -22,7 +22,8 @@ it does, `record()` does `_dropped++; return false;` and leaves a slot with `las
 `count == 0` and no sub. With 32 subs already allocated and a new device promoted from
 pending, the store reports one more device than exists, `device()` orders a slot whose
 `latestPayload()` is NULL, a `GET` of its key answers 404, and nothing reclaims it until
-`sweepStale()` measures `millis() - 0` past `DEVICE_STALE_HOURS`. Claiming the sub first,
+`sweepSubStale()` measures `millis() - 0` past `SUB_STALE_MS` (see the entry on the hour
+cap below, which is what actually bounds this and not `DEVICE_STALE_HOURS`). Claiming the sub first,
 or releasing the slot on the failure path, fixes it.
 
 ## Build-time secrets are readable in the firmware image
@@ -196,6 +197,81 @@ names, and every store's `selfTest()` carries its own copy of the
 `check(what, ok)` PASS/FAIL logger (eight copies). One blob-store template and
 one shared check helper would remove both.
 
+## Devices expire after an hour whatever `DEVICE_STALE_HOURS` says
+
+`sweepStale()` ends by calling `sweepSubStale(now, SUB_STALE_MS)`, and `SUB_STALE_MS` is
+hardcoded to 3600000 in `signal_store.h`. `sweepSubStale()` frees the owning device slot
+when its last sub goes, so effective retention is `min(DEVICE_STALE_HOURS, 1h)` and the
+72-hour build flag can never take effect. A sensor with a daily or weather-dependent duty
+cycle disappears from the dashboard after an hour and comes back as a new pending key,
+needing two sightings to reappear. `DEVICE_STALE_HOURS=0`, which the flag's comment says
+disables expiry, does not: the `staleMs == 0` early return skips only the device loop.
+Either stop freeing the slot from the sub sweep and let the device window own slot
+lifetime, or tie `SUB_STALE_MS` to `DEVICE_STALE_HOURS` and document the coupling.
+
+## MQTT publishes messages the store then drops
+
+`signal_store::record()` runs the hook loop before the `measureJson(doc) >
+SIGNAL_PAYLOAD_MAX` check, and `mqtt_publish::onRecord` is registered as a hook, so a
+payload too large for the store is still published retained to every broker. The bridge
+and the receiver then disagree about which messages exist, and the retained copy has no
+local counterpart to age out. The pending-key rule is checked earlier and is consistent;
+only the size check is on the wrong side. Moving it above the hook loop is the fix, since
+`SIGNAL_PAYLOAD_MAX` is a property of the message rather than of the store's write. The
+failed-sub-claim path above drops a record after the hooks have run for the same reason.
+
+## Two stores write blobs the 20 KB NVS partition cannot promise them
+
+`partitions.csv` gives nvs `0x5000`, five 4096-byte pages, one of which NVS reserves for
+GC. After per-entry overhead and the IDF's own `nvs.net80211` and `phy` namespaces that
+leaves roughly 16 KB, against a worst case of about 8.8 KB across `layout` (5120),
+`alias` (2048), `mqtt` (768), `location` (512), `units` (256), wifi and the OTA token.
+Three problems follow.
+
+`alias_store::persist()` uses `putString` for a 2048-byte blob. An NVS string is one
+variable-length item that must fit a contiguous free run inside a single page, which is
+exactly the failure `layout_store.h` documents hitting near 2.7 KB on a real device and
+worked around by switching to `putBytes`. `alias_store` never got that treatment, and
+`mqtt_publish_store`'s 768-byte `table` is on the same trajectory. When `persist()` starts
+returning false, `set()` and `remove()` revert the in-memory change, so renames fail with
+a `503` and nothing but "alias store full" to explain it. Both want `putBytes`/`getBytes`
+with the legacy-key migration `layout_store::load()` already implements.
+
+None of `layout_store`, `location_store`, `units_store` or `alias_store` compares the
+incoming value against the copy already in RAM before writing. A dashboard that autosaves
+the layout on each drag rewrites 5120 bytes per drag; each rewrite appends a new copy
+before the old one can be erased, so live utilisation briefly doubles and the flash wear
+counter advances on a four-page arena. A `strcmp` against the in-RAM blob before the
+`putBytes` is one line per store.
+
+`LAYOUT_STORE_MAX` alone is a quarter to a third of usable NVS, and nothing checks
+headroom: `set()` accepts anything under 5120 and the write either works or does not.
+Shrinking the per-card template on the dashboard side would help; raising the partition is
+blocked on the platform hardcoding `app0`'s offset, as `partitions.csv` notes.
+
+## Every MQTT slot allocates its 5300-byte buffer at startup
+
+`mqtt_publish.cpp` declares `Connection _conn[MQTT_PUBLISH_SLOTS + 1]`, four entries, each
+holding a `PubSubClient` whose default constructor mallocs `MQTT_MAX_PACKET_SIZE`. With
+that flag at 5300 the array costs 21,200 bytes of heap at static-init time, before
+`setup()` runs, on a device that typically has one broker configured. Constructing the
+clients small and calling `setBufferSize(MQTT_MAX_PACKET_SIZE)` from `setupConnection()`
+only for slots that parsed a valid URL recovers about 16 KB with no change to what gets
+published. The `platformio.ini` comment already flags that this buffer costs RAM for the
+life of the process; this would make it cost it once rather than four times.
+
+## The SSE frame buffer is memset on every broadcast
+
+`SizedFrame` in `web_ui.cpp` zero-initialises its storage, and `FRAME_DEVICE_CAP` is 1363,
+so each of `broadcast()`, `broadcastAlias()`, `broadcastLocation()`, `broadcastUnits()`
+and `broadcastTz()` clears 1363 bytes to write a frame of roughly 250. The zero-init is
+there so the byte past the last write is a NUL for `data()`, but `reset()` sets only
+`_buf[0]`, so that guarantee does not survive a reused buffer anyway. Appending
+`_buf[_len] = '\0'` at the end of `Frame::write`, where `_len <= _cap - 1` is already an
+invariant, is a stronger guarantee and drops the memset. `handleTopic()` compounds it by
+putting a full `FrameBuffer` on the stack to escape an alias name capped at 32 characters,
+where `mqtt_publish.cpp`'s `ALIAS_PAYLOAD_MAX` of 195 already names the worst case.
+
 ## Smaller items
 
 - `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test
@@ -242,3 +318,49 @@ one shared check helper would remove both.
   against the live connections to leave unchanged slots alone would avoid
   this, at the cost of the per-slot comparison logic (url, token, plain-vs-TLS)
   that produced the original teardown bug in the first place.
+- `signal_store::device()` rebuilds `_order` and runs an insertion sort over every
+  used slot on each call. All four callers pass 0, all from `WebReceiver.ino`
+  immediately after a successful `record()`, and the slot just written always has
+  the highest `_seq`, so `device(0)` is by construction the slot `record()` just
+  touched. Having `record()` return or stash that index takes an O(n²) sort off the
+  per-decode path; `web_ui` uses `slotAt()` and has no other need for `device()`.
+- `web_ui::loop()` calls `reapClosedClients()` unconditionally at the top and again
+  inside the keepalive branch, and each call costs an `operator bool` plus a
+  `recv(MSG_DONTWAIT|MSG_PEEK)` syscall per SSE slot. At loop rate that is thousands
+  of syscalls a second to notice something that matters within a second or two.
+  Gating it on a ~100 ms timer like the keepalive changes slot-free latency by at
+  most that much.
+- `mqtt_publish::aliasPayload()` builds a `JsonDocument` to escape one string, and
+  `replayAll()` calls it once per alias, so a broker reconnect costs up to 32
+  heap-allocating documents. `web_ui::writeJsonString` does the same escaping without
+  allocating and is already exported in `web_ui.h`.
+- Each record is serialised twice: `mqtt_publish::onRecord` writes the doc into a
+  601-byte stack buffer and `signal_store::record()` writes the identical doc into
+  `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
+  from there means changing the hook contract from "gets the doc" to "gets the
+  serialised payload", so it is worth doing only if the decode path measures hot.
+- `claimRain()` in `device_hooks.cpp` always evicts the clock-less entry. `localDay()`
+  returns 0 before the first SNTP sync, so any baseline recorded pre-sync has `day == 0`
+  and is the permanent eviction victim, and its `rain_today_mm` is meaningless until the
+  clock arrives because the rollover branch never fires. Skipping the hook while
+  `localDay() == 0` would avoid both.
+- `setupConnection()` sets `enabled = false` and returns early on a broker URL it cannot
+  parse, but the caller increments `_connCount` regardless, so `count()`, `urlAt()` and
+  `connectedAt()` — and through them `GET /$mqtt` — list a bridge that will never connect
+  and give no reason for it.
+- `buildKey()` truncates `doc["id"]` into a 16-byte buffer, so two sensors sharing a
+  15-character prefix map to one key and one slot and interleave their readings.
+  Everywhere else `buildKey` rejects rather than truncates, and has a self-test for it;
+  the `id` segment is the one inconsistent spot.
+- A `POST /<topic>/$alias` with a name longer than `ALIAS_NAME_MAX` answers `204` and
+  stores 31 characters. `web_ui.cpp` checks the topic length and returns `400` for a long
+  one, but nothing checks the name, and `alias_store::set` truncates. The truncation at
+  least propagates consistently, because the handler re-reads the stored value for the
+  broadcast.
+- `signal_store::totalRecorded()` and `droppedCount()` have no caller outside
+  `selfTest()`, though `_total` and `_dropped` are maintained on every record. The
+  Receiver telemetry card reports heap, uptime and recovery count but not decode or drop
+  counts, which are the obvious two fields to add if that was the intent.
+- `strncpy` into `item.payload` in `rtl_433_Callback` zero-pads the whole 512-byte field,
+  so a typical 120-byte decode writes about 390 wasted bytes on the decoder task.
+  Marginal, since `xQueueSend` copies the struct either way.

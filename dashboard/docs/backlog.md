@@ -157,6 +157,99 @@
   `settingsTab.value === 'devices'`, so the rows never render. They want `#subtab-settings`
   and `#subtab-devices`.
 
+- The devices table renders a rich value as the literal text "undefined". `ValueRow` in
+  `devices-table.jsx` is passed `r.merged.value[f]` straight through to
+  `<td colSpan={3}>{value}</td>`, and `cardFields()` returns the `$r`-tagged values (`sun`,
+  `moon`, `now`, `day0`, `local_time_12`) along with the scalars. A plain object as a Preact
+  child falls through every branch of child normalisation and is treated as a VNode with
+  `type === undefined`, which `diffElementNodes` turns into a text node of `undefined`.
+  Preact also stamps `_parent`, `_depth` and `_index` onto the stored reading. The
+  `reading()` helper twelve lines above handles the same case correctly, which is what makes
+  this look like an oversight. Derived from reading Preact's diff source rather than observed
+  in a browser; a one-line check on `tr.vrow[data-f="sun"] td` would settle it.
+- `Card` in `cards.jsx` dereferences `cardEntry(key)` without checking it exists.
+  `loadCardState` validates `order` and `cards` independently, so an entry in `order` with
+  no matching `cards[k]` survives, and `CardsView` filters only on `devs.has(k)`. A corrupt
+  or hand-edited blob then throws on `c.w` and takes the whole tree down. Dropping unbacked
+  keys in `loadCardState` is the cleaner half of the fix.
+- `EventSource` error handling in `stream.js` reads the wrong socket after a retry. `es` is
+  a single closure variable that every `connect()` reassigns, and the old socket's `onerror`
+  closes over the variable rather than the instance, so a late error from a superseded
+  socket inspects the current socket's `readyState`. It can schedule a duplicate five-second
+  retry, overwriting `retry` and leaking the earlier timer past `close()`. Capturing the
+  instance in a local fixes it.
+- Reverse geocoding can clobber a newer location pick. `location.jsx` awaits
+  `reverseGeocode(latitude, longitude)` and writes the label with `setLocation`, and
+  `geocode.js` serialises requests behind a one-second gap, so the write lands at least a
+  second later. A search result picked in the meantime keeps its new coordinates and gets
+  the stale label. Capturing the coordinates before the await and skipping the write when
+  they no longer match is the fix.
+- `loadBridges()` has no request sequencing. It is called from `addBridge`/`removeBridge`
+  and from the settings-tab effect in `main.jsx`, so two overlapping fetches resolve in
+  arbitrary order and the loser wins. Low impact, since the list is small and refetched on
+  the next tab switch, but a monotonic request id is two lines.
+- `$tz` is posted once and never refreshed, so the receiver's rain-day boundary drifts at
+  every DST transition. `settings.js` computes `offsetMinutes(new Date(), zone)` at save
+  time and POSTs it; the firmware stores it in `device_hooks.cpp` and uses it for the local
+  day rollover that resets `rain_today_mm`. A fixed offset is wrong for half the year until
+  someone re-opens Settings and re-saves. The tick effect in `main.jsx` already runs every
+  second and could re-post on a change against a cached last-posted value.
+- The log pane re-renders 200 rows on every message, including while it is hidden.
+  `addLog()` copies the whole array per message and `LogView` maps all 200 rows, calling
+  `toLocaleTimeString()` — an Intl formatter construction — once per row. `app.jsx` only
+  sets `hidden` on the pane, never unmounts it, so the cost is paid whichever tab is up.
+  `DevicesView` already establishes the fix by gating its body on visibility, and formatting
+  the timestamp once in `addLog` removes the other 200 Intl calls. Same family as the
+  devices-table entry under Information feeds.
+- Every message forces two synchronous layouts. Neither the `useLayoutEffect` calling
+  `measureGrid()` nor the `useEffect` calling `fitValues()` in `cards.jsx` has a dependency
+  array, and `CardsView` subscribes to `devices.value`, so both run after every message.
+  `measureGrid` does a `getComputedStyle` plus a `getBoundingClientRect`, and `fitValues`
+  reads `clientWidth`/`clientHeight`/`offsetHeight` per tracked node. Neither depends on the
+  reading that changed; both depend on cell size, grid dimensions and the set of values.
+  (`cellSignal.value` is also read inside the `useEffect` body, which is not a reactive
+  context, so it subscribes to nothing.)
+- The time-zone `<select>` rebuilds its option list on every settings render.
+  `location.jsx` calls `zones()` at module scope through `const TZ = zones()` but
+  `Intl.supportedValuesOf('timeZone')` returns a fresh ~450-entry array, and `TZ.map(...)`
+  builds ~450 `<option>` VNodes on each `LocationView` render — including every keystroke in
+  the Place field, which is `useState`-backed. The list cannot change during a page load.
+- Intl formatters are constructed rather than cached in three places. The `clock` renderer
+  in `renderers.jsx` builds a new `Intl.DateTimeFormat` every second; `formatTime` in
+  `feeds/zone.js` builds one per call and `sun.js` calls `hhmm` eleven times per run; and
+  `isDST` builds three. Construction is the expensive half of Intl and formatting is cheap,
+  so a module-level Map keyed on zone and format covers all three.
+- `pump()` in `feeds/feed.js` resolves the location five times per tick. It calls
+  `hasLocation()`, `placeOf()` (which calls `resolvedLocation()` and `hasLocation()` again),
+  `resolvedLocation()`, and `activeZone()` (another `resolvedLocation()` plus
+  `localZone()`), driven by the one-second effect in `main.jsx`, and `localZone()`
+  constructs an `Intl.DateTimeFormat` just to read `resolvedOptions().timeZone`. Resolving
+  once at the top and threading the result through is enough.
+- `main.jsx` stringifies every payload, including the ones it discards. The SSE frame
+  arrived as a string and was parsed in `stream.js`; `JSON.stringify(obj)` re-serialises it
+  before the `isSelf(key)` test that decides whether it is logged at all, so Receiver
+  telemetry pays for a string nothing reads.
+- `sortDevices` recomputes its tiebreak key inside the comparator.
+  `deviceName(x).toLowerCase()` allocates twice per comparison and `localeCompare` builds a
+  collator each call, so the sort costs O(n log n) string allocations. Decorate, sort and
+  undecorate with a hoisted `Intl.Collator` gives the same order.
+- `test/card-memo.test.js` tests a function that does not ship. It defines its own
+  `areEqual` comparing `props.key`, `props.merged` and `props.alias`; the one in `cards.jsx`
+  takes `props.cardKey`, has no `merged` or `alias` props at all, and returns `false`
+  unconditionally outside a gesture. Eleven of its twelve tests exercise branches that do
+  not exist, and the file cannot fail on a regression in `cards.jsx`. Separately, because
+  the shipped `areEqual` always returns `false`, `memo()` provides no memoisation and only
+  adds a wrapper component; whether the gesture freeze it does provide survives
+  signal-driven updates, which re-render the inner component directly, is unverified.
+- Smaller items: `sources.jsx` returns before its `useState` when
+  `Capacitor.isNativePlatform()` is false, which is a conditional hook that happens to be
+  constant per platform. `storageBroken` in `store.js` is never reset, where `loadAliases`
+  and `loadSettings` both clear their flag on reload. `geocode.js`'s `cache` is unbounded, so
+  a user typing many searches grows it for the page's lifetime. And `RenameInput`'s Enter
+  path calls `postAlias` then unmounts the input, which most browsers do not fire `blur` on,
+  so the `onBlur` handler's second `postAlias` probably does not run — unconfirmed, and if
+  it does every rename POSTs twice.
+
 ## Information feeds
 
 - NWS documents a required identifying `User-Agent`. A browser cannot send one:

@@ -160,3 +160,73 @@
   delete. The bridge instead caches it as an ordinary non-empty retained message, so a
   later `GET` returns `200 ""` instead of `404`, and the retained message survives a
   broker restart indefinitely.
+- An SSE frame is built once per client instead of once per message. `send()` in
+  `src/sse.js` does `JSON.stringify({ topic, payload: decode(payload) })` inside the
+  per-client call, and `broadcast()` in `src/server.js` loops it over every client, so one
+  incoming message costs N Buffer decodes, N `JSON.parse`s and N serializations to produce
+  N identical strings. Nothing in the frame varies per client; only the filter test does.
+  Hoisting the frame into `broadcast` is the fix. Splicing the raw payload text in to skip
+  the parse round trip is not equivalent: `JSON.parse` then `JSON.stringify` normalises
+  whitespace, number forms and duplicate keys, so the bytes on the wire would change.
+- `POST` validates a different byte sequence than it publishes. `src/server.js` parses
+  `body.toString('utf8')`, which substitutes U+FFFD for invalid bytes rather than failing,
+  and then publishes the raw `body`. A body with invalid UTF-8 inside a JSON string literal
+  passes the gate, is cached verbatim, and is served back under
+  `content-type: application/json` as bytes the bridge never actually validated. Decoding
+  once with `new TextDecoder('utf-8', { fatal: true })` and parsing that string rejects it
+  and drops the second decode.
+- `tokenMatches` in `src/auth.js` does not do what its own comment claims. The comment says
+  a naive `===` leaks the token's length and prefix through response timing; the early
+  `providedBuf.length !== expectedBuf.length` return closes the prefix leak and keeps the
+  length oracle. The guard is required in this shape, because `timingSafeEqual` throws on
+  unequal lengths. Comparing SHA-256 digests instead is length-independent and needs no
+  early return, and it would let the expected digest be cached in the token store rather
+  than `Buffer.from(expected)` being allocated on every HTTP request and MQTT CONNECT.
+- `tokenMatches` dereferences `expected.length` before any type check, so a nullish
+  expected token throws a `TypeError` from inside an aedes callback rather than returning
+  `false`. Latent, not live: every current caller guards first. It is the one function the
+  file's comment names as the single place the discipline has to be right.
+- `rotate()` in `src/token-store.js` does not fsync, so the durability its comment promises
+  is not there. Write-then-rename gives atomic visibility, not durability: without an fsync
+  on the temp file before the rename and on the containing directory after it, a power loss
+  can leave the rename visible with the file's data unwritten, or lose the rename entirely.
+  The temp path is also a fixed `${path}.tmp`, so two overlapping rotations would write the
+  same file; nothing can interleave them today because `rotate` is synchronous within one
+  request.
+- Every reconnect issues a duplicate SUBSCRIBE. `src/broker.js` sets `resubscribe: true`
+  and also subscribes to `#` by hand inside the `connect` handler, so after the first
+  connect each reconnect sends two SUBSCRIBE packets for the same filter. Idempotent at the
+  broker, so it is redundant traffic rather than a bug, but it leaves two code paths
+  re-establishing `#` where the comments describe one. The manual subscribe cannot simply
+  be deleted: the `subscribed` promise and the error-clearing both hang off its callback.
+  Setting `resubscribe: false` is the way round.
+- Nothing caps the number of filters on one stream. `GET /events` is unauthenticated and
+  takes as many `f` parameters as fit in the request line; each costs a full `cache.match`
+  scan at connect and a `matchFilter` call per message per client for the life of the
+  connection. The uncapped-stream-count entry above covers the number of readers, not the
+  filters within one.
+- Retained replay is a full cache scan per filter. `subscribe()` in `src/server.js` calls
+  `cache.match(filter)` once per filter and each call iterates every cached topic, so
+  connect cost is topics × filters and grows with the uncapped cache. Scanning the cache
+  once and testing the filter list per topic gives the same result and collapses the
+  `replayed` Set the double-filtering entry above describes.
+- The dashboard is served without a charset. `src/server.js` writes
+  `content-type: text/html` for a string read as `utf8` and re-encoded as UTF-8 bytes. The
+  shipped `public/index.html` carries `<meta charset="utf-8">` and is pure ASCII, so
+  nothing breaks today; an operator-supplied `--dashboard-html` without that meta tag and
+  with a degree sign in it would be decoded by the browser's fallback encoding.
+- The three `405` responses omit `Allow`, which RFC 9110 requires, and `HEAD` is refused
+  where `GET` is supported, which the same rule forbids. A `HEAD /<topic>` falls past the
+  `GET` branch onto the trailing `405`. Node strips the body from a `HEAD` response on its
+  own, so letting `HEAD` take the `GET` branch needs no special casing.
+- `/auth/rotate` is intercepted before topic parsing but appears nowhere in `binding.md`,
+  so the bridge removes `auth/rotate` from the topic space of a protocol whose spec
+  reserves nothing but `/events`. The fix is in the binding: either state which paths an
+  implementation may reserve, or move the endpoint under a prefix the binding declares off
+  limits.
+- Shutdown may hang on a socket that connected and never sent CONNECT. `close()` in
+  `src/embedded-broker.js` calls `server.close()` from inside the `aedes.close` callback,
+  and `server.close()` fires only once every existing connection has ended. `aedes.close`
+  destroys its own clients first, which is why this normally completes, but a pre-CONNECT
+  socket is not an aedes client. Not reproduced. Distinct from the missing `.catch` on the
+  shutdown chain above.
