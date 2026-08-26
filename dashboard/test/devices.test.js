@@ -3,7 +3,7 @@ globalThis.DEVICE_MAX = 24
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { devices, upsert, clearSource } from '../src/devices.js'
+import { devices, upsert, clearSource, setEvictHook } from '../src/devices.js'
 import * as src from '../src/sources.js'
 
 function fakeStorage() {
@@ -20,6 +20,7 @@ beforeEach(() => {
   globalThis.location = { origin: 'http://origin.test' }
   src.loadSources()
   devices.value = new Map()
+  setEvictHook(() => {})
 })
 
 test('the device cap scales with the number of configured sources', () => {
@@ -59,6 +60,18 @@ test('feed records survive a full cap of radio devices', () => {
 
   assert.equal(devices.value.size, DEVICE_MAX + 1)
   assert.ok(devices.value.has('local feed/Weather'))
+})
+
+test('an evicted device is reported through the evict hook', () => {
+  src.addSource('http://a.b')
+  const evicted = []
+  setEvictHook(key => evicted.push(key))
+
+  for (let i = 0; i < DEVICE_MAX + 1; i++) {
+    upsert({ key: `http://a.b src/Acurite/${i}`, seenAt: i })
+  }
+
+  assert.deepEqual(evicted, ['http://a.b src/Acurite/0'])
 })
 
 test('clearing a source leaves feed records alone', () => {

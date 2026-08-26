@@ -457,6 +457,25 @@ test("an entry with no stored size is sized from its value count", async ({ page
   expect([c.w, c.h]).toEqual([3, 3]);
 });
 
+test("an order entry naming a key absent from cards does not crash the page", async ({ page }) => {
+  await open(page, [ACURITE]);
+  const errors = [];
+  page.on("pageerror", e => errors.push(e));
+
+  // Reproduces a device the store never ran ensureCard for: upserted directly and
+  // ordered by hand, bypassing the path that would normally create its card entry.
+  const orphan = storeKey(server, ACURITE_KEY) + "-orphan";
+  await page.evaluate((k) => {
+    upsert({ key: k, merged: { temperature_F: 1 }, seenAt: 0, flashUntil: 0,
+      rssi: undefined, count: 0, obj: null, raw: "" });
+    cardState = { ...cardState, order: [...cardState.order, k] };
+  }, orphan);
+
+  server.emit(ACURITE);
+  await expect(page.locator(`.card:not(.ghostcard)[data-key$="${ACURITE_KEY}"]`)).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await open(page, [ACURITE]);
 

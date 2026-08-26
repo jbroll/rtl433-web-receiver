@@ -24,8 +24,6 @@
 - `measureGrid()`'s `cols × cell` arithmetic is exact only because the grid has no `gap`.
   Re-adding one would overflow the grid by `(cols-1) × gap`. Nothing in the file says so,
   and no test guards it.
-- A stored `w` or `h` outside 1–24 is discarded rather than clamped, so the card is
-  re-sized from its value count instead of pinned to 24.
 - `#grid-size` is fixed at `right:12rem` and about 7rem wide, so below roughly 320px of
   viewport width it reaches the left edge and overlaps the grid in edit mode.
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the Escape path
@@ -101,22 +99,6 @@
   is `0 === 0` on an empty `sourceState` map and that branch is tested first (`app.jsx`), so
   a fresh browser, or one where the last source was just removed, shows a green header while
   nothing is connected.
-- `ensureCard()` pushes into `s.order`, `s.hidden` and `s.cards` on the object
-  `cardState.value` already holds, with no `bump()` and no `saveCardState()` (`main.jsx`,
-  `store.js`). The card still appears, because `upsert` replaces `devices.value`, but the
-  layout is unpersisted. With no location set nothing else calls `saveCardState`, so a
-  session's worth of new devices' default sizes and hide-on-arrival flags never reach
-  `localStorage`.
-- `ensureCard()` in `store.js` mutates `cardState.value` in place — `s.cards[key] = c`,
-  `s.order.push(key)`, and the `hidden` push — and never calls `bump()`, so nothing
-  subscribed to `cardState` is notified. Rendering only recovers because `CardsView` also
-  subscribes to `devices`, which a new device reassigns. Any subscriber that reads
-  `cardState` alone sees a stale value until the next `saveCardState()`.
-- `pruneCardState()` writes `s.order = s.order.filter(...)` back into the live signal value,
-  and `bump()` copies `grid` and `cards` but passes `order` and `hidden` through by
-  reference (`store.js`), so a consumer holding an earlier `cardState` sees its `order`
-  mutated. No caller exploits it today; it defeats the immutable-snapshot pattern the rest
-  of the file follows.
 - `stream.js` reconnects on a fixed 5 s `setTimeout` with no backoff and no jitter, in the
   case its own comment names ("every slot busy"). Several tabs pointed at a receiver whose
   SSE slots are full re-open in phase every five seconds indefinitely. The receiver's
@@ -130,6 +112,11 @@
   `store.js`, `cacheDrop` in `feeds/cache.js`, the `const alias` in `Label` and the no-op
   `onPointerDown` in `cards.jsx`. `err.retryAfter` in `feeds/nws.js` is assigned and never
   read, which means the backoff ladder ignores `Retry-After` entirely.
+- `flashUntil` is dead for rendering: `devices.js` writes it on every `upsert`, `main.jsx`
+  and `feeds/feed.js` set it, and five test files construct records with it, but the flash
+  class on a card comes from `rec.flashing`, which nothing reads `flashUntil` to derive.
+  Removing it touches the `rec` shape in `devices.js`, the two writers, and every fixture
+  that still passes it.
 - `test/android-smoke.js` was updated for the gear-panel split (dropped the dead
   `#settings summary` click, switched to `#subtab-devices`) without a run against the
   tablet — no device was attached to verify it. Needs one manual run to confirm the
@@ -145,11 +132,6 @@
   `reading()` helper twelve lines above handles the same case correctly, which is what makes
   this look like an oversight. Derived from reading Preact's diff source rather than observed
   in a browser; a one-line check on `tr.vrow[data-f="sun"] td` would settle it.
-- `Card` in `cards.jsx` dereferences `cardEntry(key)` without checking it exists.
-  `loadCardState` validates `order` and `cards` independently, so an entry in `order` with
-  no matching `cards[k]` survives, and `CardsView` filters only on `devs.has(k)`. A corrupt
-  or hand-edited blob then throws on `c.w` and takes the whole tree down. Dropping unbacked
-  keys in `loadCardState` is the cleaner half of the fix.
 - `EventSource` error handling in `stream.js` reads the wrong socket after a retry. `es` is
   a single closure variable that every `connect()` reassigns, and the old socket's `onerror`
   closes over the variable rather than the instance, so a late error from a superseded

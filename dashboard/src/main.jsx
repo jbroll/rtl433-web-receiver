@@ -2,7 +2,7 @@ import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { App, tab, settingsTab } from './app.jsx'
 import { tick } from './tick.js'
-import { devices, upsert, clearSource } from './devices.js'
+import { devices, upsert, clearSource, setEvictHook } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
 import { loadTokens } from './auth.js'
 import { applyLayoutFrame, autoApply, layouts, disableAutoApply, deriveTemplate } from './layout_template.js'
@@ -34,8 +34,18 @@ function flash(key) {
   if (!rec) return
   rec.flashing.value = true
   clearTimeout(flashTimers.get(key))
-  flashTimers.set(key, setTimeout(() => { rec.flashing.value = false }, 1000))
+  // Looked up by key, not closed over: an eviction that outlives the timer
+  // must not write to a record trim() already dropped.
+  flashTimers.set(key, setTimeout(() => {
+    const cur = devices.value.get(key)
+    if (cur) cur.flashing.value = false
+  }, 1000))
 }
+
+setEvictHook(key => {
+  clearTimeout(flashTimers.get(key))
+  flashTimers.delete(key)
+})
 
 function onMessage(base, topic, obj) {
   if (!obj || typeof obj !== 'object') return

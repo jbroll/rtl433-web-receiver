@@ -81,6 +81,7 @@ function areEqual(props, otherProps) {
 const Card = memo(function Card({ rec }) {
   const key = rec.key
   const c = cardEntry(key)
+  if (!c) return null
   const merged = rec.merged.value
   const vis = visibleValues(key, merged)
   const g = cardState.value.grid

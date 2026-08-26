@@ -4,6 +4,9 @@ import { isFeed } from './alias.js'
 
 export const devices = signal(new Map())
 
+let onEvict = () => {}
+export function setEvictHook(fn) { onEvict = fn }
+
 function trim() {
   const cap = DEVICE_MAX * sources.value.length
   // Feed records are app-generated and bounded, and they are exempt from the
@@ -11,7 +14,7 @@ function trim() {
   const radio = [...devices.value.values()].filter(d => !isFeed(d.key))
   if (radio.length <= cap) return
   const stale = radio.sort((a, b) => b.seenAt.value - a.seenAt.value).slice(cap)
-  for (const d of stale) devices.value.delete(d.key)
+  for (const d of stale) { devices.value.delete(d.key); onEvict(d.key) }
   devices.value = devices.value
 }
 

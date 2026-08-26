@@ -2,6 +2,7 @@ globalThis.DEVICE_MAX = 24
 
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { effect } from '@preact/signals'
 
 import { devices } from '../src/devices.js'
 import * as store from '../src/store.js'
@@ -165,4 +166,55 @@ test('a value hidden by default can be shown, and stays shown', () => {
   store.ensureCard(FEED, SUN, { autoShow: true, hiddenValues: ['sunset'] })
 
   assert.deepEqual(store.cardEntry(FEED).hiddenValues, [])
+})
+
+test('ensureCard for a new key persists and notifies subscribers', () => {
+  let fired = 0
+  const stop = effect(() => { store.cardState.value; fired++ })
+  fired = 0
+  store.ensureCard(K, READ)
+  stop()
+  assert.ok(fired > 0)
+  assert.ok(JSON.parse(localStorage.getItem('rtl433.dashboard.v1')).cards[K])
+})
+
+test('a second ensureCard for an existing key does not save or notify', () => {
+  store.ensureCard(K, READ)
+  localStorage.removeItem('rtl433.dashboard.v1')
+  let fired = 0
+  const stop = effect(() => { store.cardState.value; fired++ })
+  fired = 0
+  store.ensureCard(K, READ)
+  stop()
+  assert.equal(fired, 0)
+  assert.equal(localStorage.getItem('rtl433.dashboard.v1'), null)
+})
+
+test('pruning does not mutate an earlier snapshot\'s order', () => {
+  store.ensureCard(K, READ)
+  store.setCardHidden(K, true)
+  const snapshot = store.cardState.value
+  const snapshotOrder = snapshot.order
+  const other = `${BASE} src/Other/9`
+  devices.value.set(other, { key: other, merged: READ })
+  store.saveCardState()
+  assert.deepEqual(snapshotOrder, [K])
+})
+
+test('a stored width or height outside 1-24 is clamped rather than discarded', () => {
+  localStorage.setItem('rtl433.dashboard.v1', JSON.stringify({
+    order: [K], hidden: [], cards: { [K]: { w: 99, h: 99, valueOrder: [], hiddenValues: [] } },
+  }))
+  store.loadCardState()
+  assert.equal(store.cardEntry(K).w, 24)
+  assert.equal(store.cardEntry(K).h, 24)
+})
+
+test('an order entry naming a key absent from cards is dropped on load', () => {
+  localStorage.setItem('rtl433.dashboard.v1', JSON.stringify({
+    order: [K, 'ghost'], hidden: ['ghost'], cards: { [K]: { w: 2, h: 2, valueOrder: [], hiddenValues: [] } },
+  }))
+  store.loadCardState()
+  assert.deepEqual(store.getCardState().order, [K])
+  assert.deepEqual(store.getCardState().hidden, [])
 })

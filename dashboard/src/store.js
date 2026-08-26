@@ -8,6 +8,7 @@ const CARDS_KEY = 'rtl433.dashboard.v1'
 export const cardState = signal(blankState())
 let storageBroken = false
 let hideNewCards = true
+let suppressSave = false
 
 const GRID_MIN = 1, GRID_MAX = 24
 
@@ -25,12 +26,16 @@ export function gridNum(v, fallback) {
   return Number.isInteger(v) && v >= GRID_MIN && v <= GRID_MAX ? v : fallback
 }
 
+export function clampGrid(v, fallback) {
+  return Number.isInteger(v) ? Math.min(GRID_MAX, Math.max(GRID_MIN, v)) : fallback
+}
+
 function bump() {
   const s = cardState.value
   cardState.value = {
     grid: { ...s.grid },
-    order: s.order,
-    hidden: s.hidden,
+    order: [...s.order],
+    hidden: [...s.hidden],
     cards: Object.assign(Object.create(null), s.cards),
   }
 }
@@ -63,17 +68,18 @@ export function loadCardState() {
     const c = cards[k]
     if (!c || typeof c !== 'object') continue
     loaded.cards[k] = {
-      w: gridNum(c.w, 0), h: gridNum(c.h, 0),
+      w: clampGrid(c.w, 0), h: clampGrid(c.h, 0),
       valueOrder: Array.isArray(c.valueOrder) ? c.valueOrder.filter(f => typeof f === 'string') : [],
       hiddenValues: Array.isArray(c.hiddenValues) ? c.hiddenValues.filter(f => typeof f === 'string') : [],
       bottomValues: Array.isArray(c.bottomValues) ? c.bottomValues.filter(f => typeof f === 'string') : [],
     }
   }
+  loaded.order = loaded.order.filter(k => loaded.cards[k])
+  loaded.hidden = loaded.hidden.filter(k => loaded.cards[k])
   cardState.value = loaded
 }
 
-function pruneCardState() {
-  const s = cardState.value
+function pruneCardState(s) {
   // Only a source that has already delivered something can say one of its
   // devices is gone. At boot devices.value is empty, and primeFeeds() saves
   // before any stream has opened, so pruning against it there threw away every
@@ -86,14 +92,19 @@ function pruneCardState() {
   const keep = new Set(s.order.filter(
     k => devices.value.has(k) || isFeed(k) || !cardHidden(k) || aliases.value.has(k) ||
       !spoken.has(sourceOf(k))))
-  s.order = s.order.filter(k => keep.has(k))
-  s.hidden = s.hidden.filter(k => keep.has(k))
-  for (const k of Object.keys(s.cards)) if (!keep.has(k)) delete s.cards[k]
+  const cards = Object.create(null)
+  for (const k of Object.keys(s.cards)) if (keep.has(k)) cards[k] = s.cards[k]
+  return {
+    grid: s.grid,
+    order: s.order.filter(k => keep.has(k)),
+    hidden: s.hidden.filter(k => keep.has(k)),
+    cards,
+  }
 }
 
 export function saveCardState() {
   if (storageBroken) return
-  pruneCardState()
+  cardState.value = pruneCardState(cardState.value)
   try { localStorage.setItem(CARDS_KEY, JSON.stringify(cardState.value)) }
   catch (e) { storageBroken = true }
   bump()
@@ -103,6 +114,7 @@ export function ensureCard(key, merged, opts) {
   const s = cardState.value
   let c = s.cards[key]
   const fields = Object.keys(merged || {})
+  let changed = false
   if (!c) {
     // A feed may nominate values that exist but are not what the card is for,
     // such as the times a composite value already draws. They stay one click
@@ -114,6 +126,7 @@ export function ensureCard(key, merged, opts) {
       bottomValues: fields.filter(f => STATUS_FIELDS.has(f)),
     }
     s.cards[key] = c
+    changed = true
     // autoShow only applies to a card being created. Applying it on every
     // call would undo a later user hide every time the card refreshed.
     const autoShow = opts && opts.autoShow
@@ -126,11 +139,12 @@ export function ensureCard(key, merged, opts) {
       if (c.valueOrder.indexOf(f) >= 0) continue
       c.valueOrder.push(f)
       if (STATUS_FIELDS.has(f)) c.bottomValues.push(f)
+      changed = true
     }
   }
   if (!c.w || !c.h) {
     // Compute visible values directly from c to avoid prototype pollution issues
-    const vis = c.valueOrder.filter(f => 
+    const vis = c.valueOrder.filter(f =>
       merged[f] !== undefined &&
       (c.hiddenValues || []).indexOf(f) < 0 &&
       (c.bottomValues || []).indexOf(f) < 0
@@ -138,8 +152,10 @@ export function ensureCard(key, merged, opts) {
     const size = defaultSize(vis.length)
     c.w = size.w
     c.h = size.h
+    changed = true
   }
-  if (s.order.indexOf(key) < 0) s.order.push(key)
+  if (s.order.indexOf(key) < 0) { s.order.push(key); changed = true }
+  if (changed && !suppressSave) saveCardState()
   return c
 }
 
@@ -257,12 +273,15 @@ export function forgetLayouts() {
   try { localStorage.removeItem(CARDS_KEY) } catch (e) { storageBroken = true }
   const hideNew = hideNewCards
   hideNewCards = false
+  // ensureCard's own save would immediately re-write the storage this just cleared.
+  suppressSave = true
   try {
     cardState.value = blankState()
     for (const rec of devices.value.values()) ensureCard(rec.key, rec.merged.value)
     bump()
   } finally {
     hideNewCards = hideNew
+    suppressSave = false
   }
 }
 

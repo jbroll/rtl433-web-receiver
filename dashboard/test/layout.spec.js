@@ -88,7 +88,8 @@ test("a $layout frame does not auto-apply once a local layout already exists", a
   servers.push(server);
   await page.addInitScript(() => {
     localStorage.setItem("rtl433.dashboard.v1", JSON.stringify({
-      grid: { cols: 6, rows: 4 }, order: ["seed"], hidden: [], cards: {},
+      grid: { cols: 6, rows: 4 }, order: ["seed"], hidden: [],
+      cards: { seed: { w: 1, h: 1, valueOrder: [], hiddenValues: [] } },
     }));
   });
   await page.goto(server.url);
