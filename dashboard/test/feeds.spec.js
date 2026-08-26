@@ -134,6 +134,7 @@ test("hiding one value on a feed card leaves the rest", async ({ page }) => {
 
 const SUN = '.card:not(.ghostcard)[data-key="local feed/Sun"]';
 const MOON = '.card:not(.ghostcard)[data-key="local feed/Moon"]';
+const WEATHER = '.card:not(.ghostcard)[data-key="local feed/Weather"]';
 
 // The dials draw their times inside the SVG, so a string wider than the
 // viewBox is clipped by the cell rather than scaled down. These pin the
@@ -269,7 +270,8 @@ test("a composite card opens showing the dial, not the times it already draws", 
 
 // A cached entry outlives the code that wrote it. When a rich value gains a
 // field, the entry on disk still lacks it, and it is painted before anything
-// reruns -- which put "undefined" on the moon card on a real device.
+// reruns. Moon, sun and clock are computed and no longer cached, so weather
+// is the only feed this can still happen to.
 test("a cache entry written before a field existed never paints undefined", async ({ page }) => {
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
@@ -277,21 +279,19 @@ test("a cache entry written before a field existed never paints undefined", asyn
     localStorage.setItem("rtl433.settings.v1", JSON.stringify({
       units: "metric", decimals: 1, custom: {},
       location: { lat: 40.015, lon: -105.2705, label: "", zone: "America/Denver", zoom: 11 } }));
-    // The shape moon.js emitted before the dial became a composite.
+    // A "now" value missing the field its renderer added after this entry
+    // was written: no text, the way a real cached entry could lack one.
     const stale = { at: Date.now(), ranAt: Date.now(), place: "40.015,-105.2705", meta: null,
-      fields: { moon: { $r: "moon", brief: "Waxing Crescent 35%", illumination: 0.35,
-                        phase: 0.2, waxing: true, name: "Waxing Crescent" } } };
-    for (const key of ["rtl433.feeds.v1", "rtl433.feeds.v2"]) {
-      localStorage.setItem(key, JSON.stringify({ moon: stale }));
-    }
+      fields: { now: { $r: "now", place: "Boulder, CO", sky: "skc", night: false, temp: 20, unit: "C" } } };
+    localStorage.setItem("rtl433.feeds.v2", JSON.stringify({ weather: stale }));
   });
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/^live/);
   await page.evaluate(() => { setHideNewCards(false); cardState = { ...cardState, hidden: [] }; saveCardState(); });
 
-  await expect(page.locator(MOON)).toBeVisible();
-  await expect(page.locator(`${MOON} .val.cval`)).not.toContainText("undefined");
-  await expect(page.locator(`${MOON} .val.cval text`).last()).toHaveText(/Waxing Crescent \d+%/);
+  await expect(page.locator(WEATHER)).toBeVisible();
+  await expect(page.locator(`${WEATHER} .val[data-f="now"]`)).not.toContainText("undefined");
+  await expect(page.locator(`${WEATHER} .val[data-f="now"] .big`)).toHaveText(/^\d+°C$/);
 });
 
 test("a computed feed is never cached, so it cannot paint a stale shape", async ({ page }) => {
