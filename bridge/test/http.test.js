@@ -5,6 +5,7 @@ import net from 'node:net'
 import mqtt from 'mqtt'
 
 import { createCache } from '../src/cache.js'
+import { brokerLabel } from '../src/config.js'
 import { BODY_LIMIT_BYTES, createBridge } from '../src/server.js'
 import { closeStream, readEvents, startBridge, waitFor, withTimeout } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
@@ -128,6 +129,58 @@ test('a 405 carries Allow naming the methods that endpoint does offer', async ()
     const rotate = await fetch(`${bridge.base}/auth/rotate`, { method: 'GET' })
     assert.equal(rotate.status, 405)
     assert.equal(rotate.headers.get('allow'), 'POST')
+
+    const status = await fetch(`${bridge.base}/status`, { method: 'POST' })
+    assert.equal(status.status, 405)
+    assert.equal(status.headers.get('allow'), 'GET')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('GET /status reports broker and subscription state while connected', async () => {
+  const bridge = await startBridge()
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: '{"a":1}' })
+
+    const status = await fetch(`${bridge.base}/status`)
+    assert.equal(status.status, 200)
+    assert.equal(status.headers.get('content-type'), 'application/json')
+    assert.deepEqual(await status.json(), {
+      connected: true,
+      ready: true,
+      broker: brokerLabel(bridge.mqttUrl),
+      cacheSize: 1,
+      sseClients: 0,
+      lastError: null,
+    })
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('HEAD /status matches GET status with an empty body', async () => {
+  const bridge = await startBridge()
+  try {
+    const head = await fetch(`${bridge.base}/status`, { method: 'HEAD' })
+    assert.equal(head.status, 200)
+    assert.equal(await head.text(), '')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('GET /status reports the broker down without itself answering 503', async () => {
+  const bridge = await startBridge()
+  try {
+    await bridge.stopBroker()
+    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).connected === false)
+
+    const status = await fetch(`${bridge.base}/status`)
+    assert.equal(status.status, 200)
+    const body = await status.json()
+    assert.equal(body.connected, false)
+    assert.equal(body.ready, false)
   } finally {
     await bridge.close()
   }
@@ -292,6 +345,7 @@ test('a publish the broker rejects is 503, and caches nothing', async () => {
   const bridge = createBridge({
     broker: {
       connected: () => true,
+      ready: () => true,
       publish: () => Promise.reject(new Error('broker went away mid-publish')),
     },
     cache,

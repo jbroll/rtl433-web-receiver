@@ -44,7 +44,8 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
   removes the topic from the cache entirely. Both answer `404` here.
 - `400` if the topic is malformed (empty, contains a space, contains an
   MQTT wildcard `+` or `#`, or has an empty segment).
-- `503` if the bridge is not currently connected to the broker.
+- `503` if the bridge is not connected to the broker and resubscribed (see
+  [GET /status](#get-status--bridge-and-broker-state)).
 
 ## POST to a topic
 
@@ -75,8 +76,8 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 -d ''
   the topic is malformed. A zero-length body skips JSON validation entirely.
 - `413` if the body exceeds 64 KiB.
 - `408` if the body stalls for 30 seconds without a new byte arriving.
-- `503` if the bridge is not currently connected to the broker, or the broker
-  did not take the publish within 5 seconds.
+- `503` if the bridge is not connected to the broker and resubscribed, or the
+  broker did not take the publish within 5 seconds.
 - `401` if `AUTH_TOKEN` is configured and the request's `Authorization: Bearer <token>`
   header is missing or wrong.
 
@@ -117,7 +118,7 @@ request is sent, so it must be percent-encoded as `%23`.
   not replayed to a subscriber connecting afterward.
 - `400` if any filter is malformed, or if more than `MAX_SSE_FILTERS` `f`
   parameters are given.
-- `503` if the bridge is not currently connected to the broker, or if
+- `503` if the bridge is not connected to the broker and resubscribed, or if
   `MAX_SSE_CLIENTS` streams are already open.
 
 A stream that falls a megabyte behind on reading its events is dropped: the
@@ -167,11 +168,41 @@ With it set, rotation also overwrites that file, and it is read back at the
 next startup in place of `AUTH_TOKEN`. The file is written mode `0600`; the
 directory holding it should not be world-readable.
 
+## GET /status — bridge and broker state
+
+Reports whether the bridge is usable, without publishing or subscribing to
+anything. Always `200`, even while the broker is down — that state is in the
+body, not the status code.
+
+```
+curl localhost:8080/status
+```
+
+```json
+{"connected":true,"ready":true,"broker":"mqtt://broker.local:1883","cacheSize":42,"sseClients":2,"lastError":null}
+```
+
+- `connected` — the MQTT connection is up (CONNACK received, no `close` since).
+- `ready` — the `#` subscription that fills the cache is in place. `connected`
+  can be `true` while this is `false`, briefly after reconnecting and while a
+  subscribe is refused; every other endpoint's `503` gate is on this, not on
+  `connected`.
+- `broker` — the broker's `protocol://host:port`, from `MQTT_URL` with any
+  credentials stripped.
+- `cacheSize` — retained messages currently cached.
+- `sseClients` — open `/events` streams.
+- `lastError` — the most recent connection or subscribe error's message, or
+  `null` if none has happened yet. A username or password would never appear
+  here: it is stripped the same way `broker` is.
+
+No `AUTH_TOKEN` check applies; nothing in the body identifies a source or
+reveals a credential.
+
 ## Other status codes
 
 - `401` — a `POST` with a missing or wrong bearer token, when `AUTH_TOKEN` is configured.
 - `405` — a method other than GET/POST on a topic path, or anything but GET
-  on `/events`.
+  on `/events` or `/status`.
 - `503` — `GET /events` at the `MAX_SSE_CLIENTS` limit.
 - `400` — `GET /events` with more than `MAX_SSE_FILTERS` `f` parameters.
 

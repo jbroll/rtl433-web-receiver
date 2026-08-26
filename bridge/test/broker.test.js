@@ -155,11 +155,41 @@ test('a broker that refuses the subscription is reported, and is not ready', asy
     })
     try {
       await waitFor(() => errors.length > 0)
-      const ready = await Promise.race([
+      const state = await Promise.race([
         client.subscribed.then(() => 'subscribed'),
         new Promise((resolve) => setTimeout(() => resolve('not subscribed'), 200)),
       ])
-      assert.equal(ready, 'not subscribed')
+      assert.equal(state, 'not subscribed')
+      assert.equal(client.ready(), false)
+    } finally {
+      await client.end()
+    }
+  } finally {
+    await broker.close()
+  }
+})
+
+test('resubscribe: false leaves the manual subscribe as the only path back to ready on reconnect', async () => {
+  const broker = await startBroker(0, {})
+  try {
+    const client = connectBroker({
+      url: broker.url,
+      cache: createCache(),
+      onMessage: () => {},
+      reconnectMs: 50,
+    })
+    try {
+      await client.subscribed
+      assert.equal(broker.subscribeCount(), 1)
+      assert.equal(client.ready(), true)
+
+      broker.dropConnections()
+      await waitFor(() => client.ready() === false)
+      // If mqtt.js's own resubscribe were doing this instead of the manual
+      // client.subscribe in the 'connect' handler, ready() would never
+      // reflect it and the count would stay at 1 forever.
+      await waitFor(() => broker.subscribeCount() === 2)
+      await waitFor(() => client.ready() === true)
     } finally {
       await client.end()
     }

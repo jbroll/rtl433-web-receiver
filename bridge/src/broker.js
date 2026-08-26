@@ -1,5 +1,7 @@
 import mqtt from 'mqtt'
 
+import { brokerLabel } from './config.js'
+
 const RECONNECT_MS = 2000
 
 // '#' never matches a topic whose first segment starts with '$' (src/topic.js
@@ -26,11 +28,16 @@ export function connectBroker({
   reconnectMs = RECONNECT_MS,
   tls,
 }) {
+  const label = brokerLabel(url)
+
   const client = mqtt.connect(url, {
     username,
     password,
     reconnectPeriod: reconnectMs,
-    resubscribe: true,
+    // The manual client.subscribe below is what re-establishes '#' on every
+    // reconnect and is what the readiness flag hangs off; mqtt.js's own
+    // resubscribe would race it and land a second, redundant SUBSCRIBE.
+    resubscribe: false,
     // Only set for the embedded broker's own internal TLS connection in
     // src/embedded-broker.js: a loopback self-connection to a certificate
     // issued for the public domain, not 127.0.0.1, which Node's default
@@ -50,21 +57,33 @@ export function connectBroker({
   // failure goes through the same path: TCP connects fine on every retry, so
   // clearing on 'connect' instead would let an unchanging subscribe refusal
   // print once per reconnect forever.
+  // A username or password echoed into an error message would otherwise
+  // reach GET /status, which is unauthenticated.
+  const redact = (message) => {
+    let redacted = message
+    if (username) redacted = redacted.split(username).join('***')
+    if (password) redacted = redacted.split(password).join('***')
+    return redacted
+  }
+
   let reported = null
+  let lastError = null
   const report = (err) => {
     if (ending || err.message === reported) return
     reported = err.message
+    lastError = redact(err.message)
     onError?.(err)
   }
   client.on('error', report)
 
   let subscribed
-  const ready = new Promise((resolve) => {
+  const subscribedOnce = new Promise((resolve) => {
     subscribed = resolve
   })
 
   const waiting = new Map()
   let up = false
+  let ready = false
 
   client.on('connect', () => {
     up = true
@@ -73,17 +92,23 @@ export function connectBroker({
     cache.clear()
     onConnect?.()
     client.subscribe(['#', ...DOLLAR_TOPICS], { qos: 0 }, (err) => {
-      if (err) report(err)
-      else {
+      if (err) {
+        ready = false
+        report(err)
+      } else {
         reported = null
+        ready = true
         subscribed()
       }
     })
   })
 
   // 'close' fires on every failed retry as well as on the loss itself, and
-  // once more for the shutdown that asked for it.
+  // once more for the shutdown that asked for it. The subscription is gone
+  // in every case, so readiness clears here rather than only on the retries
+  // that get reported.
   client.on('close', () => {
+    ready = false
     if (!up || ending) return
     up = false
     onDisconnect?.()
@@ -130,7 +155,7 @@ export function connectBroker({
   }
 
   return {
-    subscribed: ready,
+    subscribed: subscribedOnce,
     // The bridge subscribes to '#', so its own publish comes back. Waiting for
     // it makes the broker the only writer of the cache, and is the only
     // evidence the broker took the message: publishing at QoS 0 does not fail
@@ -142,7 +167,15 @@ export function connectBroker({
       return echoed
     },
     waiting: () => waiting.size,
+    // True from CONNACK to the next 'close', regardless of the subscription.
     connected: () => client.connected,
+    // True only once the '#' subscription in the 'connect' handler above has
+    // succeeded; false again from the next 'close' or subscribe error. This
+    // is what the HTTP 503 gates use, so a request never reads the cache
+    // during the window where the broker is connected but not yet resubscribed.
+    ready: () => ready,
+    label,
+    lastError: () => lastError,
     end: () => {
       ending = true
       return client.endAsync()

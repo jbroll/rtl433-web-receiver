@@ -57,6 +57,7 @@ Consumers already know how to read it: the page drops `model`, `id`, `channel`,
 | `GET /<topic>` | The last message published to that topic. `404` if there is none. `Content-Type: application/json` |
 | `POST /<topic>` | Publish a message. Body is the JSON. A zero-length body deletes the topic instead. `204` on success |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `Content-Type: text/event-stream` |
+| `GET /status` | Implementation-specific: this bridge's own connection and cache state, not a topic. See `docs/user-manual.md`. |
 
 `HEAD` is served wherever `GET` is, with the same status and headers and no
 body. A refusal carries `Allow`, naming the methods the path does accept.

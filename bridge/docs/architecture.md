@@ -5,7 +5,7 @@
 - `src/topic.js` — filter and topic matching. No I/O, no state.
 - `src/cache.js` — the last message per topic, an in-memory `Map`.
 - `src/broker.js` — the one MQTT connection: subscribes, publishes, reports
-  whether it is connected.
+  whether it is connected and whether it is subscribed.
 - `src/sse.js` — one SSE stream's lifetime: the response headers, the
   keepalive timer, filtering outgoing messages, closing.
 - `src/server.js` — routes HTTP requests to the cache, the broker, and
@@ -166,6 +166,21 @@ resolves the first time it succeeds; a broker that refuses the subscription
 leaves it pending and reports the error, rather than leaving a bridge that
 looks ready and caches nothing. Tests await it before publishing so the echo
 they are waiting for cannot be missed.
+
+`connected()` and `ready()` are separate on purpose. `connected()` reflects
+CONNACK alone and answers `GET /status`, where the distinction is the point;
+`ready()` also requires the `#` subscription to have landed, and is what the
+HTTP `503` gates use, since a request that passes a CONNACK-only check can
+still read a cache the bridge knows is stale. `mqtt.connect` is given
+`resubscribe: false`: the manual `client.subscribe` above is the only thing
+that ever re-subscribes `#`, on the first connect and every reconnect alike,
+and `ready()` tracks its outcome directly rather than the client's own
+(disabled) resubscribe bookkeeping.
+
+`ready()` narrows the race between a request being gated and the broker
+going away, rather than closing it: the check and the work it gates are still
+separate steps, so a request can still pass `ready()` and then find the
+broker gone before it finishes.
 
 Connect, disconnect, and error are handed to `bin/mqtt-http-bridge.js`, the
 one file that writes to the console. Without them a bridge whose password is

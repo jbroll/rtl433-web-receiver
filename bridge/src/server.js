@@ -113,7 +113,7 @@ async function handle(
 
   if (url.pathname === '/events') {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', { allow: 'GET' })
-    if (!broker.connected()) return send(res, 503, 'broker unavailable')
+    if (!broker.ready()) return send(res, 503, 'broker unavailable')
     if (req.method === 'HEAD') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
       return res.end()
@@ -152,6 +152,23 @@ async function handle(
     return res.end()
   }
 
+  // Reserved the same way '/events' and '/auth/rotate' are. Unauthenticated:
+  // it names no secrets, since brokerLabel has already stripped credentials
+  // from the URL and broker.js redacts a password out of the last error too.
+  if (url.pathname === '/status') {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', { allow: 'GET' })
+    const body = JSON.stringify({
+      connected: broker.connected(),
+      ready: broker.ready(),
+      broker: broker.label,
+      cacheSize: cache.size(),
+      sseClients: clients.size,
+      lastError: broker.lastError(),
+    })
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) })
+    return res.end(req.method === 'HEAD' ? undefined : body)
+  }
+
   let topic
   try {
     topic = decodeURIComponent(url.pathname.slice(1))
@@ -162,7 +179,7 @@ async function handle(
 
   if (!validTopic(topic)) return send(res, 400, 'malformed topic')
 
-  if (!broker.connected()) return send(res, 503, 'broker unavailable')
+  if (!broker.ready()) return send(res, 503, 'broker unavailable')
 
   if (req.method === 'GET' || req.method === 'HEAD') {
     const payload = cache.get(topic)
