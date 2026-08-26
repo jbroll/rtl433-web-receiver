@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { startTestBridge } from "../../bridge/test/helpers/dashboard-fixture.js";
+import { POINTS, FORECAST, STATIONS, OBSERVATION } from "./fixtures-nws.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(HERE, "..", "dist", "index.html");
@@ -248,6 +249,30 @@ function proxyToFixture(req, res, targetPort, body) {
   res.on("close", () => proxyReq.destroy());
   if (body === undefined) req.pipe(proxyReq);
   else proxyReq.end(body);
+}
+
+function nwsJson(body, status = 200) {
+  return { status, contentType: "application/geo+json", body: JSON.stringify(body) };
+}
+
+// Every spec that sets a location makes the dashboard fetch api.weather.gov,
+// so every one of them needs this route installed or the test hits the live
+// service. Answers by path so a test can count exactly which endpoints were
+// reached; `over` fulfills specific paths differently. Returns the array of
+// paths seen, appended to as requests arrive.
+export async function routeWeather(page, over = {}) {
+  const seen = [];
+  await page.route("**/api.weather.gov/**", r => {
+    const path = new URL(r.request().url()).pathname;
+    seen.push(path);
+    if (over[path]) return r.fulfill(over[path]);
+    if (path.startsWith("/points/")) return r.fulfill(nwsJson(POINTS));
+    if (path.endsWith("/stations")) return r.fulfill(nwsJson(STATIONS));
+    if (path.endsWith("/forecast")) return r.fulfill(nwsJson(FORECAST));
+    if (path.endsWith("/observations/latest")) return r.fulfill(nwsJson(OBSERVATION));
+    return r.fulfill(nwsJson({}, 404));
+  });
+  return seen;
 }
 
 // Serves the bundle and nothing else. A dashboard with no configured sources

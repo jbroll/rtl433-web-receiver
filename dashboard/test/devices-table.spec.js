@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer } from "./harness.js";
+import { startServer, routeWeather } from "./harness.js";
 import { ACURITE, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -9,6 +9,7 @@ let server;
 test.afterEach(async () => { if (server) await server.close(); server = null; });
 
 async function open(page) {
+  await routeWeather(page);
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);

@@ -1,6 +1,17 @@
 import { test, expect } from "@playwright/test";
-import { startServer, startPage } from "./harness.js";
+import { startServer, startPage, routeWeather } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
+
+// The settings pane always renders its map (src/location.jsx), regardless of
+// whether a location is set, so any test that visits it fetches real OSM
+// tiles unless this is routed too.
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64");
+async function routeTiles(page) {
+  await page.route("**/tile.openstreetmap.org/**", r =>
+    r.fulfill({ status: 200, contentType: "image/png", body: PIXEL }));
+}
 
 let servers = [];
 
@@ -26,6 +37,7 @@ const CLOCK_CARD = '.card:not(.ghostcard)[data-key="local feed/Clock"]';
 const SUN_CARD = '.card:not(.ghostcard)[data-key="local feed/Sun"]';
 
 test("a $location retained before connect makes feed cards appear with no local location", async ({ page }) => {
+  await routeWeather(page);
   const host = await startPage();
   const src = await startServer({ devices: [ACURITE], source: "srcA" });
   servers.push(host, src);
@@ -37,6 +49,7 @@ test("a $location retained before connect makes feed cards appear with no local 
 });
 
 test("a $location arriving mid-session makes feed cards appear without a reload", async ({ page }) => {
+  await routeWeather(page);
   const host = await startPage();
   const src = await startServer({ devices: [ACURITE], source: "srcA" });
   servers.push(host, src);
@@ -51,6 +64,8 @@ test("a $location arriving mid-session makes feed cards appear without a reload"
 });
 
 test("a local location always wins over a source's network location", async ({ page }) => {
+  await routeWeather(page);
+  await routeTiles(page);
   const host = await startPage();
   const src = await startServer({ devices: [ACURITE], source: "srcA" });
   servers.push(host, src);
@@ -69,6 +84,8 @@ test("a local location always wins over a source's network location", async ({ p
 });
 
 test("Save posts both $tz and $location when the serving origin is a configured source", async ({ page }) => {
+  await routeWeather(page);
+  await routeTiles(page);
   const server = await startServer({ devices: [ACURITE] });
   servers.push(server);
   await page.goto(server.url);

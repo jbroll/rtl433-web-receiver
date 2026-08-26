@@ -230,3 +230,22 @@
 - The view column cap is derived from width alone. A landscape phone gets the same 3
   columns a portrait one does at the same width, and a very short window still scrolls
   rather than fitting.
+- Any spec that visits the settings tab (`#subtab-settings`) renders `location.jsx`'s
+  map unconditionally, which fetches real `tile.openstreetmap.org` tiles regardless of
+  whether a location is set. `location.spec.js` and `location-propagation.spec.js`
+  route this; `weather.spec.js`'s "observations arrive as readings the unit setting
+  converts" test visits settings too and does not, so it still makes live tile
+  requests. Same shape as the weather.gov hole, same fix (route
+  `**/tile.openstreetmap.org/**`).
+- The Playwright suite has no default network guard: a spec that adds a new call to
+  a third-party API and forgets to route it will hit the live service, the same way
+  the four weather.gov specs did. A single fixture wrapping `page` that installs a
+  catch-all `page.route("**/*", ...)` aborting anything not aimed at 127.0.0.1 or
+  localhost, with each spec's own routes taking precedence (Playwright matches the
+  most-recently-registered route first, so a route added in a test body wins over
+  one installed by the fixture beforehand), would close this for good. Not done now
+  because it means changing the import line in every one of the ~20 *.spec.js files
+  to pull `test`/`expect` from a shared fixtures module instead of
+  `@playwright/test`, and `multi.spec.js`'s "same-origin alias..." test opens pages
+  via `browser.newContext()` directly, bypassing the `page` fixture entirely, so it
+  would need its own guard or stay uncovered.

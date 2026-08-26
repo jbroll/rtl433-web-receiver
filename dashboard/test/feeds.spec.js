@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startServer } from "./harness.js";
+import { startServer, routeWeather } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 
 const CLOCK = '.card:not(.ghostcard)[data-key="local feed/Clock"]';
@@ -9,6 +9,7 @@ let server;
 test.afterEach(async () => { if (server) await server.close(); server = null; });
 
 async function open(page) {
+  await routeWeather(page);
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
@@ -274,6 +275,7 @@ test("a composite card opens showing the dial, not the times it already draws", 
 // this pins that a stale entry still paints, with its temperature intact,
 // rather than blanking or throwing.
 test("a cache entry written before a field existed still paints", async ({ page }) => {
+  await routeWeather(page);
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await page.evaluate(() => {
@@ -282,8 +284,13 @@ test("a cache entry written before a field existed still paints", async ({ page 
       location: { lat: 40.015, lon: -105.2705, label: "", zone: "America/Denver", zoom: 11 } }));
     // A "now" value missing the field its renderer added after this entry
     // was written: no text, the way a real cached entry could lack one.
+    // The temperature (5) is deliberately different from the routed
+    // OBSERVATION fixture's (20): if priming ever fell through to a live
+    // refetch instead of painting this cached entry, the card would show the
+    // fixture's temperature instead and the exact-match assertion below
+    // would catch it.
     const stale = { at: Date.now(), ranAt: Date.now(), place: "40.015,-105.2705", meta: null,
-      fields: { now: { $r: "now", place: "Boulder, CO", sky: "skc", night: false, temp: 20, unit: "C" } } };
+      fields: { now: { $r: "now", place: "Boulder, CO", sky: "skc", night: false, temp: 5, unit: "C" } } };
     localStorage.setItem("rtl433.feeds.v2", JSON.stringify({ weather: stale }));
   });
   await page.reload();
@@ -292,7 +299,7 @@ test("a cache entry written before a field existed still paints", async ({ page 
 
   await expect(page.locator(WEATHER)).toBeVisible();
   await expect(page.locator(`${WEATHER} .val[data-f="now"]`)).not.toContainText("undefined");
-  await expect(page.locator(`${WEATHER} .val[data-f="now"] .big`)).toHaveText(/^\d+°C$/);
+  await expect(page.locator(`${WEATHER} .val[data-f="now"] .big`)).toHaveText("5°C");
 });
 
 test("a computed feed is never cached, so it cannot paint a stale shape", async ({ page }) => {

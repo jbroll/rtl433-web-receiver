@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { startServer } from "./harness.js";
+import { startServer, routeWeather } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
-import { POINTS, FORECAST, STATIONS, OBSERVATION, OUTSIDE_US } from "./fixtures-nws.js";
+import { OUTSIDE_US } from "./fixtures-nws.js";
 
 const CARD = '.card:not(.ghostcard)[data-key="local feed/Weather"]';
 
@@ -14,24 +14,8 @@ function json(body, status = 200) {
   return { status, contentType: "application/geo+json", body: JSON.stringify(body) };
 }
 
-// One route for the whole API, answering by path so a test can count exactly
-// which endpoints were reached.
-async function routeWeather(page, over = {}) {
-  seen = [];
-  await page.route("**/api.weather.gov/**", r => {
-    const path = new URL(r.request().url()).pathname;
-    seen.push(path);
-    if (over[path]) return r.fulfill(over[path]);
-    if (path.startsWith("/points/")) return r.fulfill(json(POINTS));
-    if (path.endsWith("/stations")) return r.fulfill(json(STATIONS));
-    if (path.endsWith("/forecast")) return r.fulfill(json(FORECAST));
-    if (path.endsWith("/observations/latest")) return r.fulfill(json(OBSERVATION));
-    return r.fulfill(json({}, 404));
-  });
-}
-
 async function open(page, over) {
-  await routeWeather(page, over);
+  seen = await routeWeather(page, over);
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
@@ -70,7 +54,7 @@ test("a reload paints from cache without touching weather.gov", async ({ page })
   await expect(page.locator(CARD)).toBeVisible();
 
   await page.reload();
-  seen = [];
+  seen.length = 0;
   await expect(page.locator("#status")).toHaveText(/^live/);
   await expect(page.locator(CARD)).toBeVisible();
   await page.waitForTimeout(1500);
@@ -126,7 +110,7 @@ test("moving the location refetches against the new point", async ({ page }) => 
   await setPlace(page);
   await expect(page.locator(CARD)).toBeVisible();
 
-  seen = [];
+  seen.length = 0;
   await setPlace(page, 39.7392, -104.9903);
   await expect.poll(() => seen.filter(p => p.startsWith("/points/")).length).toBe(1);
   expect(seen.some(p => p === "/points/39.7392,-104.9903")).toBe(true);
