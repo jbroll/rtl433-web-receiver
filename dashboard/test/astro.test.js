@@ -66,6 +66,23 @@ test('sun and moon at 0N 0E on the March equinox', () => {
   assert.equal(p.name, 'Waxing Crescent')
 })
 
+// The zone must pick the event's calendar day, not the day of the UTC instant
+// passed in. Boulder's sunrise on 2026-06-21 is 11:31 UTC (USNO, see above);
+// at a fixed UTC-7 zone, 18:30 local on the 21st is 01:30 UTC on the 22nd --
+// still today's sunrise, already passed, not tomorrow's ~11:32 UTC one.
+test('sunrise at UTC-7 after 17:00 local is today\'s, not tomorrow\'s', () => {
+  const afterFivePM = utc(2026, 6, 22, 1, 30)
+  const e = sunEvents(afterFivePM, 40.0, -105.0, 'Etc/GMT+7')
+  near(e.sunrise, utc(2026, 6, 21, 11, 31), 60000, 'sunrise')
+})
+
+test('sun events default to the UTC calendar day when no zone is given', () => {
+  const d = utc(2026, 6, 21)
+  const withZone = sunEvents(d, 40.0, -105.0, 'UTC')
+  const withoutZone = sunEvents(d, 40.0, -105.0)
+  assert.equal(withoutZone.sunrise.getTime(), withZone.sunrise.getTime())
+})
+
 test('sun and moon at Sydney on 2026-06-21', () => {
   const d = utc(2026, 6, 21)
   const e = sunEvents(d, -33.87, 151.21)

@@ -20,7 +20,7 @@ export default {
   defaultHidden: ['sunrise', 'sunset'],
 
   run(ctx) {
-    const e = sunEvents(new Date(), ctx.lat, ctx.lon)
+    const e = sunEvents(new Date(), ctx.lat, ctx.lon, ctx.zone)
     const z = ctx.zone
     const brief = e.alwaysUp ? 'up all day'
       : e.alwaysDown ? 'down all day'
@@ -31,8 +31,8 @@ export default {
         sun: {
           $r: 'sun',
           brief,
-          riseText: e.alwaysUp || e.alwaysDown ? '' : hhmm(e.sunrise, z),
-          setText: e.alwaysUp || e.alwaysDown ? '' : hhmm(e.sunset, z),
+          riseText: e.sunrise === null ? '' : hhmm(e.sunrise, z),
+          setText: e.sunset === null ? '' : hhmm(e.sunset, z),
           lengthText: lengthText(e.dayLength),
           sunrise: ms(e.sunrise),
           sunset: ms(e.sunset),

@@ -2,7 +2,7 @@ import { signal } from '@preact/signals'
 import { upsert, devices } from '../devices.js'
 import { makeKey, FEED_BASE } from '../alias.js'
 import { ensureCard, saveCardState } from '../store.js'
-import { hasLocation, activeZone, resolvedLocation } from '../settings.js'
+import { hasLocation, resolvedLocation, localZone } from '../settings.js'
 import { loadFeedCache, cacheGet, cacheSet, cacheClear } from './cache.js'
 
 // Retry ladder for a feed whose fetch failed, in minutes. A feed that reports
@@ -70,6 +70,9 @@ async function runFeed(feed, ctx) {
   try {
     const cached = feed.cached ? cacheGet(feed.id) : null
     const out = await feed.run({ ...ctx, meta: cached && cached.place === ctx.place ? cached.meta : null })
+    // The place can move while a request is in flight; a reply for a place
+    // nobody asked for any more must not reach the card, the cache, or state.
+    if (ctx.place !== place) return
     // Two different times. `at` is when the data is from, which the card shows
     // as its age; `ranAt` is when we asked, which is what paces the next ask.
     // A station reporting hourly would otherwise look overdue on every pass.
@@ -79,6 +82,7 @@ async function runFeed(feed, ctx) {
     if (feed.cached) cacheSet(feed.id, { at, ranAt, fields: out.fields, meta: out.meta || null, place: ctx.place })
     setState(feed.id, { status: 'ok', at, ranAt, err: '', fails: 0, nextAt: ranAt + feed.interval })
   } catch (e) {
+    if (ctx.place !== place) return
     const message = (e && e.message) || 'failed'
     if (e instanceof Unsupported) {
       setState(feed.id, { status: 'unsupported', err: message, nextAt: Infinity })
@@ -87,7 +91,10 @@ async function runFeed(feed, ctx) {
       const fails = stateOf(feed.id).fails + 1
       const wait = BACKOFF[Math.min(fails, BACKOFF.length) - 1]
       // Jitter so several feeds failing on one outage do not retry in lockstep.
-      const jittered = Math.round(wait * (0.9 + 0.2 * ((fails * 2654435761) % 1000) / 1000))
+      // The feed id folds in too, or every feed at the same fail count would
+      // still jitter to the same offset.
+      const idHash = [...feed.id].reduce((h, c) => h + c.charCodeAt(0), 0)
+      const jittered = Math.round(wait * (0.9 + 0.2 * ((fails * 2654435761 + idHash) % 1000) / 1000))
       setState(feed.id, { status: 'error', err: message, fails, nextAt: Date.now() + jittered })
       publishError(feed, message)
     }
@@ -97,19 +104,20 @@ async function runFeed(feed, ctx) {
 }
 
 export function pump(now = Date.now()) {
-  if (!hasLocation()) return
+  const l = resolvedLocation()
+  if (l.lat === null || l.lon === null) return
 
-  const next = placeOf()
-  if (next !== place) {
-    // A new place invalidates everything: grid mappings, station ids, sun
-    // times. Nothing carries over.
-    place = next
+  const next = `${l.lat},${l.lon}`
+  // A new place invalidates everything: grid mappings, station ids, sun
+  // times. Nothing carries over. An empty previous place is priming still
+  // waiting on its first frame, not a real place to invalidate away from.
+  if (next !== place && place !== '') {
     cacheClear()
     feedState.value = new Map()
   }
+  place = next
 
-  const l = resolvedLocation()
-  const ctx = { lat: l.lat, lon: l.lon, zone: activeZone(), place }
+  const ctx = { lat: l.lat, lon: l.lon, zone: l.zone || localZone(), place }
 
   for (const feed of FEEDS) {
     const s = stateOf(feed.id)

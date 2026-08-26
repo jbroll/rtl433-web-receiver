@@ -13,7 +13,7 @@ export default {
   run(ctx) {
     const now = new Date()
     const p = moonPhase(now)
-    const t = moonTimes(now, ctx.lat, ctx.lon)
+    const t = moonTimes(now, ctx.lat, ctx.lon, ctx.zone)
     const z = ctx.zone
     const pct = Math.round(p.illumination * 100)
 

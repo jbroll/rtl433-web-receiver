@@ -1,4 +1,5 @@
-// Every event is the one falling inside the UTC calendar day of the Date passed in.
+// Every event is the one falling inside the given zone's calendar day for the
+// Date passed in; zone defaults to UTC.
 
 const RAD = Math.PI / 180
 const DAY = 86400000
@@ -13,6 +14,19 @@ const century = date => (julianDay(date) - 2451545) / 36525
 
 export function julianDay (date) {
   return date.getTime() / DAY + 2440587.5
+}
+
+// The rise/set formula below is anchored to UTC midnight of the calendar day
+// it runs for -- its `m` is always minutes since UTC midnight, longitude and
+// all. So only the *date* comes from the zone (the same
+// Intl.DateTimeFormat(...).formatToParts shape feeds/zone.js uses); the
+// instant this returns is that date's UTC midnight, not the zone's.
+function zoneDayStart (date, zone) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(date)
+  const p = Object.create(null)
+  for (const { type, value } of parts) p[type] = value
+  return Date.UTC(+p.year, +p.month - 1, +p.day)
 }
 
 function obliquity (t) {
@@ -62,8 +76,8 @@ function eventMinutes (start, lat, lon, zenith, dir) {
   return m
 }
 
-export function sunEvents (date, lat, lon) {
-  const start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+export function sunEvents (date, lat, lon, zone = 'UTC') {
+  const start = zoneDayStart(date, zone)
   const at = m => m === null ? null : new Date(start + m * 60000)
   const noon = solarPosition(new Date(start + 43200000))
   let mid = 720 - 4 * lon - noon.eqOfTime
@@ -175,8 +189,8 @@ export function moonPhase (date) {
   return { age: phase * SYNODIC, phase, illumination: k, name, waxing }
 }
 
-export function moonTimes (date, lat, lon) {
-  const start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+export function moonTimes (date, lat, lon, zone = 'UTC') {
+  const start = zoneDayStart(date, zone)
   const step = 600000
   const steps = DAY / step
   let rise = null, set = null, lo = Infinity, hi = -Infinity

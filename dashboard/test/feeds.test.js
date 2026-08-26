@@ -297,6 +297,42 @@ test('a feed that does not ask to be cached never writes one', async () => {
   assert.equal(cacheGet('test'), null)
 })
 
+test('a run that resolves after the place changed publishes nothing', async () => {
+  atBoulder()
+  let release
+  registerFeed(fakeFeed({
+    run: () => { ran++; return new Promise(r => { release = () => r({ fields: { value: 1 } }) }) },
+  }))
+  pump(1000)
+  await settle()
+  assert.equal(ran, 1)
+
+  setLocation({ lat: 51.5, lon: -0.1 })
+  pump(2000)
+  await settle()
+  assert.equal(ran, 1, 'a second run started for the new place while the first was in flight')
+
+  release()
+  await settle()
+  assert.equal(devices.value.has(KEY), false, 'stale data reached the card after the place moved')
+})
+
+test('a prime with an empty place then a pump leaves the cache intact', async () => {
+  cacheSet('test', { at: Date.now(), fields: { value: 42 }, meta: null, place: '40.015,-105.2705' })
+  registerFeed(fakeFeed({ cached: true }))
+
+  primeFeeds()
+  assert.ok(cacheGet('test'), 'setup: the cache entry exists before priming')
+
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  pump(Date.now())
+  // Checked synchronously: cacheClear() runs inside pump() itself, before the
+  // feed's own run (fired but not yet awaited) could overwrite the entry.
+  assert.ok(cacheGet('test'), 'the cache was wiped on the first pump after an empty-place prime')
+
+  await settle()
+})
+
 test('an uncached feed is not painted from a cache entry left behind', async () => {
   atBoulder()
   cacheSet('test', { at: Date.now(), ranAt: Date.now(), fields: { value: 42 }, meta: null, place: '40.015,-105.2705' })

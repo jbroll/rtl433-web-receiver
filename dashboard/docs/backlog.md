@@ -136,12 +136,6 @@
   `feeds/zone.js` builds one per call and `sun.js` calls `hhmm` eleven times per run; and
   `isDST` builds three. Construction is the expensive half of Intl and formatting is cheap,
   so a module-level Map keyed on zone and format covers all three.
-- `pump()` in `feeds/feed.js` resolves the location five times per tick. It calls
-  `hasLocation()`, `placeOf()` (which calls `resolvedLocation()` and `hasLocation()` again),
-  `resolvedLocation()`, and `activeZone()` (another `resolvedLocation()` plus
-  `localZone()`), driven by the one-second effect in `main.jsx`, and `localZone()`
-  constructs an `Intl.DateTimeFormat` just to read `resolvedOptions().timeZone`. Resolving
-  once at the top and threading the result through is enough.
 - `main.jsx` stringifies every payload, including the ones it discards. The SSE frame
   arrived as a string and was parsed in `stream.js`; `JSON.stringify(obj)` re-serialises it
   before the `isSelf(key)` test that decides whether it is logged at all, so Receiver
@@ -192,38 +186,10 @@
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.
-- An in-flight feed run is neither aborted nor discarded when the location changes.
-  `pump()` in `feeds/feed.js` detects the new place, calls `cacheClear()` and resets
-  `feedState`, but the pending `await feed.run(ctx)` still holds the old `ctx`. When it
-  lands it publishes the old point's fields, re-writes the cache that was just cleared, and
-  sets `nextAt` an interval out — so moving the location while an NWS fetch is in flight
-  repaints the old city's forecast and does not refetch for 15 minutes. On the error path
-  it installs a 30-minute backoff for a location that was never tried. There is no
-  `AbortController` anywhere in `feeds/` or `geocode.js`.
-- The feed cache is wiped on every load of a fallback-location dashboard. `primeFeeds()`
-  runs before any SSE frame, so `place` is empty and every cached entry — keyed
-  `"40.015,-105.2705"` — is skipped; when the `$location` frame lands the effect re-runs
-  `pump()`, `next !== place` is true, and `cacheClear()` deletes the lot. A dashboard whose
-  location comes only from a source refetches weather, sun and moon from the upstream APIs
-  on every page reload, and the cache `primeFeeds` describes can never accumulate. A
-  local-location dashboard is unaffected. Priming `place` from `resolvedLocation()`, or not
-  treating an empty-to-real transition as an invalidation, would fix it.
-- Sun and moon events are computed for the UTC calendar day, not the location's local day:
-  `sunEvents` and `moonTimes` in `astro.js` both floor to
-  `Date.UTC(getUTCFullYear/Month/Date)`. At UTC-7, any time after 17:00 local the UTC day
-  has rolled over, so the Sun card shows tomorrow's sunrise and sunset — a minute or two
-  off — and the Moon card shows tomorrow's moonrise, which drifts about 50 minutes a day
-  and can be null on one day and not the other. The dial's night/day state is unaffected,
-  because `sunAngle` takes the value mod one day.
-- The sun renderer treats the em-dash placeholder as a real time. `hhmm(null, z)` returns
-  `'—'` (`feeds/zone.js`), `sun.js` puts it straight into `riseText`, and `{v.riseText && …}`
-  in `renderers.jsx` is truthy for it. Above the Arctic circle on a day with no rise the dial
-  draws "↑ —" and, because `!v.riseText` is false, suppresses the `v.brief` text ("up all
-  day") that exists to replace it. The moon renderer handles this correctly through `timeOf`.
-- The feed retry jitter is `(fails * 2654435761) % 1000`, which contains nothing
-  feed-specific, so every feed gets the same value and they retry in lockstep — what the
-  comment above it says the jitter prevents. Latent while `nws` is the only feed that
-  fetches.
+- `runFeed()` discards a reply that lands after the location has moved on, but the request
+  itself still runs to completion: nothing cancels the pending `fetch` inside `nws.js`'s
+  `get()`. An `AbortController` threaded from `pump()` through `feed.run(ctx)` into `get()`
+  would cancel the wasted request instead of just ignoring its answer.
 - "Clear" clears only the local location. On a page the receiver serves, the
   receiver's own published `$location` immediately supplies the fallback, so the
   feed cards stay and the location the user just cleared still resolves. There is
