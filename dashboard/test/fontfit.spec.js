@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { startServer } from "./harness.js";
-import { ACURITE, topicOf } from "./fixtures.js";
+import { ACURITE, LONGNAME, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
 const CARD = `.card:not(.ghostcard)[data-key$="${ACURITE_KEY}"]`;
@@ -72,4 +72,26 @@ test("a rich value shows its brief in the devices table, not its object", async 
   const cell = page.locator(`tr[data-key="${RICH_KEY}"] td`).nth(2);
   await expect(cell).toHaveText("note: long");
   await expect(cell).not.toContainText("$r");
+});
+
+test("a value fills most of the width it is given, at any grid size", async ({ page }) => {
+  server = await startServer({ devices: [LONGNAME] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.evaluate(() => {
+    setHideNewCards(false);
+    cardState = { ...cardState, hidden: [] };
+    saveCardState();
+  });
+  await page.click("#tab-cards");
+
+  const minFillRatio = () => page.locator(".val .fv").evaluateAll(
+    nodes => Math.min(...nodes.map(n => n.scrollWidth / n.clientWidth)));
+
+  for (const [cols, rows] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]]) {
+    await page.evaluate(([c, r]) => { setGrid("cols", c); setGrid("rows", r); }, [cols, rows]);
+    // fitValues() runs from a useEffect deferred to the next frame, so poll
+    // for the fit to settle instead of racing it with a fixed wait.
+    await expect.poll(minFillRatio, { message: `${cols}x${rows}` }).toBeGreaterThan(0.8);
+  }
 });

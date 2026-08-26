@@ -141,18 +141,20 @@
   `store.js`, `cacheDrop` in `feeds/cache.js`, the `const alias` in `Label` and the no-op
   `onPointerDown` in `cards.jsx`. `err.retryAfter` in `feeds/nws.js` is assigned and never
   read, which means the backoff ladder ignores `Retry-After` entirely.
-- Eighteen of the nineteen `debug-*` and `fill-ratio*` specs are scratch files that cannot
-  fail on a regression, and `playwright.config.js` matches `**/*.spec.js`, so `npm test`
-  runs them. Ten navigate to a hardcoded LAN address (`http://192.168.1.171/` in
-  `debug-device-values{,2..7}`, `debug-ellipsis`, `debug-wrap`, `debug-wrap2`), so the suite
-  cannot pass off that subnet — this is what keeps the dashboard tests out of CI. The other
-  nine use the real harness but their only assertion is
-  `expect(page.locator("#status")).toHaveText(/live/)`, a connectivity check;
-  `debug-sweep.spec.js` has none, and their payload is `console.log`. The exception is
-  `fill-ratio.spec.js`, which genuinely asserts `minRatio > 0.8` over `.fv`
-  `scrollWidth/clientWidth` across five grid sizes. Delete the eighteen and fold that
-  assertion into `fontfit.spec.js` under a name that says what it pins. The same glob also
-  picks up untracked scratch specs, so a local run and a clean checkout run different sets.
+- `playwright.config.js` matches `**/*.spec.js`, so an untracked scratch spec dropped into
+  `test/` runs under `npm test` right alongside the real suite. A local run and a clean
+  checkout run different sets as a result.
+- The fill ratio assertion folded into `fontfit.spec.js` ("a value fills most of the width
+  it is given, at any grid size") cannot fail on a regression: it reads
+  `fv.scrollWidth / fv.clientWidth` on the `.fv` element, but `.fv` is an unstretched flex
+  item holding unbreakable text (a number, no wrap points), so its box always grows to
+  match its own content — `scrollWidth` and `clientWidth` are equal by construction,
+  whatever font size `fitValues()` picks. Confirmed by breaking `fitValues()` four
+  different ways (early return, pinning every value to `FONT_MAX`, pinning to `FONT_MIN`,
+  and using the last box's fit as the global instead of the minimum) — the assertion stayed
+  green under all four. The real overflow this was meant to catch shows up on the parent
+  `.val` (which does clip, via `overflow:hidden` and `min-width:0`) or on the card
+  extending past its grid cell, not on `.fv` itself.
 - Both Android smoke steps are stale after the gear-panel split. `test/android-smoke.js`
   clicks `#settings summary`, but `settings.jsx` replaced `<details><summary>` with a plain
   `<div id="settings">`, so the click hangs to the Playwright timeout; and it clicks
@@ -239,3 +241,10 @@
 - The view column cap is derived from width alone. A landscape phone gets the same 3
   columns a portrait one does at the same width, and a very short window still scrolls
   rather than fitting.
+- Three tests in `test/cards.spec.js` read a `.fv` font size shortly after a layout-changing
+  step and have the same race that was just fixed elsewhere in that file — `fitValues()`
+  runs from a `useEffect` deferred to the next frame, so a read taken right after the step
+  can still see the pre-fit value — but fixing them needs more than swapping in
+  `expect.poll`: "resizing while scrolled fits to the same font as a fresh load", "every
+  card on the page shares one type size", and a related overflow read in "no card overflows
+  its box at any size or value count".
