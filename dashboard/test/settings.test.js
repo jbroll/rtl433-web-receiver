@@ -497,23 +497,53 @@ test('publishUnits leaves the adoption latch open', () => {
   assert.equal(settings.value.units, 'imperial')
 })
 
-test('refreshTz posts once when the clock crosses a DST boundary, and not again for the same offset', () => {
+const flush = () => new Promise(r => setTimeout(r, 0))
+
+test('refreshTz posts once when the clock crosses a DST boundary, and not again for the same offset', async () => {
   mock.timers.enable({ apis: ['Date'] })
   try {
     mock.timers.setTime(Date.UTC(2026, 2, 8, 8, 0, 0)) // 01:00 MST, UTC-07:00
     const posted = []
-    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return {} }
+    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return { ok: true } }
     sources.value = ['http://receiver.test']
     setLocation({ lat: 39.7, lon: -104.9, zone: 'America/Denver' })
+    await flush()
     posted.length = 0
 
     refreshTz()
+    await flush()
     mock.timers.setTime(Date.UTC(2026, 2, 8, 9, 30, 0)) // 03:30 MDT, UTC-06:00, past the spring-forward
     refreshTz()
+    await flush()
     refreshTz()
+    await flush()
 
     const tzPosts = posted.filter(p => p[0].endsWith('/$tz'))
     assert.deepEqual(tzPosts.map(p => p[1]), ['-360'])
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
+})
+
+test('a failed $tz POST does not latch, so a later tick retries the same offset', async () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    mock.timers.setTime(Date.UTC(2026, 2, 8, 9, 30, 0)) // 03:30 MDT, UTC-06:00
+    const posted = []
+    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return { ok: false, status: 503 } }
+    sources.value = ['http://receiver.test']
+    setLocation({ lat: 39.7, lon: -104.9, zone: 'America/Denver' })
+    await flush()
+    posted.length = 0
+
+    refreshTz()
+    await flush()
+    refreshTz()
+    await flush()
+
+    const tzPosts = posted.filter(p => p[0].endsWith('/$tz'))
+    assert.deepEqual(tzPosts.map(p => p[1]), ['-360', '-360'])
   } finally {
     mock.timers.reset()
     globalThis.fetch = async () => ({})

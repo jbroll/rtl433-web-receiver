@@ -144,10 +144,22 @@ export function resolvedLocation() {
 
 let storageBroken = false
 
-// The offset last written to $tz, so refreshTz's timer-driven recompute only
-// POSTs on an actual change. Reset on load along with unitsAuto: both are
-// one-way latches for the lifetime of the page.
+// The offset last confirmed written to $tz, so a recompute only POSTs on an
+// actual change. Reset on load along with unitsAuto, both one-way latches.
 let lastPostedTzOffset = null
+
+// Latches lastPostedTzOffset only on a confirmed 2xx (204 today): 401 and
+// 503 must NOT latch, or a real unlanded change goes unretried for months.
+function postTz(offset) {
+  fetch(`${location.origin}/$tz`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
+    body: JSON.stringify(offset),
+  }).then(res => {
+    if (res.ok) { lastPostedTzOffset = offset; return }
+    if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
+  }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
+}
 
 export function loadSettings() {
   settings.value = fresh()
@@ -238,15 +250,7 @@ export function setLocation(next) {
   // fallback, so a blank local edit would publish over the receiver's own
   // stored location.
   if (!zoomOnly && clean.lat !== null && clean.lon !== null && sources.value.includes(location.origin)) {
-    const offset = offsetMinutes(new Date(), clean.zone || localZone())
-    lastPostedTzOffset = offset
-    fetch(`${location.origin}/$tz`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
-      body: JSON.stringify(offset),
-    }).then(res => {
-      if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
-    }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
+    postTz(offsetMinutes(new Date(), clean.zone || localZone()))
     fetch(`${location.origin}/$location`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
@@ -273,27 +277,17 @@ export function localZone() {
   catch (e) { return 'UTC' }
 }
 
-// The zone the feeds should use: the user's own choice, else the network
-// fallback's, else the browser's. Kept independent of coordinates, so a zone
-// picked with no lat/lon still wins -- resolvedLocation() would otherwise
-// fall through to the network layer whenever local lat/lon are null.
+// The zone the feeds should use, independent of coordinates: a zone picked
+// with no lat/lon must still win over resolvedLocation()'s network fallback.
 export function activeZone() {
   return settings.value.location.zone || resolvedLocation().zone || localZone()
 }
 
-// Recomputes the offset on every tick but POSTs only when it has changed,
-// gated the same way setLocation's $tz POST is: publishing to a source is
-// only meaningful when this page is served by that source.
+// POSTs only when the offset has changed, gated the same way setLocation's
+// $tz POST is: publishing only makes sense when this page is the source.
 export function refreshTz() {
   if (!sources.value.includes(location.origin)) return
   const offset = offsetMinutes(new Date(), activeZone())
   if (offset === lastPostedTzOffset) return
-  lastPostedTzOffset = offset
-  fetch(`${location.origin}/$tz`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
-    body: JSON.stringify(offset),
-  }).then(res => {
-    if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
-  }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
+  postTz(offset)
 }
