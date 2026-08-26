@@ -1,8 +1,8 @@
-import { test, beforeEach } from 'node:test'
+import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecimals, setCustomField,
-         setLocation, clearLocation, hasLocation, activeZone, localZone,
+         setLocation, clearLocation, hasLocation, activeZone, localZone, refreshTz,
          locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources,
          unitsBySource, onUnitsFrame, unitsForSources, publishUnits } from '../src/settings.js'
 import { sources } from '../src/sources.js'
@@ -262,6 +262,17 @@ test('setLocation surfaces a 401 on $location as a toast, not only console.error
   globalThis.fetch = async () => ({})
 })
 
+test('setLocation skips both POSTs when only the zoom changes', async () => {
+  const posted = []
+  globalThis.fetch = async (url) => { posted.push(url); return {} }
+  sources.value = ['http://receiver.test']
+  setLocation({ lat: 40.015, lon: -105.2705, label: 'Boulder', zone: 'America/Denver', zoom: 12 })
+  posted.length = 0
+  setLocation({ zoom: 8 })
+  assert.deepEqual(posted, [])
+  globalThis.fetch = async () => ({})
+})
+
 test('setLocation does not POST a blanked location when only the fallback has one', async () => {
   const posted = []
   globalThis.fetch = async (url) => { posted.push(url); return {} }
@@ -321,6 +332,16 @@ test('the network fallback never writes into localStorage', () => {
   onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: 'Europe/Berlin', zoom: 11 })
   assert.equal(hasLocation(), true)
   assert.deepEqual(settings.value.location, NO_PLACE)
+  assert.equal(activeZone(), 'Europe/Berlin')
+})
+
+test('a zone set with no coordinates wins over the network fallback', () => {
+  setLocation({ zone: 'Europe/Berlin' })
+  assert.equal(settings.value.location.lat, null)
+  assert.equal(activeZone(), 'Europe/Berlin')
+
+  sources.value = ['http://a']
+  onLocationFrame('http://a', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
   assert.equal(activeZone(), 'Europe/Berlin')
 })
 
@@ -474,4 +495,27 @@ test('publishUnits leaves the adoption latch open', () => {
   publishUnits()
   onUnitsFrame('http://receiver.test', IMPERIAL)
   assert.equal(settings.value.units, 'imperial')
+})
+
+test('refreshTz posts once when the clock crosses a DST boundary, and not again for the same offset', () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    mock.timers.setTime(Date.UTC(2026, 2, 8, 8, 0, 0)) // 01:00 MST, UTC-07:00
+    const posted = []
+    globalThis.fetch = async (url, opts) => { posted.push([url, opts.body]); return {} }
+    sources.value = ['http://receiver.test']
+    setLocation({ lat: 39.7, lon: -104.9, zone: 'America/Denver' })
+    posted.length = 0
+
+    refreshTz()
+    mock.timers.setTime(Date.UTC(2026, 2, 8, 9, 30, 0)) // 03:30 MDT, UTC-06:00, past the spring-forward
+    refreshTz()
+    refreshTz()
+
+    const tzPosts = posted.filter(p => p[0].endsWith('/$tz'))
+    assert.deepEqual(tzPosts.map(p => p[1]), ['-360'])
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
 })

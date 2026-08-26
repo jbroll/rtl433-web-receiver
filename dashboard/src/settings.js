@@ -144,12 +144,18 @@ export function resolvedLocation() {
 
 let storageBroken = false
 
+// The offset last written to $tz, so refreshTz's timer-driven recompute only
+// POSTs on an actual change. Reset on load along with unitsAuto: both are
+// one-way latches for the lifetime of the page.
+let lastPostedTzOffset = null
+
 export function loadSettings() {
   settings.value = fresh()
   // Reload re-tests storage rather than staying latched off after one throw,
   // matching loadAliases. A private-mode tab that gains quota still saves.
   storageBroken = false
   unitsAuto = true
+  lastPostedTzOffset = null
   let raw
   try { raw = localStorage.getItem(SETTINGS_KEY) } catch (e) { storageBroken = true; return }
   if (!raw) return
@@ -213,19 +219,27 @@ export function setCustomField(group, value) {
   saveSettings()
 }
 
+// zoom alone is a view preference, not a place: no POST is worth issuing for it.
+function sameExceptZoom(a, b) {
+  return a.lat === b.lat && a.lon === b.lon && a.label === b.label && a.zone === b.zone
+}
+
 // The whole location moves at once: a lat without a lon is not a place, and
 // the feeds must never see one half updated.
 export function setLocation(next) {
-  const clean = cleanLocation({ ...settings.value.location, ...next })
+  const prev = settings.value.location
+  const clean = cleanLocation({ ...prev, ...next })
   settings.value = { ...settings.value, location: clean }
   saveSettings()
+  const zoomOnly = prev.zoom !== clean.zoom && sameExceptZoom(prev, clean)
   // Gated the same way the $layout Save button is: publishing to a source is
   // only meaningful when this page is served by that source. The value gate is
   // `clean` itself, never hasLocation() -- that resolves through the network
   // fallback, so a blank local edit would publish over the receiver's own
   // stored location.
-  if (clean.lat !== null && clean.lon !== null && sources.value.includes(location.origin)) {
+  if (!zoomOnly && clean.lat !== null && clean.lon !== null && sources.value.includes(location.origin)) {
     const offset = offsetMinutes(new Date(), clean.zone || localZone())
+    lastPostedTzOffset = offset
     fetch(`${location.origin}/$tz`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
@@ -259,7 +273,27 @@ export function localZone() {
   catch (e) { return 'UTC' }
 }
 
-// The zone the feeds should use: the user's choice, else the browser's.
+// The zone the feeds should use: the user's own choice, else the network
+// fallback's, else the browser's. Kept independent of coordinates, so a zone
+// picked with no lat/lon still wins -- resolvedLocation() would otherwise
+// fall through to the network layer whenever local lat/lon are null.
 export function activeZone() {
-  return resolvedLocation().zone || localZone()
+  return settings.value.location.zone || resolvedLocation().zone || localZone()
+}
+
+// Recomputes the offset on every tick but POSTs only when it has changed,
+// gated the same way setLocation's $tz POST is: publishing to a source is
+// only meaningful when this page is served by that source.
+export function refreshTz() {
+  if (!sources.value.includes(location.origin)) return
+  const offset = offsetMinutes(new Date(), activeZone())
+  if (offset === lastPostedTzOffset) return
+  lastPostedTzOffset = offset
+  fetch(`${location.origin}/$tz`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
+    body: JSON.stringify(offset),
+  }).then(res => {
+    if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
+  }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
 }

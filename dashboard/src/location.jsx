@@ -69,7 +69,13 @@ export function LocationView() {
         const { latitude, longitude } = pos.coords
         setLocation({ lat: latitude, lon: longitude, label: '', zoom: PLACE_ZOOM })
         setStatus('')
-        try { setLocation({ label: await reverseGeocode(latitude, longitude) }) } catch (e) {}
+        try {
+          const label = await reverseGeocode(latitude, longitude)
+          const l = settings.value.location
+          // A newer pick may have landed while this was in flight; only apply
+          // the label if it still describes the coordinates it was fetched for.
+          if (l.lat === latitude && l.lon === longitude) setLocation({ label })
+        } catch (e) {}
       },
       (err) => setStatus(err.message || 'Could not get your location'))
   }

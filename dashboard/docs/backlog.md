@@ -77,19 +77,6 @@
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
   `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
-- `activeZone()` in `settings.js` reads `resolvedLocation().zone`, and `resolvedLocation()`
-  returns the local settings object only when `lat` and `lon` are both non-null. The time
-  zone `<select>` in `location.jsx` calls `setLocation({ zone })` without touching
-  coordinates, so a zone chosen with no local coordinates is stored and displayed but never
-  used. On a dashboard whose coordinates come from a source's `$location`, the select shows
-  the picked zone while the Clock and Sun cards and the forecast day names run on the
-  receiver's — the reverse of "your own location always wins once you set it". The zone
-  needs its own fallback chain, independent of the coordinates.
-- `onBoundsChanged` in `location.jsx` calls `setLocation({ zoom })` on every zoom change,
-  and `setLocation` POSTs `$tz` and `$location` unconditionally when the origin is a
-  configured source. Scroll-zooming the picker from z3 to z15 issues about 24 POSTs the
-  ESP32 has to answer plus 12 settings serializations, each re-rendering `CardsView` and
-  triggering a full font re-fit. Zoom is a view preference; it should not reach the wire.
 - `fitting` in `grid.js` grows without bound. `trackFit()` inserts by node and nothing
   deletes; `resetFit()` is exported and called from nowhere in `src/`. Every hide/show,
   every device eviction and every keyed remount leaks an entry holding a detached node, and
@@ -120,22 +107,10 @@
   `reading()` helper twelve lines above handles the same case correctly, which is what makes
   this look like an oversight. Derived from reading Preact's diff source rather than observed
   in a browser; a one-line check on `tr.vrow[data-f="sun"] td` would settle it.
-- Reverse geocoding can clobber a newer location pick. `location.jsx` awaits
-  `reverseGeocode(latitude, longitude)` and writes the label with `setLocation`, and
-  `geocode.js` serialises requests behind a one-second gap, so the write lands at least a
-  second later. A search result picked in the meantime keeps its new coordinates and gets
-  the stale label. Capturing the coordinates before the await and skipping the write when
-  they no longer match is the fix.
 - `loadBridges()` has no request sequencing. It is called from `addBridge`/`removeBridge`
   and from the settings-tab effect in `main.jsx`, so two overlapping fetches resolve in
   arbitrary order and the loser wins. Low impact, since the list is small and refetched on
   the next tab switch, but a monotonic request id is two lines.
-- `$tz` is posted once and never refreshed, so the receiver's rain-day boundary drifts at
-  every DST transition. `settings.js` computes `offsetMinutes(new Date(), zone)` at save
-  time and POSTs it; the firmware stores it in `device_hooks.cpp` and uses it for the local
-  day rollover that resets `rain_today_mm`. A fixed offset is wrong for half the year until
-  someone re-opens Settings and re-saves. The tick effect in `main.jsx` already runs every
-  second and could re-post on a change against a cached last-posted value.
 - The log pane re-renders 200 rows on every message, including while it is hidden.
   `addLog()` copies the whole array per message and `LogView` maps all 200 rows, calling
   `toLocaleTimeString()` — an Intl formatter construction — once per row. `app.jsx` only

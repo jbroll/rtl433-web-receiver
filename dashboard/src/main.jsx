@@ -12,7 +12,7 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
          setSourceState } from './sources.js'
 import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame,
-         onUnitsFrame } from './settings.js'
+         onUnitsFrame, refreshTz } from './settings.js'
 import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
@@ -233,7 +233,7 @@ for (const feed of [weather, sun, moon, clock]) registerFeed(feed)
 primeFeeds()
 // tick is the app's only timer, so the feed scheduler rides it rather than
 // starting one of its own. Reading settings restarts the feeds on a move.
-effect(() => { tick.value; settings.value; pump() })
+effect(() => { tick.value; settings.value; pump(); refreshTz() })
 // A bridge's connected state only settles after loop() reconnects it, so
 // refetch whenever the Settings tab is switched to rather than only at boot.
 effect(() => { if (settingsTab.value === 'settings') loadBridges() })

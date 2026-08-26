@@ -166,6 +166,65 @@ test("picking a search result drops a pin on the map", async ({ page }) => {
   expect(await page.locator("#settings-map svg").count()).toBeGreaterThan(0);
 });
 
+test("changing only the zoom issues no further $location POST", async ({ page }) => {
+  await open(page);
+  await page.locator("#settings-place").fill("boulder");
+  await page.locator("#settings-place-go").click();
+  await page.locator("#settings-place-results li").first().locator("button").click();
+  await expect(page.locator("#settings-lat")).toHaveValue("40.0149856");
+
+  let posts = 0;
+  await page.route("**/$location", r => { posts++; r.continue(); });
+  await page.evaluate(() => window.setLocation({ zoom: 8 }));
+  await page.waitForTimeout(200);
+  expect(posts).toBe(0);
+});
+
+test("a newer pick wins over a reverse geocode still in flight", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 51.5, longitude: -0.1 });
+  await routeTiles(page);
+
+  let releaseReverse;
+  const reverseGate = new Promise(r => { releaseReverse = r; });
+  await page.route(NOMINATIM, async r => {
+    const url = r.request().url();
+    if (url.includes("/reverse")) {
+      await reverseGate;
+      return r.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ lat: "51.5", lon: "-0.1", display_name: "London, UK" }) });
+    }
+    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(BOULDER) });
+  });
+
+  server = await startServer({ devices: [ACURITE] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.locator("#tab-devices").click();
+  await page.locator("#subtab-settings").click();
+
+  await page.locator("#settings-place").fill("boulder");
+  await page.locator("#settings-place-go").click();
+  await expect(page.locator("#settings-place-results li")).toHaveCount(2);
+
+  // geocode.js serializes search and reverse lookups behind a shared
+  // one-second gap, so wait for the reverse request itself rather than a
+  // fixed delay before treating it as "in flight".
+  const reverseRequested = page.waitForRequest(r => r.url().includes("/reverse"));
+  await page.locator("#settings-geolocate").click();
+  await expect(page.locator("#settings-lat")).toHaveValue("51.5");
+  await reverseRequested;
+
+  await page.locator("#settings-place-results li").first().locator("button").click();
+  await expect(page.locator("#settings-lat")).toHaveValue("40.0149856");
+
+  const reverseResponded = page.waitForResponse(r => r.url().includes("/reverse"));
+  releaseReverse();
+  await reverseResponded;
+  await expect(page.locator("#settings-location-status"))
+    .toHaveText("Boulder, Boulder County, Colorado, United States");
+});
+
 test("clicking the map sets the coordinates to the point clicked", async ({ page }) => {
   await open(page);
   await page.locator("#settings-place").fill("boulder");
@@ -182,3 +241,4 @@ test("clicking the map sets the coordinates to the point clicked", async ({ page
   expect(Math.abs(lat - 40.015)).toBeLessThan(2);
   expect(Math.abs(lon + 105.2705)).toBeLessThan(2);
 });
+

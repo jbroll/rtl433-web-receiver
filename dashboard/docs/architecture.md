@@ -153,7 +153,13 @@ The signal also carries the location. Behind it sits a network fallback: the
 consulted by `resolvedLocation()` only when nothing is set locally. The
 fallback is never written into `localStorage`, so a location set locally takes
 over the moment it exists. Setting a location also POSTs `$location` and `$tz`
-back, but only to an origin that is itself a configured source.
+back, but only to an origin that is itself a configured source; a change that
+touches only `zoom` skips both POSTs, since zoom is a view preference. `activeZone()`
+resolves the zone on its own chain — the local zone if one is set, else the
+fallback's, else the browser's — independent of whether local coordinates exist,
+so a zone chosen with no coordinates still wins. `refreshTz()` recomputes the
+offset every tick and POSTs `$tz` again only when it has changed, which keeps
+the receiver's rain-day rollover correct across a DST transition.
 
 `$units` carries the same three unit fields the settings signal holds, in a
 per-source map of its own. It resolves differently from the location: rather
