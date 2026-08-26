@@ -38,7 +38,7 @@ export function measureGrid() {
   const top = grid.getBoundingClientRect().top + window.scrollY
   const height = window.innerHeight - top
                  - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
-  const cols = Math.max(1, Math.min(Math.floor(width / MIN_CELL), g.cols))
+  const cols = Math.max(1, Math.min(Math.floor((width + colGap) / (MIN_CELL + colGap)), g.cols))
   viewColsN = cols
   viewColsSignal.value = cols
   const usableWidth = width - (cols - 1) * colGap
@@ -73,9 +73,10 @@ function probeNode() {
   return (tracked && tracked.node) || document.querySelector(".card .fv")
 }
 
-// The unit renders in the .fn header, not beside the number, so only the
-// number's width bounds the type size.
-export function textWidthEm(num) {
+// Sets textProbe's font/letter-spacing/etc. from the probe node's computed
+// style and returns the values measureEm() needs. Split from textWidthEm()
+// so fitValues() can call this once per run instead of once per node.
+function primeTextProbe() {
   if (!textProbe) textProbe = document.createElement("canvas").getContext("2d")
   const cs = getComputedStyle(probeNode() || document.body)
   // cs.font (the shorthand) serializes to "" once a Level 3 font-variant
@@ -85,15 +86,25 @@ export function textWidthEm(num) {
   if (hasCtxSpacing) textProbe.letterSpacing = cs.letterSpacing
   if ("fontStretch" in textProbe) textProbe.fontStretch = cs.fontStretch
   if ("fontFeatureSettings" in textProbe) textProbe.fontFeatureSettings = cs.fontFeatureSettings
-  const extraPerChar = hasCtxSpacing ? 0 : (parseFloat(cs.letterSpacing) || 0)
-  const fontSizePx = parseFloat(cs.fontSize) || 100
+  return {
+    extraPerChar: hasCtxSpacing ? 0 : (parseFloat(cs.letterSpacing) || 0),
+    fontSizePx: parseFloat(cs.fontSize) || 100,
+  }
+}
+
+function measureEm(num, { extraPerChar, fontSizePx }) {
   const width = textProbe.measureText(num).width + extraPerChar * num.length
   return width / fontSizePx
 }
 
-// num, not a precomputed em: textWidthEm() runs fresh in fitValues() so a
-// CSS-only change (letter-spacing, font-feature-settings) is picked up
-// without needing a re-render to recompute it.
+// The unit renders in the .fn header, not beside the number, so only the
+// number's width bounds the type size.
+export function textWidthEm(num) {
+  return measureEm(num, primeTextProbe())
+}
+
+// num, not a precomputed em: textWidthEm() runs fresh in fitValues(), so a
+// CSS-only change (letter-spacing, font-feature-settings) needs no re-render.
 export function trackFit(node, num) {
   fitting.set(node, { node: node, num: num })
 }
@@ -106,6 +117,7 @@ export function fitValues() {
   fitValuesCalls++
   let global = FONT_MAX
   let lineHeight = null
+  let probe = null
   const boxes = []
   for (const f of fitting.values()) {
     if (!f.node.isConnected) { fitting.delete(f.node); continue }
@@ -116,15 +128,17 @@ export function fitValues() {
     // A hidden tab measures zero. Fitting to that would drop every value to the
     // floor, and nothing re-measures when the tab comes back.
     if (box <= 0 || rowH <= 0) continue
-    // .card .val publishes --val-line-height; read it once per run rather
-    // than per node, since it's the same custom property everywhere.
+    // Read --val-line-height once per run; it's the same custom property everywhere.
     if (lineHeight === null) {
       lineHeight = parseFloat(getComputedStyle(parent).getPropertyValue("--val-line-height"))
         || DEFAULT_LINE_HEIGHT
     }
+    // probeNode() returns the same node every iteration; prime the canvas
+    // font once instead of on every measureEm() call.
+    if (probe === null) probe = primeTextProbe()
     const fn = parent.querySelector(".fn")
     const availH = Math.floor((rowH - (fn ? fn.offsetHeight : 0)) / lineHeight)
-    const fits = Math.min(Math.floor(box / textWidthEm(f.num)), availH)
+    const fits = Math.min(Math.floor(box / measureEm(f.num, probe)), availH)
     if (fits < global) global = fits
     boxes.push(f.node)
   }

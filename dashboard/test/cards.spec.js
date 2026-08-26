@@ -626,15 +626,13 @@ test("hiding a value in a card smaller than its value count grows the rest", asy
   await open(page, [LONGNAME]);
   const font = () => page.locator(LONG_CARD + ' .val[data-f="temperature_F"] .fv')
     .evaluate(n => parseFloat(n.style.fontSize));
-  const initial = await font();
 
-  // fitValues() runs from a useEffect deferred to the next frame, so read
-  // after it lands rather than racing it: wait for the font to move off the
-  // pre-resize value before treating it as the settled "before" size.
+  // fitValues() runs from a useEffect deferred to the next frame, and can
+  // land on an intermediate size before settling: wait for the settled
+  // value rather than just one that differs from the pre-resize font.
   await setSize(page, LONG_KEY, 2, 1);
-  await expect.poll(font).not.toBe(initial);
   // Seven values in two columns need four rows; hiding one drops it to three.
-  const before = await font();
+  const before = await waitForFitSettled(font);
   await page.click("#tab-devices");
   await mode(page, LONG_KEY, "rain_mm").selectOption("hidden");
   await page.click("#tab-cards");
@@ -1376,14 +1374,12 @@ test("a card resized larger renders larger type", async ({ page }) => {
   const cell = await page.evaluate(() => cellSide);
   const font = () => page.locator(CARD + ' .val[data-f="temperature_F"] .fv')
     .evaluate(n => parseFloat(n.style.fontSize));
-  const initial = await font();
 
   await dragHandle(page, CARD, -4000, -4000);
   expect(await spans(page, CARD)).toEqual({ col: "span 1 auto", row: "span 1 auto" });
-  // fitValues() runs from a useEffect deferred to the next frame, so wait for
-  // the font to move off its pre-resize value instead of racing the fit.
-  await expect.poll(font).not.toBe(initial);
-  const small = await font();
+  // fitValues() runs from a useEffect deferred to the next frame, and can
+  // land on an intermediate size before settling: wait for the settled value.
+  const small = await waitForFitSettled(font);
 
   await dragHandle(page, CARD, 3 * cell, 3 * cell);
   expect(await spans(page, CARD)).toEqual({ col: "span 4 auto", row: "span 4 auto" });

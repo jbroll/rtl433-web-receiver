@@ -74,6 +74,20 @@ test("a rich value shows its brief in the devices table, not its object", async 
   await expect(cell).not.toContainText("$r");
 });
 
+// .fv is a shrink-to-fit flex item, so its own scrollWidth/clientWidth is
+// always 1; measure against the box fitValues() sized it for, the .val
+// parent. See docs/architecture.md's "Value fit" for why width and height
+// fill are both checked.
+function fillRatios(page, selector) {
+  return page.locator(selector).evaluateAll(
+    nodes => nodes.map(n => {
+      const val = n.closest(".val");
+      const fn = val.querySelector(".fn");
+      return Math.max(n.scrollWidth / val.clientWidth,
+                      n.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight));
+    }));
+}
+
 test("a value fills most of the width it is given, at any grid size", async ({ page }) => {
   server = await startServer({ devices: [LONGNAME] });
   await page.goto(server.url);
@@ -85,26 +99,14 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
   });
   await page.click("#tab-cards");
 
-  // .fv is a shrink-to-fit flex item, so its own scrollWidth/clientWidth is
-  // always 1; measure against the box fitValues() sized it for, the .val
-  // parent. See docs/architecture.md's "Value fit" for why width and height
-  // fill are both checked.
-  const fillRatios = () => page.locator(".val .fv").evaluateAll(
-    nodes => nodes.map(n => {
-      const val = n.closest(".val");
-      const fn = val.querySelector(".fn");
-      return Math.max(n.scrollWidth / val.clientWidth,
-                      n.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight));
-    }));
-
   for (const [cols, rows] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]]) {
     await page.evaluate(([c, r]) => { setGrid("cols", c); setGrid("rows", r); }, [cols, rows]);
     // fitValues() runs from a useEffect deferred to the next frame, so poll
     // for the fit to settle instead of racing it with a fixed wait.
-    await expect.poll(() => fillRatios().then(rs => Math.max(...rs)),
+    await expect.poll(() => fillRatios(page, ".val .fv").then(rs => Math.max(...rs)),
       { message: `${cols}x${rows}` }).toBeGreaterThan(0.9);
     // No value may overflow the box it was sized for.
-    for (const r of await fillRatios()) expect(r).toBeLessThanOrEqual(1.02);
+    for (const r of await fillRatios(page, ".val .fv")) expect(r).toBeLessThanOrEqual(1.02);
   }
 });
 
@@ -113,9 +115,11 @@ test("letter-spacing on .fv does not overflow the value box", async ({ page }) =
   await page.addStyleTag({ content: ".fv { letter-spacing: .2em; }" });
   await page.evaluate(() => fitValues());
 
-  const fillRatios = () => page.locator(`${CARD} .fv`).evaluateAll(
-    nodes => nodes.map(n => n.scrollWidth / n.closest(".val").clientWidth));
-  for (const r of await fillRatios()) expect(r).toBeLessThanOrEqual(1.02);
+  const ratios = await fillRatios(page, `${CARD} .fv`);
+  // Lower bound too: a change that collapsed every value to the 11px floor
+  // would still satisfy an upper-bound-only check.
+  expect(Math.max(...ratios)).toBeGreaterThan(0.9);
+  for (const r of ratios) expect(r).toBeLessThanOrEqual(1.02);
 });
 
 test("hiding and showing a card repeatedly does not leak fitting entries", async ({ page }) => {
