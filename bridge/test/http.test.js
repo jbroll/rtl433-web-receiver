@@ -91,6 +91,21 @@ test('a topic with no message is 404, and a POST makes it readable byte for byte
   }
 })
 
+test('a POST payload with multi-byte UTF-8 comes back byte for byte through GET', async () => {
+  const bridge = await startBridge()
+  try {
+    const body = JSON.stringify({ label: '日本語 café 🎉' })
+
+    const posted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body })
+    assert.equal(posted.status, 204)
+
+    const got = await fetch(`${bridge.base}/src/Acurite/1234`)
+    assert.deepEqual(Buffer.from(await got.arrayBuffer()), Buffer.from(body, 'utf8'))
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('a non-JSON body is 400 and leaves the retained message alone', async () => {
   const bridge = await startBridge()
   try {

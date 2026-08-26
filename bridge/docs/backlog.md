@@ -73,13 +73,6 @@
   broker that answers `0x80` and stays connected, `GET /events` would return `200` and
   stream nothing, topic `GET`s would `404` forever, and every `POST` would wait the full
   echo timeout.
-- `test/shutdown.test.js` is the only test coverage `bin/mqtt-http-bridge.js` has. Untested:
-  `parseArgs` wiring, the shared `tokenStore` handoff to both `createBridge` and
-  `startEmbeddedBroker`, `AUTH_TOKEN_PATH` end to end, the TLS-mode
-  `brokerUsername = 'bridge'` self-connection, and the dashboard `readFileSync`.
-  `src/sse.js`'s keepalive timer is never exercised, so nothing would notice it stop
-  emitting and let an idle proxy drop every stream; and `test/rotate.test.js` covers wrong,
-  missing, non-JSON and empty-string tokens but not a non-object body.
 - `POST` validates a different byte sequence than it publishes. `src/server.js` parses
   `body.toString('utf8')`, which substitutes U+FFFD for invalid bytes rather than failing,
   and then publishes the raw `body`. A body with invalid UTF-8 inside a JSON string literal

@@ -25,6 +25,7 @@ export function createBridge({
   maxSseClients = DEFAULT_MAX_SSE_CLIENTS,
   maxSseFilters = DEFAULT_MAX_SSE_FILTERS,
   maxBufferedBytes,
+  keepaliveMs,
 }) {
   const clients = new Set()
   const tokens = tokenStore ?? createTokenStore(authToken)
@@ -42,6 +43,7 @@ export function createBridge({
         maxSseClients,
         maxSseFilters,
         maxBufferedBytes,
+        keepaliveMs,
       }
       handle(req, res, ctx).catch(() => {
         try {
@@ -224,7 +226,7 @@ async function handle(
   return send(res, 405, 'method not allowed', { allow: 'GET, POST' })
 }
 
-function subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes }) {
+function subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes, keepaliveMs }) {
   const filters = url.searchParams.getAll('f')
   if (filters.length === 0) filters.push('#')
   // Checked before openStream is called, so a rejected request never
@@ -232,7 +234,7 @@ function subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBy
   if (filters.length > maxSseFilters) return send(res, 400, 'too many filters')
   if (!filters.every(validFilter)) return send(res, 400, 'malformed filter')
 
-  const client = openStream(res, filters, { maxBufferedBytes })
+  const client = openStream(res, filters, { maxBufferedBytes, keepaliveMs })
   clients.add(client)
   req.on('close', () => {
     clients.delete(client)

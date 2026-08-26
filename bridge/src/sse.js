@@ -6,7 +6,7 @@ const KEEPALIVE_MS = 15000
 // costs the process more than the client is worth.
 export const MAX_BUFFERED_BYTES = 1024 * 1024
 
-export function openStream(res, filters, { maxBufferedBytes = MAX_BUFFERED_BYTES } = {}) {
+export function openStream(res, filters, { maxBufferedBytes = MAX_BUFFERED_BYTES, keepaliveMs = KEEPALIVE_MS } = {}) {
   res.writeHead(200, {
     'content-type': 'text/event-stream',
     'cache-control': 'no-store',
@@ -18,7 +18,7 @@ export function openStream(res, filters, { maxBufferedBytes = MAX_BUFFERED_BYTES
   const keepalive = setInterval(() => {
     if (closed || !res.writable) return
     res.write(':keepalive\n\n')
-  }, KEEPALIVE_MS)
+  }, keepaliveMs)
   keepalive.unref()
 
   // Split once per connection rather than once per message: a stream's

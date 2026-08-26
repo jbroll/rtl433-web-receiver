@@ -6,9 +6,9 @@ import mqtt from 'mqtt'
 
 import { closeStream, readEvents, startBridge, waitFor } from './helpers/bridge.js'
 
-// Reads raw `data: ...` frame text rather than parsed JSON, so a test can
-// compare wire bytes across clients instead of just decoded values.
-async function readRawFrames(response, count) {
+// Reads raw frame text rather than parsed JSON, so a test can compare wire
+// bytes across clients or see frames readEvents skips, like ':keepalive'.
+async function readRawFrames(response, count, { matching = (frame) => frame.startsWith('data: ') } = {}) {
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   const frames = []
@@ -23,7 +23,7 @@ async function readRawFrames(response, count) {
     while ((split = buffer.indexOf('\n\n')) !== -1) {
       const frame = buffer.slice(0, split)
       buffer = buffer.slice(split + 2)
-      if (frame.startsWith('data: ')) frames.push(frame)
+      if (matching(frame)) frames.push(frame)
     }
   }
 
@@ -349,6 +349,21 @@ test('a slow reader that falls a buffer cap behind is dropped', async () => {
       await waitFor(() => bridge.clients.size === 0)
     } finally {
       socket.destroy()
+    }
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('the keepalive interval sends :keepalive frames on its own schedule', async () => {
+  const bridge = await startBridge({ keepaliveMs: 5 })
+  try {
+    const stream = await fetch(`${bridge.base}/events?f=src/%23`)
+    try {
+      const frames = await readRawFrames(stream, 2, { matching: (frame) => frame === ':keepalive' })
+      assert.deepEqual(frames, [':keepalive', ':keepalive'])
+    } finally {
+      await closeStream(stream)
     }
   } finally {
     await bridge.close()

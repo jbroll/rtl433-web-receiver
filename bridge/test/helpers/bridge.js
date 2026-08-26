@@ -16,6 +16,7 @@ export async function startBridge({
   maxSseClients,
   maxSseFilters,
   maxBufferedBytes,
+  keepaliveMs,
   username,
   password,
 } = {}) {
@@ -40,6 +41,7 @@ export async function startBridge({
     maxSseClients,
     maxSseFilters,
     maxBufferedBytes,
+    keepaliveMs,
   })
   // Unbounded, a subscription that never lands hangs `node --test` instead of
   // failing it.
