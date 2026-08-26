@@ -276,20 +276,14 @@ async function setGrid(page, cols, rows) {
   }, [cols, rows]);
 }
 
-// fitValues() writes .fv's inline font size from a useEffect deferred to the
-// next animation frame (with a 35ms timeout fallback), so a read taken right
-// after a layout-changing step can land before it does. "Settled" means the
-// inline size has actually been written (a slow frame that hasn't fired yet
-// reads as "", which must never count as stable) and stays the same across
-// two reads separated by a real poll interval, so a second layout pass
-// triggered by the same step isn't caught mid-flight. `last` starts at a
-// value no font-size string can equal, so the very first check always fails
-// and can't mistake "hasn't started" for "arrived and is holding".
-async function waitForFitSettled(read) {
+// "" means the fit hasn't run yet and must never count as stable. `differFrom`,
+// when given, also rejects a reading that hasn't moved off a known pre-fit
+// value, so a re-fit landing late isn't mistaken for the old size holding.
+async function waitForFitSettled(read, differFrom) {
   let last = null;
   await expect.poll(async () => {
     const value = await read();
-    const stable = value !== "" && value === last;
+    const stable = value !== "" && value === last && value !== differFrom;
     last = value;
     return stable;
   }).toBe(true);
@@ -298,9 +292,9 @@ async function waitForFitSettled(read) {
 
 // The page shares one font size across every .fv, so the first one settling
 // means fitValues() has finished its (synchronous) pass over all of them.
-function settledPageFont(page) {
+function settledPageFont(page, differFrom) {
   return waitForFitSettled(() =>
-    page.locator("#cards .fv").first().evaluate(n => n.style.fontSize));
+    page.locator("#cards .fv").first().evaluate(n => n.style.fontSize), differFrom);
 }
 
 function mode(page, key, field) {
@@ -1098,8 +1092,12 @@ test("no card overflows its box at any size or value count", async ({ page }) =>
   for (const [key, sel] of [[LONG_KEY, LONG_CARD], [ACURITE_KEY, CARD],
                             [OREGON_KEY, `.card[data-key$="${OREGON_KEY}"]`]]) {
     for (const [w, h] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 2], [3, 3], [6, 4]]) {
+      // A resize does not always change the shared font (the resized card may
+      // not be the tightest box), so an old size can recur legitimately; clear
+      // it first so a stale carryover reads as "" instead of a false match.
+      await page.evaluate(() => document.querySelectorAll("#cards .fv").forEach(n => n.style.fontSize = ""));
       await setSize(page, key, w, h);
-      await settledPageFont(page);
+      await settledPageFont(page, "");
       const card = await overflow(sel);
       expect(card.w, `${key} ${w}x${h} card width`).toBeLessThanOrEqual(0);
       expect(card.h, `${key} ${w}x${h} card height`).toBeLessThanOrEqual(0);
@@ -1116,8 +1114,11 @@ test("displayed values are rounded and trimmed, without touching stored data", a
   const card = page.locator(LONG_CARD);
   await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("21.8");
   await expect(card.locator('.val[data-f="wind_avg_mi_h"] .fv')).toHaveText("7.4");
+  await expect(card.locator('.val[data-f="wind_avg_mi_h"] .u')).toHaveText("km/h");
   await expect(card.locator('.val[data-f="rain_mm"] .fv')).toHaveText("0");
+  await expect(card.locator('.val[data-f="rain_mm"] .u')).toHaveText("mm");
   await expect(card.locator('.val[data-f="pressure_hPa"] .fv')).toHaveText("1013.3");
+  await expect(card.locator('.val[data-f="pressure_hPa"] .u')).toHaveText("hPa");
   await expect(card.locator('.val[data-f="humidity"] .fv')).toHaveText("38");
 
   const stored = await page.evaluate(
@@ -1319,9 +1320,12 @@ test("a value shrinks to fit its box instead of ellipsizing", async ({ page }) =
   await open(page, [ACURITE, OREGON, LONGNAME]);
   await page.click("#tab-cards");
 
+  // .fv is a shrink-to-fit flex item, so its own scrollWidth/clientWidth is
+  // always equal. Measure against the box fitValues() actually sized it for:
+  // the .val parent.
   const clipped = () => page.evaluate(() =>
     [...document.querySelectorAll("#cards .fv")]
-      .filter(fv => fv.scrollWidth > fv.clientWidth)
+      .filter(fv => fv.scrollWidth > fv.closest(".val").clientWidth)
       .map(fv => fv.textContent + " @" + fv.style.fontSize));
 
   await expect.poll(clipped).toEqual([]);
@@ -1350,10 +1354,14 @@ test("every value in a card shares the size its widest reading needs", async ({ 
 test("every card on the page shares one type size", async ({ page }) => {
   await open(page, [ACURITE, LONGNAME]);
   await page.click("#tab-cards");
+  // A stale carryover from the pre-resize fit could recur as the same font
+  // size by coincidence, so clear it rather than compare against a captured
+  // value: the settle poll then can't mistake the old size for the new one.
+  await page.evaluate(() => document.querySelectorAll("#cards .fv").forEach(n => n.style.fontSize = ""));
   await setSize(page, ACURITE_KEY, 2, 2);
   await setSize(page, LONG_KEY, 2, 2);
 
-  await settledPageFont(page);
+  await settledPageFont(page, "");
   const sizes = await page.locator("#cards .fv").evaluateAll(n => n.map(f => f.style.fontSize));
   expect(sizes.length).toBeGreaterThan(3);
   expect([...new Set(sizes)]).toHaveLength(1);

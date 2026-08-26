@@ -87,20 +87,24 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
 
   // .fv is a shrink-to-fit flex item, so its own scrollWidth/clientWidth is
   // always 1. Measure the text against the box fitValues() actually sized
-  // it for: the .val parent.
+  // it for: the .val parent. At extreme aspect ratios (e.g. 2x1) the fit is
+  // height-bound rather than width-bound, so width fill alone legitimately
+  // drops well below 1; take whichever of width or height fill is tighter,
+  // which stays near 1 regardless of which dimension bound the fit.
   const fillRatios = () => page.locator(".val .fv").evaluateAll(
-    nodes => nodes.map(n => n.scrollWidth / n.closest(".val").clientWidth));
+    nodes => nodes.map(n => {
+      const val = n.closest(".val");
+      const fn = val.querySelector(".fn");
+      return Math.max(n.scrollWidth / val.clientWidth,
+                      n.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight));
+    }));
 
   for (const [cols, rows] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]]) {
     await page.evaluate(([c, r]) => { setGrid("cols", c); setGrid("rows", r); }, [cols, rows]);
     // fitValues() runs from a useEffect deferred to the next frame, so poll
     // for the fit to settle instead of racing it with a fixed wait.
-    // At extreme aspect ratios (e.g. 2x1) the fit is height-bound rather than
-    // width-bound, so the tightest value's width fill legitimately drops as
-    // low as ~0.37; 0.3 sits under every measured grid size with headroom for
-    // rendering noise while still catching a font pinned far below its box.
     await expect.poll(() => fillRatios().then(rs => Math.max(...rs)),
-      { message: `${cols}x${rows}` }).toBeGreaterThan(0.3);
+      { message: `${cols}x${rows}` }).toBeGreaterThan(0.9);
     // No value may overflow the box it was sized for.
     for (const r of await fillRatios()) expect(r).toBeLessThanOrEqual(1.02);
   }
