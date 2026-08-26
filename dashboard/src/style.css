@@ -49,9 +49,11 @@ section[hidden] { display:none; }
 /* Not overflow:hidden: the label straddles the top border like a legend, and
    clipping the card would cut its text in half. Everything else that could
    spill clips itself. */
+/* The bottom padding reserves the band .btm and .age are absolutely placed in;
+   .body is height:100% over what is left. .age is on every card. */
 .card { position:relative; margin:.35rem; border:1px solid var(--line); border-radius:.7rem;
-        padding:.5rem .45rem .6rem; }
-.card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
+        padding:.5rem .45rem 1.2rem; }
+.card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - .9rem);
              padding:0 .4rem; background:Canvas; font-size:.75rem;
              display:flex; align-items:baseline; overflow:hidden;
              pointer-events:auto; z-index:1; }
@@ -76,13 +78,19 @@ section[hidden] { display:none; }
   justify-content:space-between; 
   align-items:center; 
   white-space:nowrap; 
-  width:100%; 
+  width:100%;
 }
-.card .fn .u { 
-  font-weight:inherit; 
-  color:inherit; 
-  opacity:inherit; 
-  margin-left:.5em; 
+.card .fn > span:first-child {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.card .fn .u {
+  font-weight:inherit;
+  color:inherit;
+  opacity:inherit;
+  margin-left:.5em;
+  flex:0 0 auto;
 }
 .card .fv { 
   font-variant-numeric:tabular-nums; 

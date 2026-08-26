@@ -83,3 +83,36 @@ test("a card wider than the cap keeps its stored width", async ({ page }) => {
   const c = await page.evaluate(k => cardState.cards[k], key);
   expect(c.w).toBe(5);
 });
+
+test("the bottom strip is not drawn through the values", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await page.waitForTimeout(120);
+
+  const overlaps = await page.evaluate(() => {
+    const bad = [];
+    for (const card of document.querySelectorAll("#cards .card")) {
+      const body = card.querySelector(".body");
+      for (const sel of [".btm", ".age"]) {
+        const node = card.querySelector(sel);
+        if (!body || !node) continue;
+        const a = body.getBoundingClientRect(), b = node.getBoundingClientRect();
+        const hit = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        if (hit) bad.push(card.dataset.key + " " + sel);
+      }
+    }
+    return bad;
+  });
+  expect(overlaps).toEqual([]);
+});
+
+test("a long field name ellipsizes rather than clipping mid-word", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await page.waitForTimeout(120);
+
+  const styles = await page.locator("#cards .card .fn > span:first-child").evaluateAll(
+    els => els.map(e => getComputedStyle(e).textOverflow));
+  expect(styles.length).toBeGreaterThan(0);
+  expect(styles.every(s => s === "ellipsis")).toBe(true);
+});
