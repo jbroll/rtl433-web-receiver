@@ -171,10 +171,44 @@ export function connectBroker({
 
 // A username or password echoed into an error message would otherwise reach
 // GET /status, which is unauthenticated.
+//
+// Two sequential .split/.join passes break when one credential is a
+// substring of the other: replacing the first fractures the second so it no
+// longer matches, and the leftover fragment survives in plaintext (username
+// "joe" against password "joepass123" leaves "***pass123"). Sorting
+// longest-first doesn't fix partially overlapping credentials that share no
+// containment either way (username "abc", password "cde", message "abcde").
+//
+// A single left-to-right scan is correct for every case: at each position,
+// try every credential and take the longest one that matches there, emit
+// "***" and skip past it; otherwise emit the character and advance by one.
+// Because the scan only ever advances past text it has already decided on,
+// nothing already emitted can be disturbed by a later match — unlike
+// sequential whole-message replacement passes.
 export function redact(message, { username, password } = {}) {
-  let redacted = message
-  if (username) redacted = redacted.split(username).join('***')
-  if (password) redacted = redacted.split(password).join('***')
+  const credentials = [username, password].filter((credential) => credential)
+  if (credentials.length === 0) return message
+
+  let redacted = ''
+  let i = 0
+  while (i < message.length) {
+    let matchLength = 0
+    for (const credential of credentials) {
+      if (
+        credential.length > matchLength &&
+        message.startsWith(credential, i)
+      ) {
+        matchLength = credential.length
+      }
+    }
+    if (matchLength > 0) {
+      redacted += '***'
+      i += matchLength
+    } else {
+      redacted += message[i]
+      i += 1
+    }
+  }
   return redacted
 }
 

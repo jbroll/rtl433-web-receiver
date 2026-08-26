@@ -222,6 +222,25 @@ test('GET /status redacts a username that lands in a real broker connection erro
   }
 })
 
+test('GET /status redacts a username that is a prefix of the password, with no fragment left behind', async () => {
+  const mqttBroker = await startBroker()
+  const url = mqttBroker.url
+  await mqttBroker.close()
+
+  const bridge = await startBridge({ url, username: 'ECONN', password: 'ECONNREFUSED' })
+  try {
+    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).lastError !== null)
+
+    const status = await fetch(`${bridge.base}/status`)
+    const body = await status.json()
+    assert.doesNotMatch(body.lastError, /ECONNREFUSED/)
+    assert.doesNotMatch(body.lastError, /ECONN/)
+    assert.match(body.lastError, /\*\*\*/)
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('HEAD matches GET status for a topic, with an empty body and no stream registered', async () => {
   const bridge = await startBridge()
   try {

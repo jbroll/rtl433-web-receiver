@@ -455,6 +455,40 @@ test('redact passes a message with no credential in it through unchanged', () =>
   assert.equal(redact(message, { username: 'myuser', password: 'mypass' }), message)
 })
 
+test('redact does not leave a password fragment when the username is a prefix of it', () => {
+  assert.equal(
+    redact('login as joepass123 failed', { username: 'joe', password: 'joepass123' }),
+    'login as *** failed',
+  )
+})
+
+test('redact does not leave a username fragment when the password is a prefix of it', () => {
+  assert.equal(
+    redact('login as joepass123 failed', { username: 'joepass123', password: 'joe' }),
+    'login as *** failed',
+  )
+})
+
+test('redact handles partially overlapping credentials that contain neither one another', () => {
+  const redacted = redact('abcde', { username: 'abc', password: 'cde' })
+  assert.doesNotMatch(redacted, /abc/)
+  assert.doesNotMatch(redacted, /cde/)
+})
+
+test('redact handles a username equal to the password', () => {
+  assert.equal(redact('the secret leaked', { username: 'secret', password: 'secret' }), 'the *** leaked')
+})
+
+test('redact handles only one credential being given', () => {
+  assert.equal(redact('user bob logged in', { username: 'bob', password: undefined }), 'user *** logged in')
+  assert.equal(redact('user bob logged in', { username: undefined, password: 'bob' }), 'user *** logged in')
+})
+
+test('redact matches a credential containing regex metacharacters literally, not as a pattern', () => {
+  const redacted = redact('token a.*b used, and aXXb also present', { password: 'a.*b' })
+  assert.equal(redacted, 'token *** used, and aXXb also present')
+})
+
 test('a broker-refused connection redacts a password that lands in the real error text', async () => {
   const broker = await startBroker()
   const url = broker.url
