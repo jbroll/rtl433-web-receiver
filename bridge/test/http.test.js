@@ -5,7 +5,7 @@ import net from 'node:net'
 import mqtt from 'mqtt'
 
 import { createCache } from '../src/cache.js'
-import { createBridge } from '../src/server.js'
+import { BODY_LIMIT_BYTES, createBridge } from '../src/server.js'
 import { startBridge, waitFor, withTimeout } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
@@ -300,6 +300,50 @@ test('a payload with a non-UTF-8 byte comes back byte for byte', async () => {
 
     const got = await fetch(`${bridge.base}/src/Acurite/1234`)
     assert.deepEqual(Buffer.from(await got.arrayBuffer()), payload)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a POST body over the cap is 413, and the topic is left alone', async () => {
+  const bridge = await startBridge()
+  try {
+    const oversized = Buffer.alloc(BODY_LIMIT_BYTES + 1, 0x61)
+    const posted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body: oversized })
+    assert.equal(posted.status, 413)
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 404)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a POST body sent as a slow drip past the idle timeout is 408', async () => {
+  const bridge = await startBridge({ bodyIdleTimeoutMs: 100 })
+  try {
+    const { port } = new URL(bridge.base)
+    const status = await new Promise((resolve, reject) => {
+      const socket = net.connect(Number(port), '127.0.0.1', () => {
+        socket.write('POST /src/Acurite/1234 HTTP/1.1\r\nHost: x\r\nContent-Length: 20\r\n\r\n')
+        socket.write('{"a":')
+      })
+      let response = ''
+      socket.on('data', (chunk) => (response += chunk.toString()))
+      socket.on('close', () => resolve(response.split(' ')[1]))
+      socket.on('error', reject)
+    })
+    assert.equal(status, '408')
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('a body with a stray non-UTF-8 byte is 400 and nothing reaches the cache', async () => {
+  const bridge = await startBridge()
+  try {
+    const body = Buffer.from([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0x80, 0x22, 0x7d])
+    const posted = await fetch(`${bridge.base}/src/Acurite/1234`, { method: 'POST', body })
+    assert.equal(posted.status, 400)
+    assert.equal((await fetch(`${bridge.base}/src/Acurite/1234`)).status, 404)
   } finally {
     await bridge.close()
   }

@@ -61,7 +61,9 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 \
 ```
 
 - `204` on success, empty body.
-- `400` if the body is not valid JSON, or the topic is malformed.
+- `400` if the body is not valid JSON, is not valid UTF-8, or the topic is malformed.
+- `413` if the body exceeds 64 KiB.
+- `408` if the body stalls for 30 seconds without a new byte arriving.
 - `503` if the bridge is not currently connected to the broker, or the broker
   did not take the publish within 5 seconds.
 - `401` if `AUTH_TOKEN` is configured and the request's `Authorization: Bearer <token>`
@@ -119,7 +121,10 @@ curl -i -X POST localhost:8080/auth/rotate \
 
 - `204` on success. From that point, `POST` to any topic and (in TLS mode)
   new MQTT `CONNECT`s require the new token; the old one is rejected.
-- `400` if the body is not JSON, or `token` is missing or empty.
+- `400` if the body is not JSON or not valid UTF-8, or `token` is missing or
+  empty (including a body of `null`).
+- `413` if the body exceeds 64 KiB.
+- `408` if the body stalls for 30 seconds without a new byte arriving.
 - `401` if the `Authorization` header is missing or does not match the
   *current* token.
 - `404` if no `AUTH_TOKEN` is configured — there is nothing to rotate.
@@ -143,8 +148,10 @@ directory holding it should not be world-readable.
 - `405` — a method other than GET/POST on a topic path, or anything but GET
   on `/events`.
 
-`400`, `404`, `405`, `401`, and `503` are the only statuses the binding defines. A
-`500` means an unforeseen error inside the bridge, which is a bug.
+`400`, `404`, `405`, `401`, and `503` are the only statuses the binding
+defines. `408` and `413` are this bridge's own answer to a stalled or
+oversized `POST` body, not part of the binding. A `500` means an unforeseen
+error inside the bridge, which is a bug.
 
 ## Cross-origin
 

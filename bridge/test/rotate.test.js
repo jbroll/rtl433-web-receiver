@@ -75,6 +75,34 @@ test('a non-JSON or empty-token body is 400 and does not rotate', async () => {
   }
 })
 
+test('a body of null or a blank token is 400 and does not rotate', async () => {
+  const bridge = await startBridge({ authToken: 's3cr3t' })
+  try {
+    const isNull = await fetch(`${bridge.base}/auth/rotate`, {
+      method: 'POST',
+      body: 'null',
+      headers: { authorization: 'Bearer s3cr3t' },
+    })
+    assert.equal(isNull.status, 400)
+
+    const blank = await fetch(`${bridge.base}/auth/rotate`, {
+      method: 'POST',
+      body: JSON.stringify({ token: '   ' }),
+      headers: { authorization: 'Bearer s3cr3t' },
+    })
+    assert.equal(blank.status, 400)
+
+    const stillOld = await fetch(`${bridge.base}/src/Acurite/1234`, {
+      method: 'POST',
+      body: '{"a":1}',
+      headers: { authorization: 'Bearer s3cr3t' },
+    })
+    assert.equal(stillOld.status, 204)
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('a valid rotation is 204, and the new token gates POST while the old one 401s', async () => {
   const bridge = await startBridge({ authToken: 's3cr3t' })
   try {

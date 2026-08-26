@@ -5,13 +5,30 @@ import { openStream } from './sse.js'
 import { validFilter, validTopic } from './topic.js'
 import { createTokenStore } from './token-store.js'
 
-export function createBridge({ broker, cache, authToken, tokenStore, dashboardHtml }) {
+// A cap far above any real payload: the largest binding message, $layout,
+// runs a few hundred bytes.
+export const BODY_LIMIT_BYTES = 64 * 1024
+
+// Counted from the last byte received, not the request start, so a slow but
+// steady uplink is not punished for taking a while overall.
+export const BODY_IDLE_TIMEOUT_MS = 30_000
+
+export function createBridge({
+  broker,
+  cache,
+  authToken,
+  tokenStore,
+  dashboardHtml,
+  bodyLimitBytes = BODY_LIMIT_BYTES,
+  bodyIdleTimeoutMs = BODY_IDLE_TIMEOUT_MS,
+}) {
   const clients = new Set()
   const tokens = tokenStore ?? createTokenStore(authToken)
 
   const bridge = {
     httpServer: http.createServer((req, res) => {
-      handle(req, res, { broker, cache, clients, tokens, dashboardHtml }).catch(() => {
+      const ctx = { broker, cache, clients, tokens, dashboardHtml, bodyLimitBytes, bodyIdleTimeoutMs }
+      handle(req, res, ctx).catch(() => {
         try {
           if (res.headersSent) res.end()
           else send(res, 500, 'internal error')
@@ -28,7 +45,11 @@ export function createBridge({ broker, cache, authToken, tokenStore, dashboardHt
   return bridge
 }
 
-async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml }) {
+async function handle(
+  req,
+  res,
+  { broker, cache, clients, tokens, dashboardHtml, bodyLimitBytes, bodyIdleTimeoutMs },
+) {
   const url = new URL(req.url, 'http://bridge.invalid')
 
   // The dashboard is served from a different origin than any bridge it reads.
@@ -71,17 +92,18 @@ async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml 
 
     let body
     try {
-      body = await readBody(req)
-    } catch {
-      return
+      body = await readBody(req, { limitBytes: bodyLimitBytes, idleTimeoutMs: bodyIdleTimeoutMs })
+    } catch (err) {
+      return respondToBodyError(req, res, err)
     }
     let parsed
     try {
-      parsed = JSON.parse(body.toString('utf8'))
-    } catch {
-      return send(res, 400, 'body is not JSON')
+      parsed = parseJson(body)
+    } catch (err) {
+      return send(res, 400, err.message)
     }
-    if (typeof parsed.token !== 'string' || parsed.token.trim().length === 0) {
+    const hasToken = typeof parsed === 'object' && parsed !== null && typeof parsed.token === 'string'
+    if (!hasToken || parsed.token.trim().length === 0) {
       return send(res, 400, 'token must be a non-empty string')
     }
     tokens.rotate(parsed.token)
@@ -115,14 +137,14 @@ async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml 
 
     let body
     try {
-      body = await readBody(req)
-    } catch {
-      return
+      body = await readBody(req, { limitBytes: bodyLimitBytes, idleTimeoutMs: bodyIdleTimeoutMs })
+    } catch (err) {
+      return respondToBodyError(req, res, err)
     }
     try {
-      JSON.parse(body.toString('utf8'))
-    } catch {
-      return send(res, 400, 'body is not JSON')
+      parseJson(body)
+    } catch (err) {
+      return send(res, 400, err.message)
     }
     try {
       // This resolves when the broker has echoed the publish back, which is
@@ -162,15 +184,73 @@ function subscribe(req, res, { cache, clients, url }) {
   }
 }
 
+class BodyTooLargeError extends Error {}
+class BodyIdleTimeoutError extends Error {}
+
+// req.destroy() closes the socket, so it runs after the response is written,
+// not before: destroying first leaves nothing left to send the status on.
+function respondToBodyError(req, res, err) {
+  if (err instanceof BodyTooLargeError) {
+    send(res, 413, 'body too large')
+    return req.destroy()
+  }
+  if (err instanceof BodyIdleTimeoutError) {
+    send(res, 408, 'request timed out')
+    return req.destroy()
+  }
+  // The client hung up; there is no one left to answer.
+}
+
 // The body is kept as bytes: it is published and cached unchanged, and
 // decoding it would replace any byte that is not valid UTF-8.
-function readBody(req) {
+function readBody(req, { limitBytes, idleTimeoutMs }) {
   return new Promise((resolve, reject) => {
     const chunks = []
-    req.on('data', (chunk) => chunks.push(chunk))
-    req.on('end', () => resolve(Buffer.concat(chunks)))
-    req.on('error', reject)
+    let length = 0
+    let timer
+    let settled = false
+
+    const settle = (fn, value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      req.pause()
+      fn(value)
+    }
+
+    const armTimer = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => settle(reject, new BodyIdleTimeoutError()), idleTimeoutMs)
+    }
+
+    armTimer()
+    req.on('data', (chunk) => {
+      if (settled) return
+      length += chunk.length
+      if (length > limitBytes) return settle(reject, new BodyTooLargeError())
+      chunks.push(chunk)
+      armTimer()
+    })
+    req.on('end', () => settle(resolve, Buffer.concat(chunks)))
+    req.on('error', (err) => settle(reject, err))
   })
+}
+
+const utf8Decoder = new TextDecoder('utf-8', { fatal: true })
+
+function parseJson(body) {
+  let text
+  try {
+    text = utf8Decoder.decode(body)
+  } catch (err) {
+    if (err instanceof TypeError) throw Object.assign(new Error('body is not UTF-8'), { cause: err })
+    throw err
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('body is not JSON')
+  }
 }
 
 function send(res, status, message) {

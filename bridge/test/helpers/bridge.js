@@ -5,7 +5,15 @@ import { startBroker } from './broker.js'
 
 // Given a url, the bridge is pointed at that address and started without
 // waiting for anything there: that is the unreachable-broker case.
-export async function startBridge({ url, delayMs, echoTimeoutMs, authToken, dashboardHtml } = {}) {
+export async function startBridge({
+  url,
+  delayMs,
+  echoTimeoutMs,
+  authToken,
+  dashboardHtml,
+  bodyLimitBytes,
+  bodyIdleTimeoutMs,
+} = {}) {
   let mqttBroker = url ? null : await startBroker(0, { delayMs })
   const cache = createCache()
   let bridge
@@ -15,7 +23,7 @@ export async function startBridge({ url, delayMs, echoTimeoutMs, authToken, dash
     onMessage: (topic, payload) => bridge.broadcast(topic, payload),
     echoTimeoutMs,
   })
-  bridge = createBridge({ broker, cache, authToken, dashboardHtml })
+  bridge = createBridge({ broker, cache, authToken, dashboardHtml, bodyLimitBytes, bodyIdleTimeoutMs })
   // Unbounded, a subscription that never lands hangs `node --test` instead of
   // failing it.
   if (mqttBroker) await withTimeout(broker.subscribed, 5000, 'the # subscription')
