@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { tokenFor } from './auth.js'
+import { authHeader } from './auth.js'
 import { showToast } from './toast.js'
 
 export const ALIAS_SUFFIX = '/$alias'
@@ -70,8 +70,7 @@ export function postAlias(key, name) {
   const origin = sourceOf(key)
   if (origin !== location.origin) return
   const url = `${origin}/${topicOf(key)}${ALIAS_SUFFIX}`
-  const token = tokenFor(origin)
-  const auth = token ? { Authorization: `Bearer ${token}` } : {}
+  const auth = authHeader(origin)
   // A zero-length body is the bridge's retained-delete primitive; a cleared
   // alias posts one instead of the JSON string "".
   const options = trimmed

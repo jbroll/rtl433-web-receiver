@@ -231,6 +231,37 @@ test('setLocation surfaces a 401 on $tz as a toast, not only console.error', asy
   globalThis.fetch = async () => ({})
 })
 
+test('setLocation attaches the Authorization header to $location when a token is stored for the origin', async () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.headers]); return {} }
+  sources.value = ['http://receiver.test']
+  setToken('http://receiver.test', 'secret')
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  const locCall = posted.find(p => p[0].endsWith('/$location'))
+  assert.equal(locCall[1].Authorization, 'Bearer secret')
+  globalThis.fetch = async () => ({})
+})
+
+test('setLocation omits the Authorization header on $location when no token is stored', async () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.headers]); return {} }
+  sources.value = ['http://receiver.test']
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  const locCall = posted.find(p => p[0].endsWith('/$location'))
+  assert.equal(locCall[1].Authorization, undefined)
+  globalThis.fetch = async () => ({})
+})
+
+test('setLocation surfaces a 401 on $location as a toast, not only console.error', async () => {
+  toast.value = null
+  globalThis.fetch = async (url) => (url.endsWith('/$location') ? { status: 401, ok: false } : {})
+  sources.value = ['http://receiver.test']
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  await new Promise(r => setTimeout(r, 10))
+  assert.ok(toast.value)
+  globalThis.fetch = async () => ({})
+})
+
 test('setLocation does not POST a blanked location when only the fallback has one', async () => {
   const posted = []
   globalThis.fetch = async (url) => { posted.push(url); return {} }
@@ -406,6 +437,35 @@ test('publishUnits does not POST when the serving origin is not a configured sou
   sources.value = []
   publishUnits()
   assert.deepEqual(posted, [])
+  globalThis.fetch = async () => ({})
+})
+
+test('publishUnits attaches the Authorization header when a token is stored for the origin', () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.headers]); return {} }
+  sources.value = ['http://receiver.test']
+  setToken('http://receiver.test', 'secret')
+  publishUnits()
+  assert.equal(posted[0][1].Authorization, 'Bearer secret')
+  globalThis.fetch = async () => ({})
+})
+
+test('publishUnits omits the Authorization header when no token is stored', () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.headers]); return {} }
+  sources.value = ['http://receiver.test']
+  publishUnits()
+  assert.equal(posted[0][1].Authorization, undefined)
+  globalThis.fetch = async () => ({})
+})
+
+test('publishUnits surfaces a 401 as a toast, not only console.error', async () => {
+  toast.value = null
+  globalThis.fetch = async () => ({ status: 401, ok: false })
+  sources.value = ['http://receiver.test']
+  publishUnits()
+  await new Promise(r => setTimeout(r, 10))
+  assert.ok(toast.value)
   globalThis.fetch = async () => ({})
 })
 

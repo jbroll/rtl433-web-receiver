@@ -63,10 +63,7 @@ export function SettingsView() {
   )
 }
 
-// The token gates writes to the origin serving this page (postAlias and the
-// $tz post both check location.origin), so one field is enough. The input
-// never carries the stored value, only whether one is set, so it stays out
-// of a screenshot of the settings pane.
+// The token gates writes to the origin serving this page, so one field is enough.
 function AuthView() {
   let input
   const origin = location.origin
@@ -78,13 +75,13 @@ function AuthView() {
       input.value = ''
     }}>
       <label>
-        Bridge access token
+        Write access token
         <input
           id="settings-token"
           type="password"
           autocomplete="off"
-          placeholder={has ? 'token set' : 'none set'}
-          aria-label="Bridge access token"
+          placeholder={has ? 'token set — save empty to clear' : 'none set'}
+          aria-label="Write access token"
           ref={(el) => { input = el }}
         />
       </label>

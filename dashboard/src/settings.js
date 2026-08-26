@@ -1,7 +1,7 @@
 import { signal } from '@preact/signals'
 import { offsetMinutes } from './feeds/zone.js'
 import { sources } from './sources.js'
-import { tokenFor } from './auth.js'
+import { authHeader } from './auth.js'
 import { showToast } from './toast.js'
 
 export const SETTINGS_KEY = 'rtl433.settings.v1'
@@ -177,8 +177,10 @@ export function publishUnits() {
   const { units, decimals, custom } = settings.value
   fetch(`${location.origin}/$units`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
     body: JSON.stringify({ units, decimals, custom }),
+  }).then(res => {
+    if (res.status === 401) showToast('Units update rejected: the bridge needs an access token. Set it in Settings.')
   }).catch(err => console.error(`POST $units failed: ${err.message || err}`))
 }
 
@@ -224,19 +226,19 @@ export function setLocation(next) {
   // stored location.
   if (clean.lat !== null && clean.lon !== null && sources.value.includes(location.origin)) {
     const offset = offsetMinutes(new Date(), clean.zone || localZone())
-    const token = tokenFor(location.origin)
-    const auth = token ? { Authorization: `Bearer ${token}` } : {}
     fetch(`${location.origin}/$tz`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...auth },
+      headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
       body: JSON.stringify(offset),
     }).then(res => {
       if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
     }).catch(err => console.error(`POST $tz failed: ${err.message || err}`))
     fetch(`${location.origin}/$location`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
       body: JSON.stringify(clean),
+    }).then(res => {
+      if (res.status === 401) showToast('Location save rejected: the bridge needs an access token. Set it in Settings.')
     }).catch(err => console.error(`POST $location failed: ${err.message || err}`))
   }
   return clean

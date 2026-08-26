@@ -118,10 +118,11 @@ keeps its own aliases in `localStorage` under `rtl433.aliases.v1`, so in practic
 When the dashboard is served by a receiver, a rename still posts to the source's `$alias`
 topic so the receiver can persist it. When the dashboard is served by a separate broker or
 static server, the source is external and has no persistent alias store for that client,
-so the rename stays local and survives reloads from `localStorage`. That POST, and the
-`$tz` POST `settings.js` makes on a location save, carry `Authorization: Bearer <token>`
-when `auth.js` holds a token for the posting origin — the only origin either ever posts
-to, since both are gated on `sourceOf(key) === location.origin` in the first place.
+so the rename stays local and survives reloads from `localStorage`. That POST, and the `$tz`, `$location`, and `$units` POSTs `settings.js` makes on a
+location or units save, carry `Authorization: Bearer <token>` via `authHeader()` when
+`auth.js` holds a token for the posting origin — the only origin any of them ever posts
+to, since each is gated on `location.origin` (or `sourceOf(key) === location.origin` for
+the alias write) in the first place.
 
 ## Display pipeline
 

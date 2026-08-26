@@ -301,15 +301,16 @@ same url with a new token replaces it.
 ## Access token
 
 A bridge started with `AUTH_TOKEN` rejects a `POST` with no matching
-`Authorization: Bearer` header, `401`. The Settings tab has an Access token
-field for the origin serving the dashboard; saving it there is what lets a
-rename and a location save reach that bridge. The field is `type=password`
-and clears itself after Save, so the value never sits in the page for a
-screenshot to catch, and it is stored in `localStorage` under
-`rtl433.tokens.v1`, keyed by origin — a dashboard pointed at two bridges
-holds two tokens, one per origin. Only the origin serving the page is ever
-posted to, so only that origin's token is ever attached; the field edits
-that origin's entry.
+`Authorization: Bearer` header, `401`. The Settings tab has a Write access
+token field for the origin serving the dashboard; saving it there is what
+lets a rename, a location save, and a units save reach that bridge. The
+field is `type=password` and clears itself after Save, so the value never
+sits in the page for a screenshot to catch, and it is stored in
+`localStorage` under `rtl433.tokens.v1`, keyed by origin — a dashboard
+pointed at two bridges holds two tokens, one per origin. Only the origin
+serving the page is ever posted to, so only that origin's token is ever
+attached; the field edits that origin's entry. Saving the field empty clears
+the stored token rather than leaving it unchanged.
 
-A `401` on a rename or a location save shows as a toast rather than only a
-console error.
+A `401` on a rename, a location save, or a units save shows as a toast
+rather than only a console error.

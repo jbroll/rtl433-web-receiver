@@ -179,6 +179,14 @@ section[hidden] { display:none; }
 #bridge-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
               color:inherit; border:1px solid var(--line); cursor:pointer; }
 
+#settings-auth { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);
+                  min-width:18rem; }
+#auth-form { display:flex; gap:.35rem; }
+#settings-token { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
+                   background:Canvas; color:inherit; border:1px solid var(--line); }
+#settings-token-save { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
+                        color:inherit; border:1px solid var(--line); cursor:pointer; }
+
 #mdns-scan { margin:0 0 .5rem; }
 #mdns-scan button[type=button] { font:inherit; font-size:.8rem; padding:.2rem .6rem;
                                  background:Canvas; color:inherit; border:1px solid var(--line);

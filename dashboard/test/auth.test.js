@@ -1,7 +1,7 @@
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { TOKENS_KEY, tokens, loadTokens, tokenFor, setToken } from '../src/auth.js'
+import { TOKENS_KEY, tokens, loadTokens, tokenFor, setToken, authHeader } from '../src/auth.js'
 
 const A = 'http://a'
 const B = 'http://b'
@@ -72,6 +72,15 @@ test('loadTokens leaves the map empty when storage is corrupt', () => {
   localStorage.setItem(TOKENS_KEY, '{not json')
   loadTokens()
   assert.equal(tokens.value.size, 0)
+})
+
+test('authHeader is empty when no token is stored for the origin', () => {
+  assert.deepEqual(authHeader(A), {})
+})
+
+test('authHeader carries the stored token as a Bearer header', () => {
+  setToken(A, 'secret')
+  assert.deepEqual(authHeader(A), { Authorization: 'Bearer secret' })
 })
 
 test('a storage exception keeps tokens in memory and turns saves into no-ops', () => {

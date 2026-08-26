@@ -30,6 +30,11 @@ export function loadTokens() {
 
 export function tokenFor(origin) { return tokens.value.get(origin) || '' }
 
+export function authHeader(origin) {
+  const token = tokenFor(origin)
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 export function setToken(origin, token) {
   const trimmed = String(token).trim()
   const next = new Map(tokens.value)

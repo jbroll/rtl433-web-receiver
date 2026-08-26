@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { startServer, routeTiles } from "./harness.js";
-import { ACURITE, OREGON, topicOf } from "./fixtures.js";
+import { ACURITE, topicOf } from "./fixtures.js";
 
 let servers = [];
 
@@ -63,6 +63,27 @@ test("setting the access token in Settings lets the write go through", async ({ 
   expect(JSON.parse(posted.body)).toBe("Back fence");
 });
 
+test("a token seeded in localStorage before boot survives a fresh page load", async ({ page }) => {
+  const server = await startServer({ authToken: "secret", devices: [ACURITE] });
+  servers.push(server);
+  const topic = topicOf(ACURITE, server.source);
+  const key = `${base(server)} ${topic}`;
+
+  // Seeded for the bridge's own origin before any script runs, so a rename
+  // only succeeds if loadTokens() actually restores it at boot -- unlike the
+  // test above, no field is ever filled through the UI in this page's life.
+  await page.addInitScript((origin) => {
+    localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [origin]: "secret" }));
+  }, base(server));
+  await page.goto(server.url);
+  await page.click("#tab-devices");
+  await rename(page, key, "Back fence");
+
+  const posted = await server.get(topic + "/$alias");
+  expect(posted.status).toBe(200);
+  expect(JSON.parse(posted.body)).toBe("Back fence");
+});
+
 test("the token field never plays the stored secret back into the page", async ({ page }) => {
   const server = await startServer({ authToken: "secret", devices: [ACURITE] });
   servers.push(server);
@@ -78,16 +99,18 @@ test("the token field never plays the stored secret back into the page", async (
 
 test("a token stored for a different bridge's origin is not sent to this one", async ({ page }) => {
   const a = await startServer({ authToken: "secret-a", devices: [ACURITE], source: "srcA" });
-  const b = await startServer({ authToken: "secret-b", devices: [OREGON], source: "srcB" });
-  servers.push(a, b);
+  servers.push(a);
   const topicA = topicOf(ACURITE, "srcA");
   const keyA = `${base(a)} ${topicA}`;
+  const foreignOrigin = "http://foreign-bridge.test";
 
   // Seeded the way a user pointed at two bridges ends up with two entries in
-  // rtl433.tokens.v1 -- only b's origin has one here.
-  await page.addInitScript((otherBase) => {
-    localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [otherBase]: "secret-b" }));
-  }, base(b));
+  // rtl433.tokens.v1 -- only the foreign origin has one here. The foreign
+  // bridge need not exist: the assertion is that this origin's request never
+  // carries it, and nothing in the app ever fetches the foreign origin.
+  await page.addInitScript((otherOrigin) => {
+    localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [otherOrigin]: "secret-b" }));
+  }, foreignOrigin);
   await page.goto(a.url);
 
   let authHeader;
