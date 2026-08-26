@@ -1,0 +1,105 @@
+import { test, expect } from "@playwright/test";
+import { startServer, routeTiles } from "./harness.js";
+import { ACURITE, OREGON, topicOf } from "./fixtures.js";
+
+let servers = [];
+
+test.afterEach(async () => {
+  for (const s of servers) await s.close();
+  servers = [];
+});
+
+test.beforeEach(async ({ page }) => {
+  await routeTiles(page);
+});
+
+function base(server) { return server.url.replace(/\/$/, ""); }
+
+async function openSettings(page) {
+  await page.click("#tab-devices");
+  await page.click("#subtab-settings");
+}
+
+// Renaming fires a fetch the UI does not await, so a caller that reads the
+// bridge's state right after would race it; wait for the response instead.
+async function rename(page, key, name) {
+  const input = page.locator(`#devices tr[data-key="${key}"] input[type=text]`);
+  await input.fill(name);
+  const posted = page.waitForResponse((r) => r.url().includes("$alias"));
+  await input.press("Enter");
+  return posted;
+}
+
+test("a rename against a token-protected bridge is rejected and surfaced as a toast", async ({ page }) => {
+  const server = await startServer({ authToken: "secret", devices: [ACURITE] });
+  servers.push(server);
+  const topic = topicOf(ACURITE, server.source);
+  const key = `${base(server)} ${topic}`;
+
+  await page.goto(server.url);
+  await page.click("#tab-devices");
+  await rename(page, key, "Back fence");
+
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect(page.locator("#toast")).toContainText(/token/i);
+  expect((await server.get(topic + "/$alias")).status).toBe(404);
+});
+
+test("setting the access token in Settings lets the write go through", async ({ page }) => {
+  const server = await startServer({ authToken: "secret", devices: [ACURITE] });
+  servers.push(server);
+  const topic = topicOf(ACURITE, server.source);
+  const key = `${base(server)} ${topic}`;
+
+  await page.goto(server.url);
+  await openSettings(page);
+  await page.fill("#settings-token", "secret");
+  await page.click("#settings-token-save");
+  await page.click("#subtab-devices");
+  await rename(page, key, "Back fence");
+
+  const posted = await server.get(topic + "/$alias");
+  expect(posted.status).toBe(200);
+  expect(JSON.parse(posted.body)).toBe("Back fence");
+});
+
+test("the token field never plays the stored secret back into the page", async ({ page }) => {
+  const server = await startServer({ authToken: "secret", devices: [ACURITE] });
+  servers.push(server);
+
+  await page.goto(server.url);
+  await openSettings(page);
+  await page.fill("#settings-token", "secret");
+  await page.click("#settings-token-save");
+
+  await expect(page.locator("#settings-token")).toHaveValue("");
+  expect(await page.content()).not.toContain("secret");
+});
+
+test("a token stored for a different bridge's origin is not sent to this one", async ({ page }) => {
+  const a = await startServer({ authToken: "secret-a", devices: [ACURITE], source: "srcA" });
+  const b = await startServer({ authToken: "secret-b", devices: [OREGON], source: "srcB" });
+  servers.push(a, b);
+  const topicA = topicOf(ACURITE, "srcA");
+  const keyA = `${base(a)} ${topicA}`;
+
+  // Seeded the way a user pointed at two bridges ends up with two entries in
+  // rtl433.tokens.v1 -- only b's origin has one here.
+  await page.addInitScript((otherBase) => {
+    localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [otherBase]: "secret-b" }));
+  }, base(b));
+  await page.goto(a.url);
+
+  let authHeader;
+  await page.route("**/$alias", (route) => {
+    authHeader = route.request().headers()["authorization"];
+    route.continue();
+  });
+
+  await page.click("#tab-devices");
+  await rename(page, keyA, "Back fence");
+  await expect(page.locator("#toast")).toBeVisible();
+
+  expect(authHeader).toBeUndefined();
+  expect((await a.get(topicA + "/$alias")).status).toBe(404);
+});

@@ -10,6 +10,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `app.jsx` | the tab shell and the cards toolbar |
 | `units.js` | the meta and status field sets, `splitUnit()`, `fmtValue()`, `displayValue()`, `ageText()`, reading extraction |
 | `alias.js` | keys, the alias map, name resolution, the alias POST, `isFeed()` |
+| `auth.js` | the bridge access token, in `localStorage` keyed by origin |
 | `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
 | `store.js` | card layout in `localStorage`, and `forgetLayouts()` |
 | `settings.js` | units, decimals, and the location, in `localStorage`, with a source-published location and units as fallback |
@@ -117,7 +118,10 @@ keeps its own aliases in `localStorage` under `rtl433.aliases.v1`, so in practic
 When the dashboard is served by a receiver, a rename still posts to the source's `$alias`
 topic so the receiver can persist it. When the dashboard is served by a separate broker or
 static server, the source is external and has no persistent alias store for that client,
-so the rename stays local and survives reloads from `localStorage`.
+so the rename stays local and survives reloads from `localStorage`. That POST, and the
+`$tz` POST `settings.js` makes on a location save, carry `Authorization: Bearer <token>`
+when `auth.js` holds a token for the posting origin — the only origin either ever posts
+to, since both are gated on `sourceOf(key) === location.origin` in the first place.
 
 ## Display pipeline
 

@@ -5,6 +5,8 @@ import {
   ALIASES_KEY, aliases, loadAliases, applyAliasFrame, postAlias,
   aliasOf, displayName, sourceOf, topicOf, makeKey,
 } from '../src/alias.js'
+import { tokens, setToken } from '../src/auth.js'
+import { toast } from '../src/toast.js'
 
 const BASE = 'http://a'
 const OTHER = 'http://b'
@@ -39,6 +41,7 @@ beforeEach(() => {
   fakeFetch()
   aliases.value = new Map()
   loadAliases()
+  tokens.value = new Map()
 })
 
 test('loadAliases restores stored aliases', () => {
@@ -115,6 +118,30 @@ test('postAlias clears an alias with a zero-length body, not an empty JSON strin
   assert.equal(fetches[1].opts.body, undefined)
 })
 
+test('postAlias attaches the Authorization header when a token is stored for the origin', () => {
+  setToken(BASE, 'secret')
+  postAlias(K, 'Back fence')
+  assert.equal(fetches[0].opts.headers.Authorization, 'Bearer secret')
+})
+
+test('postAlias omits the Authorization header when no token is stored for the origin', () => {
+  postAlias(K, 'Back fence')
+  assert.equal(fetches[0].opts.headers.Authorization, undefined)
+})
+
+test('postAlias attaches the header on a clearing post too', () => {
+  setToken(BASE, 'secret')
+  postAlias(K, 'Back fence')
+  postAlias(K, '')
+  assert.equal(fetches[1].opts.headers.Authorization, 'Bearer secret')
+})
+
+test('a token stored for a different origin is not sent', () => {
+  setToken(OTHER, 'other-secret')
+  postAlias(K, 'Back fence')
+  assert.equal(fetches[0].opts.headers.Authorization, undefined)
+})
+
 test('postAlias does not post when the source is not the serving origin', () => {
   fakeLocation(OTHER)
   postAlias(K, 'Back fence')
@@ -160,4 +187,13 @@ test('postAlias logs a failed POST without throwing', async () => {
     console.error = origError
     globalThis.fetch = origFetch
   }
+})
+
+test('postAlias surfaces a 401 as a toast, not only console.error', async () => {
+  toast.value = null
+  globalThis.fetch = () => Promise.resolve({ ok: false, status: 401 })
+  postAlias(K, 'Back fence')
+  await new Promise(r => setTimeout(r, 10))
+  assert.ok(toast.value)
+  assert.match(toast.value.msg, /401|token|unauthorized/i)
 })

@@ -6,6 +6,8 @@ import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecima
          locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources,
          unitsBySource, onUnitsFrame, unitsForSources, publishUnits } from '../src/settings.js'
 import { sources } from '../src/sources.js'
+import { tokens, setToken } from '../src/auth.js'
+import { toast } from '../src/toast.js'
 
 function fakeStorage() {
   const map = new Map()
@@ -29,6 +31,7 @@ beforeEach(() => {
   locations.value = new Map()
   tzOffsets.value = new Map()
   unitsBySource.value = new Map()
+  tokens.value = new Map()
 })
 
 const NO_PLACE = { lat: null, lon: null, label: '', zone: '', zoom: 11 }
@@ -194,6 +197,37 @@ test('setLocation POSTs both /$tz and /$location when the origin is a configured
   assert.equal(posted.length, 2)
   assert.deepEqual(posted.map(p => p[0]).sort(),
     ['http://receiver.test/$location', 'http://receiver.test/$tz'])
+  globalThis.fetch = async () => ({})
+})
+
+test('setLocation attaches the Authorization header to $tz when a token is stored for the origin', async () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.headers]); return {} }
+  sources.value = ['http://receiver.test']
+  setToken('http://receiver.test', 'secret')
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  const tzCall = posted.find(p => p[0].endsWith('/$tz'))
+  assert.equal(tzCall[1].Authorization, 'Bearer secret')
+  globalThis.fetch = async () => ({})
+})
+
+test('setLocation omits the Authorization header on $tz when no token is stored', async () => {
+  const posted = []
+  globalThis.fetch = async (url, opts) => { posted.push([url, opts.headers]); return {} }
+  sources.value = ['http://receiver.test']
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  const tzCall = posted.find(p => p[0].endsWith('/$tz'))
+  assert.equal(tzCall[1].Authorization, undefined)
+  globalThis.fetch = async () => ({})
+})
+
+test('setLocation surfaces a 401 on $tz as a toast, not only console.error', async () => {
+  toast.value = null
+  globalThis.fetch = async (url) => (url.endsWith('/$tz') ? { status: 401, ok: false } : {})
+  sources.value = ['http://receiver.test']
+  setLocation({ lat: 40.015, lon: -105.2705 })
+  await new Promise(r => setTimeout(r, 10))
+  assert.ok(toast.value)
   globalThis.fetch = async () => ({})
 })
 

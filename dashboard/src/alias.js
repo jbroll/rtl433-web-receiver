@@ -1,4 +1,6 @@
 import { signal } from '@preact/signals'
+import { tokenFor } from './auth.js'
+import { showToast } from './toast.js'
 
 export const ALIAS_SUFFIX = '/$alias'
 export const ALIASES_KEY = 'rtl433.aliases.v1'
@@ -65,14 +67,21 @@ export function postAlias(key, name) {
   else next.delete(key)
   aliases.value = next
   saveAliases()
-  if (sourceOf(key) !== location.origin) return
-  const url = `${sourceOf(key)}/${topicOf(key)}${ALIAS_SUFFIX}`
+  const origin = sourceOf(key)
+  if (origin !== location.origin) return
+  const url = `${origin}/${topicOf(key)}${ALIAS_SUFFIX}`
+  const token = tokenFor(origin)
+  const auth = token ? { Authorization: `Bearer ${token}` } : {}
   // A zero-length body is the bridge's retained-delete primitive; a cleared
   // alias posts one instead of the JSON string "".
   const options = trimmed
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trimmed) }
-    : { method: 'POST' }
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth }, body: JSON.stringify(trimmed) }
+    : { method: 'POST', headers: auth }
   fetch(url, options).then(res => {
+    if (res.status === 401) {
+      showToast('Rename rejected: the bridge needs an access token. Set it in Settings.')
+      return
+    }
     if (!res.ok) {
       console.error(`POST ${url} failed: ${res.status}`)
     }

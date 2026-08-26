@@ -4,6 +4,7 @@ import { App, tab, settingsTab } from './app.jsx'
 import { tick } from './tick.js'
 import { devices, upsert, clearSource } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
+import { loadTokens } from './auth.js'
 import { applyLayoutFrame, autoApply, layouts, disableAutoApply, deriveTemplate } from './layout_template.js'
 import { mergeReadings, fmtValue } from './units.js'
 import * as store from './store.js'
@@ -197,6 +198,7 @@ exposeForTests()
 store.loadCardState()
 if (store.cardState.value.order.length !== 0) disableAutoApply()
 loadAliases()
+loadTokens()
 loadSort()
 loadSources()
 loadBridges()

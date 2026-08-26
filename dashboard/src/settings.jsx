@@ -1,4 +1,5 @@
 import { settings, setUnits, setDecimals, setCustomField } from './settings.js'
+import { tokenFor, setToken } from './auth.js'
 import { LocationView } from './location.jsx'
 import { SourcesView } from './sources.jsx'
 import { BridgesView } from './bridges.jsx'
@@ -55,6 +56,39 @@ export function SettingsView() {
       <div id="settings-bridges">
         <BridgesView />
       </div>
+      <div id="settings-auth">
+        <AuthView />
+      </div>
     </div>
+  )
+}
+
+// The token gates writes to the origin serving this page (postAlias and the
+// $tz post both check location.origin), so one field is enough. The input
+// never carries the stored value, only whether one is set, so it stays out
+// of a screenshot of the settings pane.
+function AuthView() {
+  let input
+  const origin = location.origin
+  const has = tokenFor(origin) !== ''
+  return (
+    <form id="auth-form" onSubmit={(ev) => {
+      ev.preventDefault()
+      setToken(origin, input.value)
+      input.value = ''
+    }}>
+      <label>
+        Bridge access token
+        <input
+          id="settings-token"
+          type="password"
+          autocomplete="off"
+          placeholder={has ? 'token set' : 'none set'}
+          aria-label="Bridge access token"
+          ref={(el) => { input = el }}
+        />
+      </label>
+      <button id="settings-token-save" type="submit">Save</button>
+    </form>
   )
 }

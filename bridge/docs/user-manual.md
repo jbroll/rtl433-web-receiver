@@ -223,3 +223,8 @@ anywhere can therefore read this, including the bridge's own origin: `GET /`, wi
 [`docs/install.md`](install.md#serving-the-dashboard)). With `AUTH_TOKEN` set, `POST`
 still requires the token regardless of origin, so the wildcard origin doesn't weaken
 that: a cross-origin caller still needs the token to publish.
+
+The dashboard's own way of holding that token is `dashboard/docs/user-manual.md`'s
+[Access token](../../dashboard/docs/user-manual.md#access-token) section: a Settings
+field, stored per bridge origin, attached as `Authorization: Bearer <token>` on the
+writes it makes to the origin serving it.

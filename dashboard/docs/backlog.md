@@ -1,8 +1,6 @@
 # Backlog
 
 - A device seen through two bridges is two cards. Nothing merges them.
-- No authentication to a source. The bridge has none, and a dashboard reaching one over
-  anything but localhost inherits that. Filed in the bridge's backlog.
 - `setValueMode`, `setCardHidden`, `setGrid`, and a rename committed with Enter all save
   layout, and all are reachable with a second finger while a resize is in flight, which
   the project's rules say must not write. No corruption results today: the in-flight

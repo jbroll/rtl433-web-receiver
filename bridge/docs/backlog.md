@@ -53,14 +53,6 @@
   broker still holds. It stays masked until the next reconnect rebuilds the
   cache from the broker's actual retained set. See
   [`docs/architecture.md`](architecture.md#payloads-stay-bytes).
-- `Access-Control-Allow-Origin: *` means a page on any site the user visits can read a
-  reachable bridge and publish to it. Authentication is the fix; an origin allowlist
-  alone is not, since a non-browser client sends whatever origin it likes.
-- The dashboard's alias-write `POST` (`dashboard/src/alias.js`) has no way to configure
-  or send `Authorization: Bearer <AUTH_TOKEN>`, so alias writes fail with `401` against
-  any bridge that has `AUTH_TOKEN` set — including the `weather.rkroll.com` deploy this
-  branch adds. The dashboard needs its own token-configuration surface before that
-  deploy's alias-editing UI can work.
 - `/auth/rotate` dereferences `parsed.token` without checking that `parsed` is an object
   (`src/server.js`), so a body of literal `null` throws and reaches the generic `500`
   handler, where `123`, `"str"`, `[]` and `{"token":{}}` all correctly answer `400`.
