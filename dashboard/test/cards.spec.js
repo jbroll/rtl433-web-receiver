@@ -495,7 +495,25 @@ test("a card renders label, visible values, rssi and age", async ({ page }) => {
   await expect(card.locator(".age")).not.toBeEmpty();
 });
 
-test("the page's tightest reading fills its box", async ({ page }) => {
+test("a card wider than its shown values sizes columns to what's visible", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await setSize(page, ACURITE_KEY, 2, 1);
+  await page.evaluate(k => {
+    cardState.cards[k].hiddenValues = ["wind_avg_mi_h", "humidity"];
+    saveCardState();
+  }, storeKey(server, ACURITE_KEY));
+
+  const body = page.locator(CARD + " .body");
+  await expect(body.locator(".val")).toHaveCount(1);
+  const cols = await body.evaluate(n => getComputedStyle(n).gridTemplateColumns.split(" ").length);
+  expect(cols).toBe(1);
+
+  const bodyBox = await body.boundingBox();
+  const valBox = await body.locator(".val").boundingBox();
+  expect(valBox.width).toBeGreaterThan(bodyBox.width * 0.9);
+});
+
+test("the page's tightest reading fills its box, except one outlier that floors and ellipsizes", async ({ page }) => {
   await open(page, [ACURITE, LONGNAME]);
   await page.click("#tab-cards");
   const fills = await page.evaluate(() =>
@@ -506,8 +524,14 @@ test("the page's tightest reading fills its box", async ({ page }) => {
                       fv.getBoundingClientRect().height / (val.clientHeight - fn.offsetHeight));
     }));
   expect(fills.length).toBeGreaterThan(1);
-  expect(Math.max(...fills)).toBeGreaterThan(0.9);
-  expect(Math.max(...fills)).toBeLessThanOrEqual(1);
+  const sorted = [...fills].sort((a, b) => b - a);
+  // LONGNAME's pressure_hPa sits in a narrow last-row cell far tighter than
+  // the page's other boxes; the 0.6-of-median floor (architecture.md, "Value
+  // fit") sizes the page off the rest and lets that one box overflow rather
+  // than shrinking everything else down to it.
+  expect(sorted[0]).toBeGreaterThan(1);
+  expect(sorted[1]).toBeGreaterThan(0.9);
+  expect(sorted[1]).toBeLessThanOrEqual(1);
 });
 
 test("resizing while scrolled fits to the same font as a fresh load", async ({ page }) => {

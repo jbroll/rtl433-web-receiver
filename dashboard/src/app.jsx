@@ -56,70 +56,72 @@ export function App() {
       </header>
       <Toast />
       <section id="view-cards" class={editing.value ? 'editing' : ''} hidden={tab.value !== 'cards'}>
-        <button
-          id="edit-cards"
-          title="Edit layout"
-          onClick={() => { setEditing(!editing.value) }}
-        >
-          &#9998;
-        </button>
-        <button
-          id="forget-cards"
-          title="Forget saved layouts"
-          onClick={() => {
-            if (confirm('Forget every saved card layout in this browser?')) {
-              forgetLayouts()
-              disableAutoApply()
-            }
-          }}
-        >
-          Forget layouts
-        </button>
-        {sources.value.includes(location.origin) && (
+        <div id="edit-controls">
           <button
-            id="save-layout"
-            title="Save this arrangement as the site default"
-            onClick={() => { postLayout(); publishUnits() }}
+            id="edit-cards"
+            title="Edit layout"
+            onClick={() => { setEditing(!editing.value) }}
           >
-            Save as default layout
+            &#9998;
           </button>
-        )}
-        {layoutForSources(layouts.value, sources.value) && (
           <button
-            id="load-layout"
-            title="Load the site default layout"
+            id="forget-cards"
+            title="Forget saved layouts"
             onClick={() => {
-              if (confirm('Replace the current card arrangement with the site default layout?')) {
-                applyTemplate(layoutForSources(layouts.value, sources.value))
+              if (confirm('Forget every saved card layout in this browser?')) {
+                forgetLayouts()
+                disableAutoApply()
               }
             }}
           >
-            Load default layout
+            Forget layouts
           </button>
-        )}
-        <span id="grid-size" title="Grid columns and rows">
-          <input
-            id="grid-cols"
-            type="number"
-            min="1"
-            max="24"
-            aria-label="Grid columns"
-            value={grid().cols}
-            onChange={(ev) => { setGrid('cols', parseInt(ev.target.value, 10)) }}
-            onBlur={(ev) => { const v = parseInt(ev.target.value, 10); if (!Number.isInteger(v) || v < 1 || v > 24) ev.target.value = String(grid().cols); }}
-          />
-          <span>&times;</span>
-          <input
-            id="grid-rows"
-            type="number"
-            min="1"
-            max="24"
-            aria-label="Grid rows"
-            value={grid().rows}
-            onChange={(ev) => { setGrid('rows', parseInt(ev.target.value, 10)) }}
-            onBlur={(ev) => { const v = parseInt(ev.target.value, 10); if (!Number.isInteger(v) || v < 1 || v > 24) ev.target.value = String(grid().rows); }}
-          />
-        </span>
+          {sources.value.includes(location.origin) && (
+            <button
+              id="save-layout"
+              title="Save this arrangement as the site default"
+              onClick={() => { postLayout(); publishUnits() }}
+            >
+              Save as default layout
+            </button>
+          )}
+          {layoutForSources(layouts.value, sources.value) && (
+            <button
+              id="load-layout"
+              title="Load the site default layout"
+              onClick={() => {
+                if (confirm('Replace the current card arrangement with the site default layout?')) {
+                  applyTemplate(layoutForSources(layouts.value, sources.value))
+                }
+              }}
+            >
+              Load default layout
+            </button>
+          )}
+          <span id="grid-size" title="Grid columns and rows">
+            <input
+              id="grid-cols"
+              type="number"
+              min="1"
+              max="24"
+              aria-label="Grid columns"
+              value={grid().cols}
+              onChange={(ev) => { setGrid('cols', parseInt(ev.target.value, 10)) }}
+              onBlur={(ev) => { const v = parseInt(ev.target.value, 10); if (!Number.isInteger(v) || v < 1 || v > 24) ev.target.value = String(grid().cols); }}
+            />
+            <span>&times;</span>
+            <input
+              id="grid-rows"
+              type="number"
+              min="1"
+              max="24"
+              aria-label="Grid rows"
+              value={grid().rows}
+              onChange={(ev) => { setGrid('rows', parseInt(ev.target.value, 10)) }}
+              onBlur={(ev) => { const v = parseInt(ev.target.value, 10); if (!Number.isInteger(v) || v < 1 || v > 24) ev.target.value = String(grid().rows); }}
+            />
+          </span>
+        </div>
         <CardsView />
       </section>
       <section id="view-devices" hidden={tab.value !== 'devices'}>

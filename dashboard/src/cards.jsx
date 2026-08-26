@@ -175,13 +175,14 @@ function RenameInput({ rec }) {
 }
 
 function Body({ rec, vis, h, w, cardKey }) {
-  const valueRows = Math.max(h, Math.ceil(vis.length / w))
+  const valueCols = Math.max(1, Math.min(w, vis.length))
+  const valueRows = Math.max(h, Math.ceil(vis.length / valueCols))
 
   return (
     <div
       class="body"
       style={{
-        gridTemplateColumns: `repeat(${w}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${valueCols}, minmax(0, 1fr))`,
         gridTemplateRows: `repeat(${valueRows}, minmax(0, 1fr))`
       }}
     >

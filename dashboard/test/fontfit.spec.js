@@ -110,6 +110,40 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
   }
 });
 
+test("one narrow box floors at 0.6 of the median fit, not the global minimum", async ({ page }) => {
+  server = await startServer({ devices: [] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+
+  const num = "1234567";
+  const result = await page.evaluate((num) => {
+    const widths = [400, 400, 400, 400, 400, 400, 120];
+    const parents = widths.map(w => {
+      const parent = document.createElement("div");
+      parent.style.cssText = `width:${w}px; height:1000px;`;
+      document.body.appendChild(parent);
+      const node = document.createElement("span");
+      parent.appendChild(node);
+      trackFit(node, num);
+      return parent;
+    });
+    const em = textWidthEm(num);
+    fitValues();
+    const sizes = parents.map(p => parseFloat(p.firstChild.style.fontSize));
+    parents.forEach(p => p.remove());
+    return { em, sizes };
+  }, num);
+
+  const normalFit = Math.floor(400 / result.em);
+  const pathFit = Math.floor(120 / result.em);
+  const expected = Math.max(11, pathFit, 0.6 * normalFit);
+
+  // One page-wide size: the narrow box's own fit no longer sets it for all
+  // seven, so every size lands at the 0.6-of-median floor instead of pathFit.
+  for (const size of result.sizes) expect(size).toBeCloseTo(expected, 0);
+  expect(expected).toBeGreaterThan(pathFit);
+});
+
 test("letter-spacing on .fv does not overflow the value box", async ({ page }) => {
   await open(page);
   await page.addStyleTag({ content: ".fv { letter-spacing: .2em; }" });

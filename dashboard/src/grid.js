@@ -38,7 +38,15 @@ export function measureGrid() {
   const top = grid.getBoundingClientRect().top + window.scrollY
   const height = window.innerHeight - top
                  - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
-  const cols = Math.max(1, Math.min(Math.floor((width + colGap) / (MIN_CELL + colGap)), g.cols))
+  const widthCols = Math.max(1, Math.min(Math.floor((width + colGap) / (MIN_CELL + colGap)), g.cols))
+  // A short window fits fewer rows at MIN_CELL than the card count needs, so
+  // the width-only column count would leave rows off the bottom of the
+  // screen and the page scrolls. Raise cols, up to what's saved, so the
+  // actual card count's rows fit the height instead.
+  const cardCount = grid.children.length
+  const maxRowsForHeight = Math.max(1, Math.floor((height + rowGap) / (MIN_CELL + rowGap)))
+  const heightCols = cardCount > 0 ? Math.min(g.cols, Math.ceil(cardCount / maxRowsForHeight)) : 1
+  const cols = Math.max(widthCols, heightCols)
   viewColsN = cols
   viewColsSignal.value = cols
   const usableWidth = width - (cols - 1) * colGap
@@ -62,6 +70,9 @@ export function measureGrid() {
 const FONT_MIN = 11
 const FONT_MAX = 200
 export { FONT_MIN }
+
+// See docs/architecture.md's "Value fit" for why 0.6.
+const PAGE_FLOOR_RATIO = 0.6
 
 let fitting = new Map()
 
@@ -128,6 +139,7 @@ export function fitValues() {
   let lineHeight = null
   let probe = null
   const boxes = []
+  const fits = []
   for (const f of fitting.values()) {
     if (!f.node.isConnected) { fitting.delete(f.node); continue }
     const parent = f.node.parentNode
@@ -147,9 +159,19 @@ export function fitValues() {
     if (probe === null) probe = primeTextProbe()
     const fn = parent.querySelector(".fn")
     const availH = Math.floor((rowH - (fn ? fn.offsetHeight : 0)) / lineHeight)
-    const fits = Math.min(Math.floor(box / measureEm(f.num, probe)), availH)
-    if (fits < global) global = fits
+    const fit = Math.min(Math.floor(box / measureEm(f.num, probe)), availH)
+    fits.push(fit)
+    if (fit < global) global = fit
     boxes.push(f.node)
+  }
+  // A single crowded box would otherwise set the size for the whole page.
+  // Floor it at PAGE_FLOOR_RATIO of the median instead, so that box ellipsizes
+  // on its own rather than shrinking every other card to match it.
+  if (fits.length) {
+    const sorted = [...fits].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    global = Math.max(global, PAGE_FLOOR_RATIO * median)
   }
   // One size for the whole page: the largest the tightest value box allows.
   const size = Math.max(FONT_MIN, global) + "px"

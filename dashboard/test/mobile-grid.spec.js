@@ -128,6 +128,49 @@ test("saving from a capped view writes the saved column count, not the cap", asy
   expect(m.template.grid.rows).toBe(4);
 });
 
+test("#grid-size does not overlap the grid at 320px wide in edit mode", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await open(page);
+  // Enough cards that the grid's own height reaches down near the controls,
+  // which a 1-card grid never does.
+  for (let i = 0; i < 15; i++) await addMinimalCard(page, `local feed/extra${i}`);
+  await page.click("#edit-cards");
+  await expect(page.locator("#grid-size")).toBeVisible();
+
+  const gridSizeBox = await page.locator("#grid-size").boundingBox();
+  const cardsBox = await page.locator("#cards").boundingBox();
+  const overlap = gridSizeBox.x < cardsBox.x + cardsBox.width &&
+    gridSizeBox.x + gridSizeBox.width > cardsBox.x &&
+    gridSizeBox.y < cardsBox.y + cardsBox.height &&
+    gridSizeBox.y + gridSizeBox.height > cardsBox.y;
+  expect(overlap).toBe(false);
+});
+
+async function addMinimalCard(page, key) {
+  await page.evaluate((k) => {
+    const merged = { v: 1 };
+    upsert({ key: k, merged, seenAt: 0, flashUntil: 0, rssi: undefined, count: 0, obj: null, raw: "" });
+    ensureCard(k, merged, { autoShow: true });
+    setCardSize(k, 1, 1);
+    saveCardState();
+  }, key);
+}
+
+test("a short window gets more columns than a tall one at the same width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  for (let i = 0; i < 5; i++) await addMinimalCard(page, `local feed/extra${i}`);
+  await page.waitForTimeout(120);
+  const portraitCols = await page.evaluate(() => viewCols);
+
+  await page.setViewportSize({ width: 390, height: 300 });
+  await page.waitForTimeout(120);
+  const shortCols = await page.evaluate(() => viewCols);
+
+  // Same width both times: only the height term can explain the difference.
+  expect(shortCols).toBeGreaterThan(portraitCols);
+});
+
 async function edit(page) {
   await page.click("#tab-cards");
   await page.click("#edit-cards");

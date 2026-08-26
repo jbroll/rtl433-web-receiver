@@ -40,6 +40,12 @@ targets against the working directory.
 a cell stops being legible; at any desktop width the clamp lands on the saved
 `grid.cols` and the derived count is inert.
 
+Width alone would give a short landscape window the same column count as a
+tall portrait one at the same width, needing more rows than fit and scrolling
+the page. A second, height-derived count raises the column count, up to
+`grid.cols`, to whatever keeps `ceil(cardCount / cols)` rows at 110px within
+the available height; the final count is the larger of the two.
+
 The derived count is separate from the saved `cardState.grid.cols`, and only
 rendering reads it: the card's rendered span, the resize gesture's upper bound,
 and `gridTemplateColumns`. `deriveTemplate()` reads `cardState` directly, so
@@ -60,6 +66,16 @@ and `(rows-1)` gaps sit between cells, not around them.
 `.card`'s bottom padding (`1.2rem`) reserves the band `.btm` and `.age` are
 absolutely placed in. `.body` is `height:100%` of what is left, so the bottom
 row is not drawn through the values at any cell size.
+
+`Body()` in `cards.jsx` sizes `.body`'s own `gridTemplateColumns` from
+`min(w, visible value count)`, not the card's width `w` directly, so a card
+wider than the values it shows spreads them across its full width instead of
+leaving empty columns.
+
+Below 400px wide, `#edit-controls` (the edit-mode buttons and `#grid-size`)
+switches from each child's own `position:fixed; right:Nrem` to a wrapping flex
+row along the bottom; the individual `right` offsets otherwise push
+`#grid-size` past the left edge and into the grid.
 
 ## Drag zones
 
@@ -209,6 +225,15 @@ divided by the line height. The smallest bound any value produces is the size
 they all get, with a floor of 11px. A card of two readings therefore reads at
 the same size as a card of five beside it, rather than each card sizing to its
 own boxes.
+
+A single crowded box would otherwise set that size for the whole page: one
+card with an unusually tight cell shrinks every other card's type to match it.
+`fitValues()` floors the page size at 0.6 of the median of every tracked
+box's own fit, so that one outlier ellipsizes on its own instead. 0.6 is
+chosen to still let a page of genuinely similar-sized readings track its true
+minimum closely (a bound at, say, 0.9 would fight the legitimate case where
+every card is about equally tight), while stopping a single pathological box
+from pulling the whole page down to a fraction of what the rest can show.
 
 `fitValues()` is the only writer of `.fv` font size. Setting an initial size in
 the JSX as well would let a re-render put the unfitted size back, which is what

@@ -12,8 +12,6 @@
   finger did. The drag and resize entry points already guard against each other; these
   four do not guard against either. `setValueMode` and `setCardHidden` are now reachable
   from the device table as well as from a card.
-- One size for the page means one crowded card sets it for every other. Nothing caps
-  how far a single card can pull the rest down short of the 11px floor.
 - A reading that cannot fit even at 11px still ellipsizes.
 - A prior backlog entry claimed every message forced two synchronous layouts in
   `cards.jsx` because neither `useLayoutEffect` nor `useEffect` had a dependency array.
@@ -23,13 +21,6 @@
   `cardState.value` into one render, so the effects ran once, not twice. The commit's
   only real effect was that a `devices.value`-only change (eviction, `clearSource`,
   `clear`) stopped refitting the grid, which it now does again.
-- `Body()` in `cards.jsx` lays the values out as `repeat(w, minmax(0,1fr))` columns, one
-  value per grid cell of card width, so a card showing fewer values than it is wide leaves
-  the rest of the card empty. A 2-wide Clock card showing only the time fills the left half
-  and nothing else, at any type size. Sizing the columns from the visible value count would
-  fix it, and would change every card, scalar ones included.
-- `#grid-size` is fixed at `right:12rem` and about 7rem wide, so below roughly 320px of
-  viewport width it reaches the left edge and overlaps the grid in edit mode.
 - Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the Escape path
   out of a rename.
 - The cell-side test re-derives `measureGrid()`'s own arithmetic and compares against the
@@ -162,6 +153,3 @@
   no delete for the published value.
 - No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly — there's no
   host-testable seam for `web_ui.cpp` routes at all, receiver-wide.
-- The view column cap is derived from width alone. A landscape phone gets the same 3
-  columns a portrait one does at the same width, and a very short window still scrolls
-  rather than fitting.
