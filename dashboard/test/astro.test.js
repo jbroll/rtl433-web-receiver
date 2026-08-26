@@ -66,10 +66,8 @@ test('sun and moon at 0N 0E on the March equinox', () => {
   assert.equal(p.name, 'Waxing Crescent')
 })
 
-// The zone must pick the event's calendar day, not the day of the UTC instant
-// passed in. Boulder's sunrise on 2026-06-21 is 11:31 UTC (USNO, see above);
-// at a fixed UTC-7 zone, 18:30 local on the 21st is 01:30 UTC on the 22nd --
-// still today's sunrise, already passed, not tomorrow's ~11:32 UTC one.
+// A UTC instant just after local midnight must still pick the local day it
+// falls on, not the next one.
 test('sunrise at UTC-7 after 17:00 local is today\'s, not tomorrow\'s', () => {
   const afterFivePM = utc(2026, 6, 22, 1, 30)
   const e = sunEvents(afterFivePM, 40.0, -105.0, 'Etc/GMT+7')
@@ -94,6 +92,34 @@ test('sun and moon at Sydney on 2026-06-21', () => {
   const m = moonTimes(d, -33.87, 151.21)
   near(m.rise, utc(2026, 6, 21, 1, 25), 10 * MIN, 'moonrise')
   near(m.set, utc(2026, 6, 21, 13, 39), 10 * MIN, 'moonset')
+})
+
+// Sydney is UTC+10 with no DST in June, so local 2026-06-21 spans UTC
+// 2026-06-20T14:00Z to 2026-06-21T14:00Z, straddling two UTC calendar days:
+// its sunrise is the one the UTC-day-20 call above finds, its sunset the one
+// the UTC-day-21 call finds. Both are the untouched no-zone path, so this
+// check does not depend on the zone-window code it is verifying.
+test('sunrise and sunset land on the Sydney local day for a UTC+10 instant', () => {
+  const local0900 = utc(2026, 6, 20, 23, 0) // 2026-06-21 09:00 AEST
+  const e = sunEvents(local0900, -33.87, 151.21, 'Australia/Sydney')
+  near(e.sunrise, sunEvents(utc(2026, 6, 20), -33.87, 151.21).sunrise, 60000, 'sunrise')
+  near(e.sunset, sunEvents(utc(2026, 6, 21), -33.87, 151.21).sunset, 60000, 'sunset')
+})
+
+// Asia/Kolkata is UTC+5:30, a non-hour offset with no DST. New Delhi's
+// moonrise/moonset drift about 50 minutes later each day; local 2026-06-21's
+// moonset lands just after its window closes, so that day has a moonrise and
+// no moonset -- exactly the case the review called out.
+test('sun and moon land on the Kolkata local day for a UTC+5:30 instant', () => {
+  const local0830 = utc(2026, 6, 21, 3, 0) // 2026-06-21 08:30 IST
+  const lat = 28.6139, lon = 77.2090
+  const e = sunEvents(local0830, lat, lon, 'Asia/Kolkata')
+  near(e.sunrise, sunEvents(utc(2026, 6, 20), lat, lon).sunrise, 60000, 'sunrise')
+  near(e.sunset, sunEvents(utc(2026, 6, 21), lat, lon).sunset, 60000, 'sunset')
+
+  const m = moonTimes(local0830, lat, lon, 'Asia/Kolkata')
+  near(m.rise, moonTimes(utc(2026, 6, 21), lat, lon).rise, 10 * MIN, 'moonrise')
+  assert.equal(m.set, null)
 })
 
 test('polar day at Svalbard on 2026-06-21', () => {

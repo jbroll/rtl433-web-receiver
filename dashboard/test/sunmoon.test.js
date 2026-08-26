@@ -139,7 +139,7 @@ test('the moon disc matches the phase it was computed from', () => {
 
 test('moonrise and moonset read as times or a dash', () => {
   const { fields } = moon.run(BOULDER)
-  const t = moonTimes(new Date(), BOULDER.lat, BOULDER.lon)
+  const t = moonTimes(new Date(), BOULDER.lat, BOULDER.lon, BOULDER.zone)
   assert.equal(fields.moonrise, hhmm(t.rise, BOULDER.zone))
   for (const f of ['moonrise', 'moonset']) {
     assert.ok(fields[f] === '—' || HHMM.test(fields[f]), `${f} read ${fields[f]}`)

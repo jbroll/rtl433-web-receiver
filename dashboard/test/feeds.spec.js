@@ -221,15 +221,15 @@ test("a location above the Arctic circle on an all-day-sun date shows up all day
   }
 });
 
-// Just past 85N in March, the day's window has a rise crossing but no set
-// crossing: alwaysUp and alwaysDown are both false, so the dial must not
-// fall back to hhmm(null)'s dash for the event that has none.
+// A rise crossing with no set crossing must not fall back to hhmm(null)'s dash.
 test("a latitude with only one of a rise or set draws no dash arrow", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-03-29T06:00:00Z"));
   await open(page);
   await setPlace(page, 85.5, 15.65, "UTC");
   await expect(page.locator(SUN)).toBeVisible();
 
+  await expect(page.locator(`${SUN} .val.cval[data-f="sun"] text`).first())
+    .toHaveText(/^\u2191 \d\d:\d\d$/);
   for (const t of await textFits(page, "local feed/Sun")) {
     expect(t.txt).not.toContain("↓ —");
   }

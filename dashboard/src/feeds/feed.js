@@ -2,7 +2,7 @@ import { signal } from '@preact/signals'
 import { upsert, devices } from '../devices.js'
 import { makeKey, FEED_BASE } from '../alias.js'
 import { ensureCard, saveCardState } from '../store.js'
-import { hasLocation, resolvedLocation, localZone } from '../settings.js'
+import { hasLocation, resolvedLocation, activeZone } from '../settings.js'
 import { loadFeedCache, cacheGet, cacheSet, cacheClear } from './cache.js'
 
 // Retry ladder for a feed whose fetch failed, in minutes. A feed that reports
@@ -24,6 +24,14 @@ export function feedKey(feed) { return makeKey(FEED_BASE, `feed/${feed.topic}`) 
 export class Unsupported extends Error {}
 
 const IDLE = { status: 'idle', at: 0, ranAt: 0, err: '', nextAt: 0, fails: 0 }
+
+// A plain char-code sum is order-blind: anagrams collide outright, and it
+// barely spreads over 1000 buckets. DJB2's per-character multiply fixes both.
+export function stringHash(s) {
+  let h = 5381
+  for (const c of s) h = (h * 33 + c.charCodeAt(0)) >>> 0
+  return h
+}
 
 // Merged over the defaults rather than returned as stored: a partial entry
 // would otherwise feed an undefined straight into the backoff index.
@@ -93,8 +101,7 @@ async function runFeed(feed, ctx) {
       // Jitter so several feeds failing on one outage do not retry in lockstep.
       // The feed id folds in too, or every feed at the same fail count would
       // still jitter to the same offset.
-      const idHash = [...feed.id].reduce((h, c) => h + c.charCodeAt(0), 0)
-      const jittered = Math.round(wait * (0.9 + 0.2 * ((fails * 2654435761 + idHash) % 1000) / 1000))
+      const jittered = Math.round(wait * (0.9 + 0.2 * ((fails * 2654435761 + stringHash(feed.id)) % 1000) / 1000))
       setState(feed.id, { status: 'error', err: message, fails, nextAt: Date.now() + jittered })
       publishError(feed, message)
     }
@@ -117,7 +124,7 @@ export function pump(now = Date.now()) {
   }
   place = next
 
-  const ctx = { lat: l.lat, lon: l.lon, zone: l.zone || localZone(), place }
+  const ctx = { lat: l.lat, lon: l.lon, zone: activeZone(), place }
 
   for (const feed of FEEDS) {
     const s = stateOf(feed.id)
@@ -134,7 +141,6 @@ export function pump(now = Date.now()) {
 export function primeFeeds() {
   loadFeedCache()
   place = placeOf()
-  const now = Date.now()
   for (const feed of FEEDS) {
     if (!feed.cached) continue
     const e = cacheGet(feed.id)

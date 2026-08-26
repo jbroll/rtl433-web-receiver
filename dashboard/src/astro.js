@@ -1,6 +1,8 @@
 // Every event is the one falling inside the given zone's calendar day for the
 // Date passed in; zone defaults to UTC.
 
+import { offsetMinutes } from './feeds/zone.js'
+
 const RAD = Math.PI / 180
 const DAY = 86400000
 const AU = 149597870.7
@@ -16,17 +18,22 @@ export function julianDay (date) {
   return date.getTime() / DAY + 2440587.5
 }
 
-// The rise/set formula below is anchored to UTC midnight of the calendar day
-// it runs for -- its `m` is always minutes since UTC midnight, longitude and
-// all. So only the *date* comes from the zone (the same
-// Intl.DateTimeFormat(...).formatToParts shape feeds/zone.js uses); the
-// instant this returns is that date's UTC midnight, not the zone's.
-function zoneDayStart (date, zone) {
+// Y-M-D of `date` as seen in `zone`, zero-padded so two keys compare
+// correctly with plain string comparison.
+function zoneDateKey (date, zone) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' })
     .formatToParts(date)
   const p = Object.create(null)
   for (const { type, value } of parts) p[type] = value
-  return Date.UTC(+p.year, +p.month - 1, +p.day)
+  return `${p.year}-${p.month}-${p.day}`
+}
+
+// UTC midnight of the zone-local calendar day `date` falls on -- not the
+// zone's own midnight. eventMinutes anchors to this and shifts back.
+function zoneDayStart (date, zone) {
+  const key = zoneDateKey(date, zone)
+  const [y, mo, d] = key.split('-').map(Number)
+  return Date.UTC(y, mo - 1, d)
 }
 
 function obliquity (t) {
@@ -60,7 +67,16 @@ function hourAngle (lat, decl, zenith) {
   return c > 1 || c < -1 ? null : Math.acos(c) / RAD
 }
 
-function eventMinutes (start, lat, lon, zenith, dir) {
+// `m` is minutes since UTC midnight (zoneDayStart), so it can land on the
+// wrong side of local midnight; shift by 1440 until it doesn't.
+function toLocalDay (start, m, zone, dayKey) {
+  const key = zoneDateKey(new Date(start + m * 60000), zone)
+  if (key < dayKey) return m + 1440
+  if (key > dayKey) return m - 1440
+  return m
+}
+
+function eventMinutes (start, lat, lon, zenith, dir, zone, dayKey) {
   const noon = solarPosition(new Date(start + 43200000))
   let ha = hourAngle(lat, noon.declination, zenith)
   if (ha === null) return null
@@ -73,11 +89,12 @@ function eventMinutes (start, lat, lon, zenith, dir) {
     const next = 720 - 4 * (lon + dir * ha) - sp.eqOfTime
     m = next + 1440 * Math.round((m - next) / 1440)
   }
-  return m
+  return toLocalDay(start, m, zone, dayKey)
 }
 
 export function sunEvents (date, lat, lon, zone = 'UTC') {
   const start = zoneDayStart(date, zone)
+  const dayKey = zoneDateKey(date, zone)
   const at = m => m === null ? null : new Date(start + m * 60000)
   const noon = solarPosition(new Date(start + 43200000))
   let mid = 720 - 4 * lon - noon.eqOfTime
@@ -85,20 +102,21 @@ export function sunEvents (date, lat, lon, zone = 'UTC') {
   const midday = solarPosition(new Date(start + mid * 60000))
   mid = 720 - 4 * lon - midday.eqOfTime
   mid -= 1440 * Math.floor(mid / 1440)
+  mid = toLocalDay(start, mid, zone, dayKey)
 
-  const rise = eventMinutes(start, lat, lon, 90.833, 1)
-  const set = eventMinutes(start, lat, lon, 90.833, -1)
+  const rise = eventMinutes(start, lat, lon, 90.833, 1, zone, dayKey)
+  const set = eventMinutes(start, lat, lon, 90.833, -1, zone, dayKey)
   const up = rise === null && sin(lat) * sin(midday.declination) + cos(lat) * cos(midday.declination) > cos(90.833)
   const events = {
     sunrise: at(rise),
     sunset: at(set),
     solarNoon: at(mid),
-    civilDawn: at(eventMinutes(start, lat, lon, 96, 1)),
-    civilDusk: at(eventMinutes(start, lat, lon, 96, -1)),
-    nauticalDawn: at(eventMinutes(start, lat, lon, 102, 1)),
-    nauticalDusk: at(eventMinutes(start, lat, lon, 102, -1)),
-    astroDawn: at(eventMinutes(start, lat, lon, 108, 1)),
-    astroDusk: at(eventMinutes(start, lat, lon, 108, -1)),
+    civilDawn: at(eventMinutes(start, lat, lon, 96, 1, zone, dayKey)),
+    civilDusk: at(eventMinutes(start, lat, lon, 96, -1, zone, dayKey)),
+    nauticalDawn: at(eventMinutes(start, lat, lon, 102, 1, zone, dayKey)),
+    nauticalDusk: at(eventMinutes(start, lat, lon, 102, -1, zone, dayKey)),
+    astroDawn: at(eventMinutes(start, lat, lon, 108, 1, zone, dayKey)),
+    astroDusk: at(eventMinutes(start, lat, lon, 108, -1, zone, dayKey)),
     dayLength: null,
     alwaysUp: up,
     alwaysDown: rise === null && !up
@@ -189,8 +207,10 @@ export function moonPhase (date) {
   return { age: phase * SYNODIC, phase, illumination: k, name, waxing }
 }
 
+// This scans a fixed window rather than solving a formula, so the window
+// itself has to start at local midnight, not be shifted after the fact.
 export function moonTimes (date, lat, lon, zone = 'UTC') {
-  const start = zoneDayStart(date, zone)
+  const start = zoneDayStart(date, zone) - offsetMinutes(date, zone) * 60000
   const step = 600000
   const steps = DAY / step
   let rise = null, set = null, lo = Infinity, hi = -Infinity

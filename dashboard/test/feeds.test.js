@@ -5,7 +5,8 @@ import assert from 'node:assert/strict'
 
 import { devices } from '../src/devices.js'
 import { cardHidden, loadCardState, setHideNewCards } from '../src/store.js'
-import { loadSettings, setLocation } from '../src/settings.js'
+import { loadSettings, setLocation, onLocationFrame } from '../src/settings.js'
+import { sources } from '../src/sources.js'
 import { loadFeedCache, cacheGet, cacheSet } from '../src/feeds/cache.js'
 import { registerFeed, resetFeeds, feedState, pump, primeFeeds, feedKey, Unsupported } from '../src/feeds/feed.js'
 
@@ -53,6 +54,7 @@ beforeEach(() => {
   loadCardState()
   loadFeedCache()
   setHideNewCards(true)
+  sources.value = []
 })
 
 function atBoulder() { setLocation({ lat: 40.015, lon: -105.2705 }); primeFeeds() }
@@ -67,6 +69,19 @@ test('nothing runs until a location is set', async () => {
   pump(2000)
   await settle()
   assert.equal(ran, 1)
+})
+
+test('pump() builds the feed context with a picked zone over a source location', async () => {
+  setLocation({ zone: 'Europe/Berlin' })
+  sources.value = ['http://receiver.test']
+  onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
+
+  let seenZone
+  registerFeed(fakeFeed({ run: async ctx => { seenZone = ctx.zone; return { fields: { value: 1 } } } }))
+  pump(Date.now())
+  await settle()
+
+  assert.equal(seenZone, 'Europe/Berlin')
 })
 
 test('a successful run publishes a card that is not hidden', async () => {
@@ -162,6 +177,18 @@ test('repeated failures climb the backoff ladder and stop at six hours', async (
     assert.ok(w >= floors[i] * 0.9 && w <= floors[i] * 1.1,
       `retry ${i + 1} waited ${w}m, expected about ${floors[i]}m`)
   })
+})
+
+test('two feed ids that are anagrams of each other get different jitter', async () => {
+  atBoulder()
+  registerFeed(fakeFeed({ id: 'abc', run: async () => { throw new Error('down') } }))
+  registerFeed(fakeFeed({ id: 'cba', run: async () => { throw new Error('down') } }))
+
+  pump(Date.now())
+  await settle()
+
+  assert.notEqual(feedState.value.get('abc').nextAt, feedState.value.get('cba').nextAt,
+    'anagram ids landed on the same retry jitter')
 })
 
 test('an unsupported location stops the feed instead of retrying', async () => {
@@ -301,6 +328,7 @@ test('a run that resolves after the place changed publishes nothing', async () =
   atBoulder()
   let release
   registerFeed(fakeFeed({
+    cached: true,
     run: () => { ran++; return new Promise(r => { release = () => r({ fields: { value: 1 } }) }) },
   }))
   pump(1000)
@@ -315,6 +343,8 @@ test('a run that resolves after the place changed publishes nothing', async () =
   release()
   await settle()
   assert.equal(devices.value.has(KEY), false, 'stale data reached the card after the place moved')
+  assert.equal(cacheGet('test'), null, 'a stale run wrote a cache entry after the place moved')
+  assert.equal(feedState.value.has('test'), false, 'a stale run wrote feed state (and so a nextAt) after the place moved')
 })
 
 test('a prime with an empty place then a pump leaves the cache intact', async () => {
