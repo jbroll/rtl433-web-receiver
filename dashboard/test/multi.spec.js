@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, guardContext } from "./pw.js";
 import { startServer, startPage, routeTiles } from "./harness.js";
 import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
@@ -156,12 +156,18 @@ test("same-origin alias written in one browser replays in a fresh browser", asyn
   const key = `${base(server)} ${topic}`;
 
   const contextA = await browser.newContext();
+  await guardContext(contextA);
   const pageA = await contextA.newPage();
   try {
     await pageA.goto(server.url);
     await pageA.click("#tab-devices");
     await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).fill("Back fence");
-    await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).press("Enter");
+    // The route guard adds enough latency to the POST that the unawaited fetch
+    // in postAlias() can lose the race against the check below.
+    await Promise.all([
+      pageA.waitForResponse(res => res.url().endsWith(topic + "/$alias")),
+      pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).press("Enter"),
+    ]);
 
     // The POST landed and was retained.
     const posted = await server.get(topic + "/$alias");
@@ -170,6 +176,7 @@ test("same-origin alias written in one browser replays in a fresh browser", asyn
 
     // A fresh browser with no localStorage sees the alias replayed from the server.
     const contextB = await browser.newContext();
+    await guardContext(contextB);
     const pageB = await contextB.newPage();
     try {
       await pageB.goto(server.url);

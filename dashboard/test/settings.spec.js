@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./pw.js";
 import { startServer, routeTiles } from "./harness.js";
 import { ACURITE, OREGON, LONGNAME, topicOf } from "./fixtures.js";
 

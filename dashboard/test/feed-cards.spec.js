@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./pw.js";
 import { startPage } from "./harness.js";
 
 const SUN_KEY = "local feed/Sun";

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./pw.js";
 import { startServer, routeWeather, routeTiles, nwsJson } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 import { OUTSIDE_US } from "./fixtures-nws.js";

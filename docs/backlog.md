@@ -6,11 +6,7 @@ Work that spans sub-projects. Each sub-project's own backlog holds the rest.
 
 `ci/android` and `.github/workflows/ios.yml` only build. Neither invokes `bin/test.sh`, the
 bridge's `node --test`, the dashboard's suite, or the receiver host tests, so a change that
-breaks any of them lands on main green. The dashboard suite cannot be added as it stands:
-`dashboard/playwright.config.js` matches `**/*.spec.js` and ten of the tracked
-`debug-*.spec.js` files navigate to a hardcoded LAN address, so it fails anywhere but that
-subnet. Deleting those (see [`dashboard/docs/backlog.md`](../dashboard/docs/backlog.md)) is
-the prerequisite.
+breaks any of them lands on main green.
 
 ## The Android CDP smoke test passes when it does not run
 

@@ -373,6 +373,15 @@ they say.
 Nothing in the suite reaches the network. Setting a location makes the weather feed
 fetch the National Weather Service, and opening the settings tab makes the map fetch
 OpenStreetMap tiles, so `harness.js` exports `routeWeather()` and `routeTiles()` and
-every spec that does either calls them. A spec that forgets still passes while the
-services are up, which is how a live fetch once masked a mutation that should have
-failed the test.
+every spec that does either calls them. `test/pw.js` wraps `@playwright/test` with a
+`page` fixture that routes every request through `127.0.0.1`/`localhost` or aborts it,
+so a spec that forgets `routeWeather()`/`routeTiles()` now fails instead of passing
+against whichever service happens to be up. Playwright matches the most recently
+registered route first, so a spec's own route still wins over this default. The two
+`browser.newContext()` pages in `multi.spec.js` bypass the `page` fixture, so they call
+`guardContext()` directly. Every spec imports `test`/`expect` from `./pw.js`, not
+`@playwright/test`.
+
+`playwright.config.js` lists the tracked spec basenames in `testMatch` rather than
+globbing `test/*.spec.js`, so a scratch file dropped into `test/` never runs. A new
+spec needs a line added there.

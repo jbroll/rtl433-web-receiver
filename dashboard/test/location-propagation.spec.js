@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./pw.js";
 import { startServer, startPage, routeWeather, routeTiles } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 

@@ -144,9 +144,6 @@
   `store.js`, `cacheDrop` in `feeds/cache.js`, the `const alias` in `Label` and the no-op
   `onPointerDown` in `cards.jsx`. `err.retryAfter` in `feeds/nws.js` is assigned and never
   read, which means the backoff ladder ignores `Retry-After` entirely.
-- `playwright.config.js` matches `**/*.spec.js`, so an untracked scratch spec dropped into
-  `test/` runs under `npm test` right alongside the real suite. A local run and a clean
-  checkout run different sets as a result.
 - Both Android smoke steps are stale after the gear-panel split. `test/android-smoke.js`
   clicks `#settings summary`, but `settings.jsx` replaced `<details><summary>` with a plain
   `<div id="settings">`, so the click hangs to the Playwright timeout; and it clicks
@@ -326,15 +323,3 @@
 - The view column cap is derived from width alone. A landscape phone gets the same 3
   columns a portrait one does at the same width, and a very short window still scrolls
   rather than fitting.
-- The Playwright suite has no default network guard: a spec that adds a new call to
-  a third-party API and forgets to route it will hit the live service, the same way
-  the four weather.gov specs did. A single fixture wrapping `page` that installs a
-  catch-all `page.route("**/*", ...)` aborting anything not aimed at 127.0.0.1 or
-  localhost, with each spec's own routes taking precedence (Playwright matches the
-  most-recently-registered route first, so a route added in a test body wins over
-  one installed by the fixture beforehand), would close this for good. Not done now
-  because it means changing the import line in every one of the ~20 *.spec.js files
-  to pull `test`/`expect` from a shared fixtures module instead of
-  `@playwright/test`, and `multi.spec.js`'s "same-origin alias..." test opens pages
-  via `browser.newContext()` directly, bypassing the `page` fixture entirely, so it
-  would need its own guard or stay uncovered.
