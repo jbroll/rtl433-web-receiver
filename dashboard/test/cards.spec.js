@@ -276,6 +276,33 @@ async function setGrid(page, cols, rows) {
   }, [cols, rows]);
 }
 
+// fitValues() writes .fv's inline font size from a useEffect deferred to the
+// next animation frame (with a 35ms timeout fallback), so a read taken right
+// after a layout-changing step can land before it does. "Settled" means the
+// inline size has actually been written (a slow frame that hasn't fired yet
+// reads as "", which must never count as stable) and stays the same across
+// two reads separated by a real poll interval, so a second layout pass
+// triggered by the same step isn't caught mid-flight. `last` starts at a
+// value no font-size string can equal, so the very first check always fails
+// and can't mistake "hasn't started" for "arrived and is holding".
+async function waitForFitSettled(read) {
+  let last = null;
+  await expect.poll(async () => {
+    const value = await read();
+    const stable = value !== "" && value === last;
+    last = value;
+    return stable;
+  }).toBe(true);
+  return last;
+}
+
+// The page shares one font size across every .fv, so the first one settling
+// means fitValues() has finished its (synchronous) pass over all of them.
+function settledPageFont(page) {
+  return waitForFitSettled(() =>
+    page.locator("#cards .fv").first().evaluate(n => n.style.fontSize));
+}
+
 function mode(page, key, field) {
   return page.locator(`#devices tr.vrow[data-key$="${key}"][data-f="${field}"] select`);
 }
@@ -468,18 +495,18 @@ test("the page's tightest reading fills its box", async ({ page }) => {
 
 test("resizing while scrolled fits to the same font as a fresh load", async ({ page }) => {
   await open(page, [ACURITE]);
-  const font = () => page.locator(CARD + " .fv").first().evaluate(n => getComputedStyle(n).fontSize);
+  const font = () => page.locator(CARD + " .fv").first().evaluate(n => n.style.fontSize);
   await page.evaluate(() => {
     document.body.style.minHeight = "4000px";
     window.scrollTo(0, 250);
   });
   await page.setViewportSize({ width: 1280, height: 800 });
-  const resized = await font();
+  const resized = await waitForFitSettled(font);
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/live/);
   await showEveryCard(page);
-  const reloaded = await font();
+  const reloaded = await waitForFitSettled(font);
 
   expect(resized).toBe(reloaded);
 });
@@ -699,6 +726,9 @@ test("a card renders the same in edit mode as out of it", async ({ page }) => {
     font: n.querySelector(".fv").style.fontSize,
     bottom: n.querySelector(".btm").textContent,
   }));
+  // fitValues() may not have landed yet right after open(), so capturing
+  // "before" this early can catch the pre-fit "" font and fail on nothing.
+  await waitForFitSettled(() => page.locator(CARD + " .fv").first().evaluate(n => n.style.fontSize));
   const before = await shape();
 
   await page.click("#edit-cards");
@@ -1069,6 +1099,7 @@ test("no card overflows its box at any size or value count", async ({ page }) =>
                             [OREGON_KEY, `.card[data-key$="${OREGON_KEY}"]`]]) {
     for (const [w, h] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 2], [3, 3], [6, 4]]) {
       await setSize(page, key, w, h);
+      await settledPageFont(page);
       const card = await overflow(sel);
       expect(card.w, `${key} ${w}x${h} card width`).toBeLessThanOrEqual(0);
       expect(card.h, `${key} ${w}x${h} card height`).toBeLessThanOrEqual(0);
@@ -1322,6 +1353,7 @@ test("every card on the page shares one type size", async ({ page }) => {
   await setSize(page, ACURITE_KEY, 2, 2);
   await setSize(page, LONG_KEY, 2, 2);
 
+  await settledPageFont(page);
   const sizes = await page.locator("#cards .fv").evaluateAll(n => n.map(f => f.style.fontSize));
   expect(sizes.length).toBeGreaterThan(3);
   expect([...new Set(sizes)]).toHaveLength(1);

@@ -230,10 +230,3 @@
 - The view column cap is derived from width alone. A landscape phone gets the same 3
   columns a portrait one does at the same width, and a very short window still scrolls
   rather than fitting.
-- Three tests in `test/cards.spec.js` read a `.fv` font size shortly after a layout-changing
-  step and have the same race that was just fixed elsewhere in that file — `fitValues()`
-  runs from a `useEffect` deferred to the next frame, so a read taken right after the step
-  can still see the pre-fit value — but fixing them needs more than swapping in
-  `expect.poll`: "resizing while scrolled fits to the same font as a fresh load", "every
-  card on the page shares one type size", and a related overflow read in "no card overflows
-  its box at any size or value count".
