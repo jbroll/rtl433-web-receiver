@@ -77,6 +77,9 @@ function ValueRow({ rowKey, field, raw }) {
   const mode = valueMode(rowKey, field)
   let value
   if (isRich(raw)) {
+    // briefOf() already returns '' for a missing/non-string brief (e.g.
+    // weather's `now` field with no observation and no forecast text), the
+    // same fallback reading() above applies explicitly.
     value = briefOf(raw)
   } else {
     const d = displayValue(field, raw, settings.value)

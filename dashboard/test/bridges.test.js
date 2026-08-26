@@ -122,3 +122,13 @@ test('removeBridge reports failure on a network error', async () => {
   const ok = await br.removeBridge('mqtt://b:1883')
   assert.equal(ok, false)
 })
+
+test('removeBridge reports "stuck" when a 204 leaves the bridge in the reloaded list', async () => {
+  fakeFetch({
+    'POST http://receiver.local/$mqtt/remove': { ok: true },
+    'GET http://receiver.local/$mqtt': { ok: true, body: [{ url: 'mqtt://b:1883', connected: true }] },
+  })
+  const ok = await br.removeBridge('mqtt://b:1883')
+  assert.equal(ok, 'stuck')
+  assert.deepEqual(br.bridges.value, [{ url: 'mqtt://b:1883', connected: true }])
+})

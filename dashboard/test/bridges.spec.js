@@ -63,3 +63,20 @@ test("removing a bridge that fails leaves the row in place and toasts", async ({
   await expect(page.locator("#toast")).toBeVisible();
   await expect(page.locator("#bridge-list li")).toHaveCount(1);
 });
+
+test("removing a bridge the firmware won't drop still answers 204, and the row stays with a toast", async ({ page }) => {
+  await openBridges(page, [{ url: "mqtts://weather.rkroll.com:8883", connected: true }]);
+  await page.route("**/$mqtt/remove", (route) => route.fulfill({ status: 204 }));
+  await page.route("**/$mqtt", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify([{ url: "mqtts://weather.rkroll.com:8883", connected: true }]),
+    });
+  });
+
+  await page.click("#bridge-list .rm");
+
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect(page.locator("#bridge-list li")).toHaveCount(1);
+});

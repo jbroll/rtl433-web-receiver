@@ -37,6 +37,10 @@ export async function addBridge(url, token) {
   return true
 }
 
+// The receiver's /$mqtt/remove always answers 204, even for a url it never
+// removed -- one baked into the firmware build can't be dropped from the
+// runtime store. So a 204 alone doesn't mean the bridge is gone; the reload
+// below checks whether it actually left the list.
 export async function removeBridge(url) {
   try {
     const res = await fetch(`${location.origin}/$mqtt/remove`, {
@@ -49,5 +53,6 @@ export async function removeBridge(url) {
     return false
   }
   await loadBridges()
-  return true
+  const stillThere = Array.isArray(bridges.value) && bridges.value.some(b => b.url === url)
+  return stillThere ? 'stuck' : true
 }

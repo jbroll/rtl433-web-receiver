@@ -272,6 +272,16 @@ invariant, is a stronger guarantee and drops the memset. `handleTopic()` compoun
 putting a full `FrameBuffer` on the stack to escape an alias name capped at 32 characters,
 where `mqtt_publish.cpp`'s `ALIAS_PAYLOAD_MAX` of 195 already names the worst case.
 
+## `POST /$mqtt/remove` returns 204 for a url it never removed
+
+`handleMqttRemovePost()` in `web_ui.cpp` calls `mqtt_publish_store::remove(url)` and
+unconditionally answers `204`, on the stated basis that "a url that was never present is
+not an error." That collapses two different outcomes into one response: a bridge that was
+actually dropped, and one baked into the firmware build (or otherwise never in the runtime
+store) that a client cannot remove at runtime. A caller reading only the status code cannot
+tell them apart, so the dashboard has to re-fetch `GET /$mqtt` after a `204` and check
+whether the url is still listed to know whether anything happened.
+
 ## The deployed device needs this firmware before its dashboard can clear aliases
 
 `handleAliasPost` now accepts a zero-length body as an alias clear, matching
