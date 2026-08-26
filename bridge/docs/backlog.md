@@ -108,12 +108,6 @@
 - Nothing caps the number of concurrent SSE streams. Each `GET /events` adds a client with
   no authentication and no `maxConnections`, plus a 15 s `setInterval` of its own. The
   unbounded-`res.write` entry above covers one slow reader, not the count of readers.
-- Replay filters twice: `cache.match(filter)` has already established that the topic
-  matches, and then `client.send()` re-runs `filters.some(matchFilter)` over the whole list
-  for the same topic. Only the `replayed` Set in that second pass does real work.
-  Separately, `matchFilter` splits both filter and topic on every call and nothing caches
-  the split, even though a stream's filters are fixed for its lifetime, so each broadcast
-  costs `clients × filters` splits of the same strings.
 - `test/shutdown.test.js` is the only test coverage `bin/mqtt-http-bridge.js` has. Untested:
   `parseArgs` wiring, the shared `tokenStore` handoff to both `createBridge` and
   `startEmbeddedBroker`, `AUTH_TOKEN_PATH` end to end, the TLS-mode
@@ -131,14 +125,6 @@
   delete. The bridge instead caches it as an ordinary non-empty retained message, so a
   later `GET` returns `200 ""` instead of `404`, and the retained message survives a
   broker restart indefinitely.
-- An SSE frame is built once per client instead of once per message. `send()` in
-  `src/sse.js` does `JSON.stringify({ topic, payload: decode(payload) })` inside the
-  per-client call, and `broadcast()` in `src/server.js` loops it over every client, so one
-  incoming message costs N Buffer decodes, N `JSON.parse`s and N serializations to produce
-  N identical strings. Nothing in the frame varies per client; only the filter test does.
-  Hoisting the frame into `broadcast` is the fix. Splicing the raw payload text in to skip
-  the parse round trip is not equivalent: `JSON.parse` then `JSON.stringify` normalises
-  whitespace, number forms and duplicate keys, so the bytes on the wire would change.
 - `POST` validates a different byte sequence than it publishes. `src/server.js` parses
   `body.toString('utf8')`, which substitutes U+FFFD for invalid bytes rather than failing,
   and then publishes the raw `body`. A body with invalid UTF-8 inside a JSON string literal
@@ -154,15 +140,9 @@
   be deleted: the `subscribed` promise and the error-clearing both hang off its callback.
   Setting `resubscribe: false` is the way round.
 - Nothing caps the number of filters on one stream. `GET /events` is unauthenticated and
-  takes as many `f` parameters as fit in the request line; each costs a full `cache.match`
-  scan at connect and a `matchFilter` call per message per client for the life of the
-  connection. The uncapped-stream-count entry above covers the number of readers, not the
-  filters within one.
-- Retained replay is a full cache scan per filter. `subscribe()` in `src/server.js` calls
-  `cache.match(filter)` once per filter and each call iterates every cached topic, so
-  connect cost is topics × filters and grows with the uncapped cache. Scanning the cache
-  once and testing the filter list per topic gives the same result and collapses the
-  `replayed` Set the double-filtering entry above describes.
+  takes as many `f` parameters as fit in the request line; each costs a `matchSplit` call
+  per message per client for the life of the connection. The uncapped-stream-count entry
+  above covers the number of readers, not the filters within one.
 - The dashboard is served without a charset. `src/server.js` writes
   `content-type: text/html` for a string read as `utf8` and re-encoded as UTF-8 bytes. The
   shipped `public/index.html` carries `<meta charset="utf-8">` and is pure ASCII, so

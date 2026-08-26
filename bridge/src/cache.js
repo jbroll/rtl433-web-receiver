@@ -1,5 +1,3 @@
-import { matchFilter } from './topic.js'
-
 export function createCache() {
   const messages = new Map()
 
@@ -16,12 +14,8 @@ export function createCache() {
     get(topic) {
       return messages.get(topic)
     },
-    match(filter) {
-      const found = []
-      for (const [topic, payload] of messages) {
-        if (matchFilter(filter, topic)) found.push([topic, payload])
-      }
-      return found
+    entries() {
+      return messages.entries()
     },
     size() {
       return messages.size

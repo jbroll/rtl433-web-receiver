@@ -1,7 +1,7 @@
 import http from 'node:http'
 
 import { digestMatches } from './auth.js'
-import { openStream } from './sse.js'
+import { decode, openStream } from './sse.js'
 import { validFilter, validTopic } from './topic.js'
 import { createTokenStore } from './token-store.js'
 
@@ -39,7 +39,10 @@ export function createBridge({
     }),
     clients,
     broadcast(topic, payload) {
-      for (const client of clients) client.send(topic, payload)
+      const frame = `data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`
+      for (const client of clients) {
+        if (client.matches(topic)) client.write(frame)
+      }
     },
     waiting: () => broker.waiting(),
   }
@@ -179,13 +182,8 @@ function subscribe(req, res, { cache, clients, url }) {
     client.close()
   })
 
-  const replayed = new Set()
-  for (const filter of filters) {
-    for (const [topic, payload] of cache.match(filter)) {
-      if (replayed.has(topic)) continue
-      replayed.add(topic)
-      client.send(topic, payload)
-    }
+  for (const [topic, payload] of cache.entries()) {
+    if (client.matches(topic)) client.write(`data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`)
   }
 }
 

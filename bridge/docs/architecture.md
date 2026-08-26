@@ -53,6 +53,28 @@ does not fail when the client is offline, it queues the packet and calls back
 whenever a broker reappears, which was measured at 5967 ms with the request
 held open and no status the whole time.
 
+## Broadcasting to SSE clients
+
+`server.js` builds one frame per broadcast message and one per replayed
+topic, not one per client: `data: ${JSON.stringify({ topic, payload:
+decode(payload) })}\n\n`, using `decode` from `sse.js`. Every matching
+client writes that same string. A client only decides whether it matches;
+`sse.js`'s `matches(topic)` tests the stream's filters against a topic and
+`write(frame)` puts bytes on the wire, so filtering never touches the frame
+and building the frame never touches a client's filters.
+
+A stream's filters are fixed at connect time (see "Filters are fixed per
+connection" below), so `openStream` splits each filter into segments once,
+at construction, instead of on every message.
+
+Replay, on a new subscriber's connect, walks `cache.entries()` once in
+insertion order and writes a frame for each topic the stream matches. That
+replaces a pass per filter with a set tracking which topics had already gone
+out; a topic matching two filters still arrives once, because it is visited
+once. Replay order is therefore cache insertion order, not filter order.
+Nothing in `binding.md` promises an order, but this is a behavior change
+from before.
+
 ## Payloads stay bytes
 
 A payload is a `Buffer` from the moment it is read, whether from a `POST`

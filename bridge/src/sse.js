@@ -1,4 +1,4 @@
-import { matchFilter } from './topic.js'
+import { matchSplit } from './topic.js'
 
 const KEEPALIVE_MS = 15000
 
@@ -17,11 +17,18 @@ export function openStream(res, filters) {
   }, KEEPALIVE_MS)
   keepalive.unref()
 
+  // Split once per connection rather than once per message: a stream's
+  // filters never change (see architecture.md, "Filters are fixed per connection").
+  const splitFilters = filters.map((filter) => filter.split('/'))
+
   const stream = {
-    send(topic, payload) {
+    matches(topic) {
+      const topicSegments = topic.split('/')
+      return splitFilters.some((segments) => matchSplit(segments, topicSegments))
+    },
+    write(frame) {
       if (closed || !res.writable) return
-      if (!filters.some((filter) => matchFilter(filter, topic))) return
-      res.write(`data: ${JSON.stringify({ topic, payload: decode(payload) })}\n\n`)
+      res.write(frame)
     },
     close() {
       if (closed) return
@@ -42,7 +49,7 @@ export function openStream(res, filters) {
 // The frame is JSON, so this is the one place a payload has to become text.
 // A payload that is not JSON is carried as the string it decodes to, so a
 // foreign publisher on the broker cannot break the frame.
-function decode(payload) {
+export function decode(payload) {
   const text = payload.toString('utf8')
   try {
     return JSON.parse(text)

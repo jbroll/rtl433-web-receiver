@@ -20,13 +20,15 @@ export function validFilter(filter) {
   })
 }
 
-export function matchFilter(filter, topic) {
-  const f = filter.split('/')
-  const t = topic.split('/')
-  for (let i = 0; i < f.length; i++) {
-    if (f[i] === '#') return true
-    if (i >= t.length) return false
-    if (f[i] !== '+' && f[i] !== t[i]) return false
+export function matchSplit(filterSegments, topicSegments) {
+  for (let i = 0; i < filterSegments.length; i++) {
+    if (filterSegments[i] === '#') return true
+    if (i >= topicSegments.length) return false
+    if (filterSegments[i] !== '+' && filterSegments[i] !== topicSegments[i]) return false
   }
-  return f.length === t.length
+  return filterSegments.length === topicSegments.length
+}
+
+export function matchFilter(filter, topic) {
+  return matchSplit(filter.split('/'), topic.split('/'))
 }

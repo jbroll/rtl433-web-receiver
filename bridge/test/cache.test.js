@@ -17,22 +17,16 @@ test('set replaces rather than accumulates', () => {
   assert.equal(cache.size(), 1)
 })
 
-test('match returns every pair the filter selects', () => {
+test('entries yields every pair in insertion order', () => {
   const cache = createCache()
   cache.set('src/Acurite/1/temperature_C', '21.4')
-  cache.set('src/Acurite/2/temperature_C', '19.0')
   cache.set('src/Other/1/humidity', '48')
-  const matched = cache.match('src/Acurite/+/temperature_C')
-  assert.deepEqual(matched.sort(), [
+  cache.set('src/Acurite/2/temperature_C', '19.0')
+  assert.deepEqual([...cache.entries()], [
     ['src/Acurite/1/temperature_C', '21.4'],
+    ['src/Other/1/humidity', '48'],
     ['src/Acurite/2/temperature_C', '19.0'],
-  ].sort())
-})
-
-test('a filter matching nothing returns an empty list', () => {
-  const cache = createCache()
-  cache.set('a/b/c', '1')
-  assert.deepEqual(cache.match('x/#'), [])
+  ])
 })
 
 test('delete removes the topic rather than emptying it', () => {
@@ -41,5 +35,5 @@ test('delete removes the topic rather than emptying it', () => {
   cache.delete('a/b/c')
   assert.equal(cache.get('a/b/c'), undefined)
   assert.equal(cache.size(), 0)
-  assert.deepEqual(cache.match('#'), [])
+  assert.deepEqual([...cache.entries()], [])
 })

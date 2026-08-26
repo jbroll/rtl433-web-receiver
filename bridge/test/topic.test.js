@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { matchFilter, validFilter, validTopic } from '../src/topic.js'
+import { matchFilter, matchSplit, validFilter, validTopic } from '../src/topic.js'
 
 // The topic rules are shared with receiver/topic.cpp; both suites run the
 // same table so a change has to land in both implementations at once.
@@ -30,4 +30,11 @@ test('a non-string input is rejected', () => {
   assert.equal(validTopic(undefined), false)
   assert.equal(validTopic(null), false)
   assert.equal(validFilter(123), false)
+})
+
+test('matchSplit takes pre-split segments and agrees with matchFilter', () => {
+  assert.equal(matchSplit(['a', '+', 'c'], ['a', 'b', 'c']), true)
+  assert.equal(matchSplit(['a', '#'], ['a', 'b', 'c']), true)
+  assert.equal(matchSplit(['a', 'b'], ['a', 'b', 'c']), false)
+  assert.equal(matchSplit(['a', '+', 'c'], ['a', 'b', 'c']), matchFilter('a/+/c', 'a/b/c'))
 })
