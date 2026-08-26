@@ -152,9 +152,8 @@ async function handle(
     return res.end()
   }
 
-  // Reserved the same way '/events' and '/auth/rotate' are. Unauthenticated:
-  // it names no secrets, since brokerLabel has already stripped credentials
-  // from the URL and broker.js redacts a password out of the last error too.
+  // Unauthenticated: brokerLabel strips credentials from the URL and
+  // broker.js redacts them out of the last error too.
   if (url.pathname === '/status') {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', { allow: 'GET' })
     const body = JSON.stringify({

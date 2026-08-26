@@ -16,6 +16,8 @@ export async function startBridge({
   maxSseClients,
   maxSseFilters,
   maxBufferedBytes,
+  username,
+  password,
 } = {}) {
   let mqttBroker = url ? null : await startBroker(0, { delayMs })
   const cache = createCache()
@@ -25,6 +27,8 @@ export async function startBridge({
     cache,
     onMessage: (topic, payload, deleted) => bridge.broadcast(topic, payload, deleted),
     echoTimeoutMs,
+    username,
+    password,
   })
   bridge = createBridge({
     broker,

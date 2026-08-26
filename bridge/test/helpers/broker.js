@@ -10,9 +10,8 @@ const DEFAULT_DELAY_MS = Number(process.env.MQTT_TEST_LATENCY_MS ?? 0)
 
 const MQTT_SUBSCRIBE = 8
 
-// A minimal MQTT fixed-header parser: enough to tell packet types apart on
-// the wire, not a general decoder. Buffers across chunks so a packet split
-// by TCP is still counted once, and never double-counts one read as two.
+// A minimal MQTT fixed-header parser, enough to tell packet types apart.
+// Buffers across chunks so a packet split by TCP is counted once, not twice.
 function countMqttPacketTypes(onType) {
   let buffer = Buffer.alloc(0)
   return (chunk) => {
@@ -119,9 +118,7 @@ async function startProxy({ target, listenPort, delayMs }) {
       dropping = direction
     },
     // Severs every socket without closing the listener, forcing the mqtt
-    // client to reconnect through the same proxy address — the cheapest way
-    // to make it run its 'connect' handler, and the manual subscribe with
-    // it, a second time.
+    // client to reconnect and run its 'connect' handler a second time.
     dropConnections: () => {
       for (const socket of sockets) socket.destroy()
     },

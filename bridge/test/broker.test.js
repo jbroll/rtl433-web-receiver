@@ -10,7 +10,7 @@ import path from 'node:path'
 
 import Aedes from 'aedes'
 
-import { cacheMessage, connectBroker } from '../src/broker.js'
+import { cacheMessage, connectBroker, redact } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
 import { waitFor } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
@@ -425,5 +425,74 @@ test('a shutdown reports neither the disconnect nor the error it causes', async 
     assert.deepEqual(errors, [])
   } finally {
     await broker.close()
+  }
+})
+
+test('redact strips a password wherever it appears in the message', () => {
+  assert.equal(
+    redact('auth failed: mypass was rejected', { password: 'mypass' }),
+    'auth failed: *** was rejected',
+  )
+})
+
+test('redact strips a username wherever it appears in the message', () => {
+  assert.equal(
+    redact('auth failed: myuser was rejected', { username: 'myuser' }),
+    'auth failed: *** was rejected',
+  )
+})
+
+test('redact strips both a username and password out of a full broker URL', () => {
+  const message = 'could not reach mqtt://myuser:mypass@broker.example:1883'
+  assert.equal(
+    redact(message, { username: 'myuser', password: 'mypass' }),
+    'could not reach mqtt://***:***@broker.example:1883',
+  )
+})
+
+test('redact passes a message with no credential in it through unchanged', () => {
+  const message = 'the broker did not echo src/Acurite/1 within 5000 ms'
+  assert.equal(redact(message, { username: 'myuser', password: 'mypass' }), message)
+})
+
+test('a broker-refused connection redacts a password that lands in the real error text', async () => {
+  const broker = await startBroker()
+  const url = broker.url
+  await broker.close()
+
+  const client = connectBroker({
+    url,
+    cache: createCache(),
+    onMessage: () => {},
+    username: 'someuser',
+    password: 'ECONNREFUSED',
+  })
+  try {
+    await waitFor(() => client.lastError() !== null)
+    assert.doesNotMatch(client.lastError(), /ECONNREFUSED/)
+    assert.match(client.lastError(), /\*\*\*/)
+  } finally {
+    await client.end()
+  }
+})
+
+test('a broker-refused connection redacts a username that lands in the real error text', async () => {
+  const broker = await startBroker()
+  const url = broker.url
+  await broker.close()
+
+  const client = connectBroker({
+    url,
+    cache: createCache(),
+    onMessage: () => {},
+    username: 'ECONNREFUSED',
+    password: 'somepass',
+  })
+  try {
+    await waitFor(() => client.lastError() !== null)
+    assert.doesNotMatch(client.lastError(), /ECONNREFUSED/)
+    assert.match(client.lastError(), /\*\*\*/)
+  } finally {
+    await client.end()
   }
 })

@@ -44,8 +44,9 @@ curl -i localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234
   removes the topic from the cache entirely. Both answer `404` here.
 - `400` if the topic is malformed (empty, contains a space, contains an
   MQTT wildcard `+` or `#`, or has an empty segment).
-- `503` if the bridge is not connected to the broker and resubscribed (see
-  [GET /status](#get-status--bridge-and-broker-state)).
+- `503` if the bridge is not `ready` (see
+  [GET /status](#get-status--bridge-and-broker-state)): not connected to the
+  broker, or connected but without its `#` subscription in place yet.
 
 ## POST to a topic
 
@@ -76,8 +77,9 @@ curl -i -X POST localhost:8080/rtl433-a1b2c3/Acurite-5n1/1234 -d ''
   the topic is malformed. A zero-length body skips JSON validation entirely.
 - `413` if the body exceeds 64 KiB.
 - `408` if the body stalls for 30 seconds without a new byte arriving.
-- `503` if the bridge is not connected to the broker and resubscribed, or the
-  broker did not take the publish within 5 seconds.
+- `503` if the bridge is not `ready` (not connected to the broker, or
+  connected but without its `#` subscription in place yet), or the broker did
+  not take the publish within 5 seconds.
 - `401` if `AUTH_TOKEN` is configured and the request's `Authorization: Bearer <token>`
   header is missing or wrong.
 
@@ -118,7 +120,8 @@ request is sent, so it must be percent-encoded as `%23`.
   not replayed to a subscriber connecting afterward.
 - `400` if any filter is malformed, or if more than `MAX_SSE_FILTERS` `f`
   parameters are given.
-- `503` if the bridge is not connected to the broker and resubscribed, or if
+- `503` if the bridge is not `ready` (not connected to the broker, or
+  connected but without its `#` subscription in place yet), or if
   `MAX_SSE_CLIENTS` streams are already open.
 
 A stream that falls a megabyte behind on reading its events is dropped: the

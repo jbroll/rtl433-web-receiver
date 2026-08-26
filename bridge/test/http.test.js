@@ -186,6 +186,42 @@ test('GET /status reports the broker down without itself answering 503', async (
   }
 })
 
+test('GET /status redacts a password that lands in a real broker connection error', async () => {
+  const mqttBroker = await startBroker()
+  const url = mqttBroker.url
+  await mqttBroker.close()
+
+  const bridge = await startBridge({ url, username: 'someuser', password: 'ECONNREFUSED' })
+  try {
+    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).lastError !== null)
+
+    const status = await fetch(`${bridge.base}/status`)
+    const body = await status.json()
+    assert.doesNotMatch(body.lastError, /ECONNREFUSED/)
+    assert.match(body.lastError, /\*\*\*/)
+  } finally {
+    await bridge.close()
+  }
+})
+
+test('GET /status redacts a username that lands in a real broker connection error', async () => {
+  const mqttBroker = await startBroker()
+  const url = mqttBroker.url
+  await mqttBroker.close()
+
+  const bridge = await startBridge({ url, username: 'ECONNREFUSED', password: 'somepass' })
+  try {
+    await waitFor(async () => (await (await fetch(`${bridge.base}/status`)).json()).lastError !== null)
+
+    const status = await fetch(`${bridge.base}/status`)
+    const body = await status.json()
+    assert.doesNotMatch(body.lastError, /ECONNREFUSED/)
+    assert.match(body.lastError, /\*\*\*/)
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('HEAD matches GET status for a topic, with an empty body and no stream registered', async () => {
   const bridge = await startBridge()
   try {
