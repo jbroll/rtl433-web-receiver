@@ -61,3 +61,25 @@ test("a capped grid sizes its cell from width alone and scrolls instead", async 
   expect(m.cell).toBeCloseTo(m.width / 3, 1);
   expect(m.rows.split(/\s+/).length).not.toBe(4);
 });
+
+test("a card wider than the cap renders at the cap", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  await page.evaluate(k => setCardSize(k, 5, 2), await page.evaluate(() =>
+    Object.keys(cardState.cards).find(k => k.includes("Acurite"))));
+  await page.waitForTimeout(120);
+
+  await expect(page.locator(CARD)).toHaveCSS("grid-column", /span 3/);
+});
+
+test("a card wider than the cap keeps its stored width", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const key = await page.evaluate(() =>
+    Object.keys(cardState.cards).find(k => k.includes("Acurite")));
+  await page.evaluate(k => setCardSize(k, 5, 2), key);
+  await page.waitForTimeout(120);
+
+  const c = await page.evaluate(k => cardState.cards[k], key);
+  expect(c.w).toBe(5);
+});

@@ -266,7 +266,8 @@ function resizeMove(ev) {
   const r = resizing.value
   if (!r || ev.pointerId !== r.pointerId) return
   const g = gridSize()
-  r.w = Math.max(1, Math.min(g.cols, r.w0 + Math.round((ev.clientX - r.x0) / cell)))
+  // A card cannot be dragged wider than the grid on screen.
+  r.w = Math.max(1, Math.min(viewCols(), r.w0 + Math.round((ev.clientX - r.x0) / cell)))
   r.h = Math.max(1, Math.min(g.rows, r.h0 + Math.round((ev.clientY - r.y0) / cell)))
   r.card.style.gridColumn = "span " + r.w
   r.card.style.gridRow = "span " + r.h

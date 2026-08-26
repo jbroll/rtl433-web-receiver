@@ -6,7 +6,7 @@ import { aliasOf, displayName, postAlias } from './alias.js'
 import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
-         measureGrid, fitValues, textWidthEm, cellSignal,
+         measureGrid, fitValues, textWidthEm, cellSignal, viewCols, viewColsSignal,
          trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize } from './grid.js'
 import { tick } from './tick.js'
 import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
@@ -16,6 +16,7 @@ export function CardsView() {
 
   // Read cellSignal and cardState to trigger re-render on changes
   cellSignal.value
+  viewColsSignal.value
   cardState.value
   settings.value
 
@@ -80,7 +81,7 @@ const Card = memo(function Card({ rec }) {
   const merged = rec.merged.value
   const vis = visibleValues(key, merged)
   const g = cardState.value.grid
-  const w = Math.max(1, Math.min(c.w, g.cols))
+  const w = Math.max(1, Math.min(c.w, viewCols()))
   const h = Math.max(1, Math.min(c.h, g.rows))
 
   const flashClass = rec.flashUntil.value > tick.value ? 'flash' : ''
