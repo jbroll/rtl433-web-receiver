@@ -18,6 +18,14 @@
   ellipsizes.
 - One size for the page means one crowded card sets it for every other. Nothing caps
   how far a single card can pull the rest down short of the 11px floor.
+- A prior backlog entry claimed every message forced two synchronous layouts in
+  `cards.jsx` because neither `useLayoutEffect` nor `useEffect` had a dependency array.
+  Measured call counts before commit 6125356 disproved that: a repeat message to an
+  existing device re-renders `CardsView` 0 times (`upsert` on an existing record writes
+  only per-device signals), and a new device coalesces `devices.value` and
+  `cardState.value` into one render, so the effects ran once, not twice. The commit's
+  only real effect was that a `devices.value`-only change (eviction, `clearSource`,
+  `clear`) stopped refitting the grid, which it now does again.
 - `Body()` in `cards.jsx` lays the values out as `repeat(w, minmax(0,1fr))` columns, one
   value per grid cell of card width, so a card showing fewer values than it is wide leaves
   the rest of the card empty. A 2-wide Clock card showing only the time fills the left half

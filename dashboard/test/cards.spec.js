@@ -531,20 +531,36 @@ test("a live update flashes the card, clears on its own, and flashes again", asy
   await expect(card).toHaveClass(/flash/);
 });
 
-test("a devices update alone, with the grid, cards, and settings unchanged, doesn't refit", async ({ page }) => {
+test("a devices update alone, with the grid, cards, and settings unchanged, still refits", async ({ page }) => {
   await open(page, [ACURITE]);
   await settledPageFont(page);
   const before = await page.evaluate(() => measureGridCalls + fitValuesCalls);
 
   // CardsView reads devices.value to compute which keys are shown, so it
-  // re-renders on this even though nothing the fit depends on changed.
-  for (let i = 0; i < 10; i++) {
-    await page.evaluate(() => devices.clear());
-    await page.waitForTimeout(20);
-  }
+  // re-renders on this even though nothing else the fit depends on changed;
+  // the dependency arrays must include devices.value or an eviction (see
+  // below) would leave the survivors sized for a grid that no longer exists.
+  await page.evaluate(() => devices.clear());
 
-  const after = await page.evaluate(() => measureGridCalls + fitValuesCalls);
-  expect(after - before).toBeLessThan(10);
+  await expect.poll(() => page.evaluate(() => measureGridCalls + fitValuesCalls))
+    .toBeGreaterThan(before);
+});
+
+test("evicting a card grows the survivors back to fill their box", async ({ page }) => {
+  await open(page, [ACURITE, LONGNAME]);
+  const font = () => page.locator(CARD + " .fv").first().evaluate(n => n.style.fontSize);
+  const before = parseFloat(await waitForFitSettled(font));
+
+  // Mirrors what trim() and clearSource() do on a real eviction: replace the
+  // devices map with one missing a key, touching nothing else CardsView reads.
+  await page.evaluate((acuriteKey) => {
+    const kept = [...devices.entries()].filter(([k]) => k === acuriteKey);
+    devices.clear();
+    for (const [, rec] of kept) upsert(rec);
+  }, storeKey(server, ACURITE_KEY));
+
+  const after = parseFloat(await waitForFitSettled(font));
+  expect(after).toBeGreaterThan(before);
 });
 
 async function edit(page) {

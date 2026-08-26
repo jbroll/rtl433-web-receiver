@@ -23,13 +23,13 @@ export function CardsView() {
   // measureGrid on render (synchronous, before paint)
   useLayoutEffect(() => {
     if (gridRef.current) measureGrid()
-  }, [cellSignal.value, viewColsSignal.value, cardState.value, settings.value])
+  }, [cellSignal.value, viewColsSignal.value, cardState.value, settings.value, devices.value])
 
-  // fitValues runs after every render, after paint, so values tracked after
-  // the last cell change (device arrival, text width change) still get fitted
+  // devices.value is here so an eviction or clear (fewer tracked boxes, same
+  // cell/card/settings state) still refits the survivors, not just arrivals.
   useEffect(() => {
     if (gridRef.current) fitValues()
-  }, [cellSignal.value, viewColsSignal.value, cardState.value, settings.value])
+  }, [cellSignal.value, viewColsSignal.value, cardState.value, settings.value, devices.value])
 
   // The grid measures zero on a hidden tab, so re-fit when it gets its size
   // back as well as on a window resize.
