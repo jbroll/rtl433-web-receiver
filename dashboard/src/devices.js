@@ -33,6 +33,7 @@ export function upsert(rec) {
       count: signal(rec.count),
       seenAt: signal(rec.seenAt),
       flashUntil: signal(rec.flashUntil),
+      flashing: signal(false),
       obj: signal(rec.obj),
       raw: signal(rec.raw),
       merged: signal(rec.merged),

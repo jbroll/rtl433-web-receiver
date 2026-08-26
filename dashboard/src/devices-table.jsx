@@ -6,7 +6,6 @@ import { aliasOf, postAlias, shortKey } from './alias.js'
 import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { sortDevices, sortBy, current, sortable } from './devicesort.js'
-import { tick } from './tick.js'
 import { isRich, briefOf } from './render-values.js'
 
 function reading(rec) {
@@ -44,7 +43,7 @@ function AliasInput({ r, name }) {
 function DeviceRow({ r }) {
   const obj = r.obj.value
   const name = obj && obj.model ? obj.model : shortKey(r.key)
-  const flash = r.flashUntil.value > tick.value ? 'flash' : ''
+  const flash = r.flashing.value ? 'flash' : ''
   const id = obj && obj.id !== undefined ? obj.id : (obj && obj.channel !== undefined ? 'ch' + obj.channel : '')
   // seenAt 0 marks a record with no arrival time, the same as on a card.
   const age = r.seenAt.value ? ageText(Date.now() - r.seenAt.value) : ''

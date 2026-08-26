@@ -25,6 +25,17 @@ import moon from './feeds/moon.js'
 import weather from './feeds/nws.js'
 
 let build = null
+const flashTimers = new Map()
+
+// Off tick's one-second grain, which would leave the class on for up to twice
+// as long as it should. tick is otherwise the app's only timer.
+function flash(key) {
+  const rec = devices.value.get(key)
+  if (!rec) return
+  rec.flashing.value = true
+  clearTimeout(flashTimers.get(key))
+  flashTimers.set(key, setTimeout(() => { rec.flashing.value = false }, 1000))
+}
 
 function onMessage(base, topic, obj) {
   if (!obj || typeof obj !== 'object') return
@@ -44,6 +55,7 @@ function onMessage(base, topic, obj) {
     flashUntil: Date.now() + 1000,
   })
   store.ensureCard(key, merged)
+  flash(key)
   if (!isSelf(key)) addLog(at, raw)
 }
 
@@ -153,6 +165,7 @@ function wrapRec(rec) {
     get count() { return rec.count.value },
     get seenAt() { return rec.seenAt.value },
     get flashUntil() { return rec.flashUntil.value },
+    get flashing() { return rec.flashing.value },
     get obj() { return rec.obj.value },
     get raw() { return rec.raw.value },
     get merged() { return rec.merged.value },

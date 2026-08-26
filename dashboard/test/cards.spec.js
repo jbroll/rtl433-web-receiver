@@ -504,10 +504,14 @@ test("resizing while scrolled fits to the same font as a fresh load", async ({ p
   expect(resized).toBe(reloaded);
 });
 
-test("a live update flashes the card", async ({ page }) => {
+test("a live update flashes the card, clears on its own, and flashes again", async ({ page }) => {
   await open(page, [ACURITE]);
+  const card = page.locator(`.card[data-key$="${ACURITE_KEY}"]`);
   server.emit(ACURITE);
-  await expect(page.locator(`.card[data-key$="${ACURITE_KEY}"]`)).toHaveClass(/flash/);
+  await expect(card).toHaveClass(/flash/);
+  await expect(card).not.toHaveClass(/flash/, { timeout: 2000 });
+  server.emit(ACURITE);
+  await expect(card).toHaveClass(/flash/);
 });
 
 async function edit(page) {

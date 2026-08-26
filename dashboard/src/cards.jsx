@@ -87,7 +87,7 @@ const Card = memo(function Card({ rec }) {
   const w = Math.max(1, Math.min(c.w, viewCols()))
   const h = Math.max(1, Math.min(c.h, g.rows))
 
-  const flashClass = rec.flashUntil.value > tick.value ? 'flash' : ''
+  const flashClass = rec.flashing.value ? 'flash' : ''
   const editingClass = editing.value ? 'editing' : ''
 
   return (

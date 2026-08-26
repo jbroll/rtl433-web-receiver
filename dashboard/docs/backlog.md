@@ -75,20 +75,6 @@
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
   `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
-- The flash class latches on and never clears. `cards.jsx` and `devices-table.jsx` both
-  test `rec.flashUntil.value > tick.value`, comparing an epoch timestamp
-  (`Date.now() + 1000` in `main.jsx`, about 1.75e12) against the seconds-since-load counter
-  `tick` starts at zero, so it is true for the rest of the session. `.flash` is a one-shot
-  CSS animation and only replays when the class is removed and re-added, so a device
-  flashes on its first message and never again, while every card and row that has ever had
-  data carries `.flash` permanently. `cards.spec.js` asserts only that the class appears,
-  so it passes with the bug. Comparing against `Date.now()` fixes it and also drops the
-  per-second re-render below.
-- Every card re-renders once a second. `Card` reads `tick.value` for the flash class and
-  `Age` reads it for the age string, so the whole subtree — `Label`, `Body`, every `Value`,
-  `BottomStrip` — re-renders and runs `displayValue()` per value every second when only the
-  age text changed. Fixing the flash comparison confines the tick read to `Age`, one small
-  leaf per card.
 - `trim()` in `devices.js` ends with `devices.value = devices.value`, and signals skip
   notification when the new value is `===` the old. It deleted from the same Map `upsert`
   installed, so once the device count passes `DEVICE_MAX × sources` the evicted card and
