@@ -26,10 +26,10 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
     // CONNECT is the only gate: once authenticated, a client has full
     // read+write over '#', the same as the bridge's own internal
     // connection. Public read access is intentionally the HTTP side's job.
-    // tokens.get() is read per-CONNECT, not captured once, so a rotation
+    // tokens.digest() is read per-CONNECT, not captured once, so a rotation
     // gates new connections immediately without restarting the broker.
     aedes.authenticate = (client, username, password, callback) => {
-      callback(null, tokenMatches(password, tokens.get()))
+      callback(null, tokenMatches(password, tokens.digest()))
     }
   }
 

@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+import { digest } from '../src/auth.js'
 import { createTokenStore } from '../src/token-store.js'
 
 test('with no path, get() returns the initial token and rotate() only changes memory', () => {
@@ -90,6 +91,25 @@ test('a token with surrounding whitespace comes back identical from a reopened s
 
     const reopened = createTokenStore('s3cr3t', { path: tokenPath })
     assert.equal(reopened.get(), 'padded-token')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('digest() tracks the current token and changes on rotate', () => {
+  const store = createTokenStore('s3cr3t')
+  assert.deepEqual(store.digest(), digest('s3cr3t'))
+  store.rotate('rotated')
+  assert.deepEqual(store.digest(), digest('rotated'))
+})
+
+test('a rotate() that throws leaves digest() matching the old token, not the rejected one', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'bridge-token-store-'))
+  try {
+    const tokenPath = path.join(dir, 'missing-subdir', 'auth-token')
+    const store = createTokenStore('s3cr3t', { path: tokenPath })
+    assert.throws(() => store.rotate('rotated'))
+    assert.deepEqual(store.digest(), digest('s3cr3t'))
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

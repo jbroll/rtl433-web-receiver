@@ -155,17 +155,6 @@
   `content-type: application/json` as bytes the bridge never actually validated. Decoding
   once with `new TextDecoder('utf-8', { fatal: true })` and parsing that string rejects it
   and drops the second decode.
-- `tokenMatches` in `src/auth.js` does not do what its own comment claims. The comment says
-  a naive `===` leaks the token's length and prefix through response timing; the early
-  `providedBuf.length !== expectedBuf.length` return closes the prefix leak and keeps the
-  length oracle. The guard is required in this shape, because `timingSafeEqual` throws on
-  unequal lengths. Comparing SHA-256 digests instead is length-independent and needs no
-  early return, and it would let the expected digest be cached in the token store rather
-  than `Buffer.from(expected)` being allocated on every HTTP request and MQTT CONNECT.
-- `tokenMatches` dereferences `expected.length` before any type check, so a nullish
-  expected token throws a `TypeError` from inside an aedes callback rather than returning
-  `false`. Latent, not live: every current caller guards first. It is the one function the
-  file's comment names as the single place the discipline has to be right.
 - Every reconnect issues a duplicate SUBSCRIBE. `src/broker.js` sets `resubscribe: true`
   and also subscribes to `#` by hand inside the `connect` handler, so after the first
   connect each reconnect sends two SUBSCRIBE packets for the same filter. Idempotent at the

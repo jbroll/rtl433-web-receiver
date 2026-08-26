@@ -168,10 +168,13 @@ never changes. `bin/mqtt-http-bridge.js` builds one store and passes it to
 both `createBridge` (the HTTP bearer check and `POST /auth/rotate`) and
 `startEmbeddedBroker` (the MQTT `authenticate` hook), so a rotation through
 either path is visible to both immediately — there is exactly one current
-token, not two copies that can drift. `authenticate` calls `tokens.get()`
+token, not two copies that can drift. `authenticate` calls `tokens.digest()`
 inside the hook itself rather than closing over a value captured at start,
 which is what makes a rotation take effect for the very next `CONNECT`
-without restarting the embedded broker.
+without restarting the embedded broker. The store caches the SHA-256 digest
+of the current token alongside it and updates both together in `rotate()`,
+so the HTTP and MQTT checks (`src/auth.js`'s `tokenMatches`) hash only the
+incoming credential per request, not the expected token as well.
 
 With `AUTH_TOKEN_PATH` set, `rotate()` also writes the new token to that
 file (write-to-`.tmp`-then-`rename`, so a crash mid-write can't leave a

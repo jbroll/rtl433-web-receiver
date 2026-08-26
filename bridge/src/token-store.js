@@ -8,6 +8,8 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 
+import { digest } from './auth.js'
+
 // The bridge's own internal connection to the embedded broker and any
 // external MQTT client dial in once and keep their session past a
 // rotation, so this is a single mutable value, not a queue of valid
@@ -23,14 +25,20 @@ export function createTokenStore(initialToken, { path: tokenPath } = {}) {
       if (err.code !== 'ENOENT') throw err
     }
   }
+  let currentDigest = current ? digest(current) : undefined
 
   return {
     get: () => current,
+    digest: () => currentDigest,
     rotate(newToken) {
       const trimmed = newToken.trim()
       if (trimmed.length === 0) throw new Error('token must not be empty')
+      // The digest is assigned right alongside `current`, after persist()
+      // succeeds: a failed write must leave both the old token and the old
+      // digest live, not one updated and the other stale.
       if (tokenPath) persist(tokenPath, trimmed, counter++)
       current = trimmed
+      currentDigest = digest(trimmed)
     },
   }
 }

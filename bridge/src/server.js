@@ -64,11 +64,10 @@ async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml 
   // in practice, and gated ahead of topic parsing so it can't collide with one.
   if (url.pathname === '/auth/rotate') {
     if (req.method !== 'POST') return send(res, 405, 'method not allowed')
-    const currentToken = tokens.get()
     // Nothing to rotate: a deployment with no AUTH_TOKEN has no auth surface
     // to expose here either, so this is "not found," not "not authorized."
-    if (!currentToken) return send(res, 404, 'not found')
-    if (!authorized(req, currentToken)) return send(res, 401, 'unauthorized')
+    if (!tokens.get()) return send(res, 404, 'not found')
+    if (!authorized(req, tokens.digest())) return send(res, 401, 'unauthorized')
 
     let body
     try {
@@ -112,8 +111,7 @@ async function handle(req, res, { broker, cache, clients, tokens, dashboardHtml 
   }
 
   if (req.method === 'POST') {
-    const authToken = tokens.get()
-    if (authToken && !authorized(req, authToken)) return send(res, 401, 'unauthorized')
+    if (tokens.get() && !authorized(req, tokens.digest())) return send(res, 401, 'unauthorized')
 
     let body
     try {
@@ -180,8 +178,8 @@ function send(res, status, message) {
   res.end(`${message}\n`)
 }
 
-function authorized(req, authToken) {
+function authorized(req, expectedDigest) {
   const header = req.headers['authorization']
   if (typeof header !== 'string' || !/^Bearer /i.test(header)) return false
-  return tokenMatches(header.slice('Bearer '.length), authToken)
+  return tokenMatches(header.slice('Bearer '.length), expectedDigest)
 }
