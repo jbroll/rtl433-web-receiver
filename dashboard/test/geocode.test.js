@@ -1,4 +1,4 @@
-import { test, mock, beforeEach, afterEach } from 'node:test'
+import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { geocode, reverseGeocode, resetGeocode, geocodeCacheSize } from '../src/geocode.js'
@@ -82,6 +82,17 @@ test('the cache drops its oldest entry past 100 distinct queries', async () => {
       await found
     }
     assert.equal(geocodeCacheSize(), 100)
+
+    const before = calls.length
+    const recent = geocode('query 149')
+    mock.timers.tick(1000)
+    await recent
+    assert.equal(calls.length, before, 'a recent query should still be cached')
+
+    const oldest = geocode('query 0')
+    mock.timers.tick(1000)
+    await oldest
+    assert.equal(calls.length, before + 1, 'the oldest query should have been evicted')
   } finally {
     mock.timers.reset()
   }
