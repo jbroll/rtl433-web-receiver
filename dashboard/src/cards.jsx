@@ -114,7 +114,6 @@ const Card = memo(function Card({ rec }) {
 
 function Label({ rec }) {
   const key = rec.key
-  const alias = aliasOf(key)
   const isRenaming = renaming.value && key === renaming.value
 
   return (
@@ -124,10 +123,6 @@ function Label({ rec }) {
         if (!editing.value || isRenaming) return
         ev.stopPropagation()
         setRenaming(key)
-      }}
-      onPointerDown={() => {
-        if (!editing.value || isRenaming) return
-        // Long press to rename is handled by RenameInput
       }}
     >
       <RenameInput rec={rec} />
@@ -140,8 +135,10 @@ function RenameInput({ rec }) {
   const alias = aliasOf(key)
   const isRenaming = renaming.value === key
   const inputRef = useRef(null)
+  const committed = useRef(false)
 
   if (isRenaming) {
+    committed.current = false
     // We need to render the input synchronously
     return (
       <input
@@ -150,6 +147,7 @@ function RenameInput({ rec }) {
         defaultValue={alias}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter') {
+            committed.current = true
             postAlias(key, ev.target.value)
             setRenaming(false)
           } else if (ev.key === 'Escape') {
@@ -157,6 +155,9 @@ function RenameInput({ rec }) {
           }
         }}
         onBlur={(ev) => {
+          // The unmount from Enter's setRenaming(false) can itself fire blur;
+          // committed guards against posting the same alias twice.
+          if (committed.current) return
           postAlias(key, ev.target.value)
           setRenaming(false)
         }}

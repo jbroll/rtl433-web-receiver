@@ -80,12 +80,6 @@
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
   `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
-- Dead code: `src/render-loop.js` is imported by nothing — `setRender`, `scheduleRender`
-  and `startRenderLoop` have no references. So do `resetFit` and `cellSide()` in `grid.js`
-  (the latter shadowed by the `window.cellSide` getter the tests use), `orderedKeys` in
-  `store.js`, `cacheDrop` in `feeds/cache.js`, the `const alias` in `Label` and the no-op
-  `onPointerDown` in `cards.jsx`. `err.retryAfter` in `feeds/nws.js` is assigned and never
-  read, which means the backoff ladder ignores `Retry-After` entirely.
 - `flashUntil` is dead for rendering: `devices.js` writes it on every `upsert`, `main.jsx`
   and `feeds/feed.js` set it, and five test files construct records with it, but the flash
   class on a card comes from `rec.flashing`, which nothing reads `flashUntil` to derive.
@@ -104,14 +98,6 @@
   the shipped `areEqual` always returns `false`, `memo()` provides no memoisation and only
   adds a wrapper component; whether the gesture freeze it does provide survives
   signal-driven updates, which re-render the inner component directly, is unverified.
-- Smaller items: `sources.jsx` returns before its `useState` when
-  `Capacitor.isNativePlatform()` is false, which is a conditional hook that happens to be
-  constant per platform. `storageBroken` in `store.js` is never reset, where `loadAliases`
-  and `loadSettings` both clear their flag on reload. `geocode.js`'s `cache` is unbounded, so
-  a user typing many searches grows it for the page's lifetime. And `RenameInput`'s Enter
-  path calls `postAlias` then unmounts the input, which most browsers do not fire `blur` on,
-  so the `onBlur` handler's second `postAlias` probably does not run — unconfirmed, and if
-  it does every rename POSTs twice.
 
 ## Information feeds
 

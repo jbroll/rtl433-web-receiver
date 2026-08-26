@@ -102,7 +102,9 @@ async function runFeed(feed, ctx) {
       // The feed id folds in too, or every feed at the same fail count would
       // still jitter to the same offset.
       const jittered = Math.round(wait * (0.9 + 0.2 * ((fails * 2654435761 + stringHash(feed.id)) % 1000) / 1000))
-      setState(feed.id, { status: 'error', err: message, fails, nextAt: Date.now() + jittered })
+      // A provider naming its own retry window overrides the ladder's guess.
+      const delay = Math.max(e && e.retryAfter || 0, jittered)
+      setState(feed.id, { status: 'error', err: message, fails, nextAt: Date.now() + delay })
       publishError(feed, message)
     }
   } finally {

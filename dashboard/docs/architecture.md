@@ -319,10 +319,14 @@ policy asks for.
 
 A failed run keeps the last good values on the card and adds the error as a
 plain string, so it renders through the scalar path and can be hidden like any
-other value. Retries climb 30m, 1h, 2h, 4h and stop at 6h, jittered so several
-feeds failing on one outage do not come back in lockstep. A point outside the
-United States makes NWS return 404, which is terminal: that feed stops rather
-than climbing the ladder against a permanent answer. The locally computed feeds
+other value. Retries climb 30m, 1h, 2h, 4h and stop at 6h, jittered per feed
+(a DJB2 hash of the feed id folded into the jitter) so several feeds failing on
+one outage do not come back in lockstep. If the response carries a
+`Retry-After` header, `nws.js` reads it into `err.retryAfter`, and `feed.js`'s
+catch takes `Math.max(err.retryAfter, jittered)` — the server's own wait wins
+when it asks for longer than the ladder would. A point outside the United
+States makes NWS return 404, which is terminal: that feed stops rather than
+climbing the ladder against a permanent answer. The locally computed feeds
 work anywhere.
 
 A feed that fetches declares `cached: true`, and its results go to

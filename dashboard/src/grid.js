@@ -6,8 +6,6 @@ const $ = (id) => document.getElementById(id)
 
 let cell = 150
 
-export function cellSide() { return cell }
-
 export const cellSignal = signal(cell)
 
 // The width below which a cell stops being legible: at 110px a 390px phone
@@ -77,10 +75,6 @@ let fitting = new Map()
 
 export function trackFit(node, em) {
   fitting.set(node, { node: node, em: em })
-}
-
-export function resetFit() {
-  fitting = new Map()
 }
 
 export function fittingSize() { return fitting.size }

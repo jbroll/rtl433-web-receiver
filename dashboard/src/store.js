@@ -47,6 +47,7 @@ export function defaultSize(count) {
 
 export function loadCardState() {
   cardState.value = blankState()
+  storageBroken = false
   let raw
   try {
     raw = localStorage.getItem(CARDS_KEY)
@@ -214,8 +215,6 @@ export function setCardHidden(key, hidden) {
   onEdit()
   saveCardState()
 }
-
-export function orderedKeys() { return cardState.value.order.filter(k => devices.value.has(k)) }
 
 export function moveCard(key, beforeKey) {
   const s = cardState.value

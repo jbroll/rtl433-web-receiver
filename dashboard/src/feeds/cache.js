@@ -37,6 +37,4 @@ export function cacheGet(id) { return entries[id] || null }
 
 export function cacheSet(id, entry) { entries[id] = entry; save() }
 
-export function cacheDrop(id) { delete entries[id]; save() }
-
 export function cacheClear() { entries = Object.create(null); save() }

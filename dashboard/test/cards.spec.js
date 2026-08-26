@@ -764,6 +764,21 @@ test("committing a rename closes the input and shows the new name", async ({ pag
   await expect(page.locator(CARD + " .nm")).toHaveText("Roof station");
 });
 
+test("an Enter-committed card rename posts $alias once", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  let posts = 0;
+  await page.route("**/$alias", (route) => { posts++; route.continue(); });
+  await page.dblclick(CARD + " .lbl");
+  await page.fill(CARD + " .lbl input", "Roof station");
+  const posted = page.waitForResponse((r) => r.url().includes("$alias"));
+  await page.press(CARD + " .lbl input", "Enter");
+  await posted;
+  // The unmount from setRenaming(false) may fire a blur asynchronously.
+  await page.waitForTimeout(300);
+  expect(posts).toBe(1);
+});
+
 test("the device table keeps up after a checkbox takes focus", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.click("#tab-devices");

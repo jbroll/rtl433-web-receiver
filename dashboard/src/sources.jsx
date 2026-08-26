@@ -17,14 +17,13 @@ export function SourcesView() {
           </li>
         ))}
       </ul>
-      <ScanButton />
+      {Capacitor.isNativePlatform() && <ScanButton />}
       <SourceForm />
     </>
   )
 }
 
 function ScanButton() {
-  if (!Capacitor.isNativePlatform()) return null
   const [state, setState] = useState({ status: 'idle', found: [] })
 
   async function scan() {

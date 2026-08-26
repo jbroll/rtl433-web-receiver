@@ -1,7 +1,7 @@
-import { test, beforeEach } from 'node:test'
+import { test, mock, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { geocode, reverseGeocode, resetGeocode } from '../src/geocode.js'
+import { geocode, reverseGeocode, resetGeocode, geocodeCacheSize } from '../src/geocode.js'
 
 const BOULDER = [{ lat: '40.0149856', lon: '-105.2705456', display_name: 'Boulder, Colorado, United States' }]
 
@@ -70,6 +70,21 @@ test('a failed request does not wedge the queue behind it', async () => {
   await assert.rejects(() => geocode('first'))
   fakeFetch(BOULDER)
   assert.equal((await geocode('second')).length, 1)
+})
+
+test('the cache drops its oldest entry past 100 distinct queries', async () => {
+  mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  try {
+    fakeFetch(BOULDER)
+    for (let i = 0; i < 150; i++) {
+      const found = geocode(`query ${i}`)
+      mock.timers.tick(1000)
+      await found
+    }
+    assert.equal(geocodeCacheSize(), 100)
+  } finally {
+    mock.timers.reset()
+  }
 })
 
 test('reverse geocoding yields just the label', async () => {

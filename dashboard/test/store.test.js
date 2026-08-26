@@ -30,9 +30,7 @@ beforeEach(() => {
 
 test('a new card appends, hides, and puts status fields at the bottom', () => {
   store.ensureCard(K, READ)
-  assert.deepEqual(store.orderedKeys(), [])
   devices.value.set(K, { key: K, merged: READ })
-  assert.deepEqual(store.orderedKeys(), [K])
   assert.equal(store.cardHidden(K), true)
   assert.deepEqual(store.visibleValues(K, READ), ['temperature_F', 'humidity'])
   assert.deepEqual(store.bottomFields(K, READ), ['battery_ok'])
@@ -73,7 +71,6 @@ test('a device nobody showed is dropped from storage once it is gone', () => {
   const live = `${BASE} src/Nexus-TH/2`
   devices.value.set(live, { key: live, merged: READ })
   store.saveCardState()
-  assert.deepEqual(store.orderedKeys(), [])
   assert.deepEqual(JSON.parse(localStorage.getItem('rtl433.dashboard.v1')).order, [K])
 })
 
