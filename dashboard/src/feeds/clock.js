@@ -1,4 +1,4 @@
-import { offsetMinutes, offsetText, isDST, formatTime } from './zone.js'
+import { offsetMinutes, offsetText, isDST, formatTime } from '../zone.js'
 
 function zoneLabel(date, zone) {
   const part = new Intl.DateTimeFormat('en-US', {

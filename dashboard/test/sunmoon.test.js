@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { sunEvents, moonPhase, moonTimes } from '../src/astro.js'
-import { hhmm } from '../src/feeds/zone.js'
+import { hhmm } from '../src/zone.js'
 import sun from '../src/feeds/sun.js'
 import moon from '../src/feeds/moon.js'
 

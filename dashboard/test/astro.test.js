@@ -5,9 +5,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { julianDay, solarPosition, sunEvents, moonPhase, moonTimes } from '../src/astro.js'
+import { offsetMinutes } from '../src/zone.js'
 
 const utc = (y, mo, d, h = 0, mi = 0) => new Date(Date.UTC(y, mo - 1, d, h, mi))
 const MIN = 60000
+const DAY = 86400000
 
 function near (actual, expected, tol, label) {
   assert.ok(actual instanceof Date, `${label}: expected a Date, got ${actual}`)
@@ -157,6 +159,89 @@ test('moon illumination through January 2026', () => {
   const full = moonPhase(utc(2026, 2, 1, 12))
   assert.ok(full.illumination >= 0.98, `illumination ${full.illumination}`)
   assert.equal(full.name, 'Full Moon')
+})
+
+// Independent check for the day-drift bug fixed in astro.js: `toLocalDay` used
+// to translate a wrong-day event by exactly 86400000ms, which is wrong
+// whenever declination or the equation of time changed noticeably over that
+// day -- true at an equinox, hidden at a solstice where both are nearly flat.
+// This bisects true solar altitude across the true local calendar day
+// directly from `date.getUTCHours()` and `solarPosition`'s declination/
+// eqOfTime, entirely independent of `zoneDayStart`/`toLocalDay`/`eventMinutes`
+// -- the functions that held the bug -- so a reintroduced 86400000ms
+// translation shows up as tens to hundreds of seconds of disagreement here,
+// not as a pass.
+const BI_RAD = Math.PI / 180
+const biSin = d => Math.sin(d * BI_RAD)
+const biCos = d => Math.cos(d * BI_RAD)
+
+function trueAltitude (date, lat, lon) {
+  const { declination, eqOfTime } = solarPosition(date)
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60
+  let h = (utcMinutes + 4 * lon + eqOfTime) / 4 - 180
+  h = ((h + 180) % 360 + 360) % 360 - 180
+  return Math.asin(biSin(lat) * biSin(declination) + biCos(lat) * biCos(declination) * biCos(h)) / BI_RAD
+}
+
+// UTC instant of the zone's local midnight for the given Y-M-D.
+function trueLocalMidnight (y, mo, d, zone) {
+  const guess = Date.UTC(y, mo - 1, d)
+  return guess - offsetMinutes(new Date(guess), zone) * 60000
+}
+
+// Bisects the altitude crossing of -0.833 degrees (the sunrise/sunset
+// zenith) across the true local day, scanning forward (dir 1) for the rising
+// crossing or (dir -1) for the falling one.
+function bisectHorizon (lat, lon, dayStart, dir) {
+  const TARGET = -0.833
+  const step = 60000
+  let prevT = dayStart
+  let prevAlt = trueAltitude(new Date(prevT), lat, lon) - TARGET
+  for (let t = dayStart + step; t <= dayStart + DAY; t += step) {
+    const alt = trueAltitude(new Date(t), lat, lon) - TARGET
+    const crossed = dir === 1 ? (prevAlt <= 0 && alt > 0) : (prevAlt > 0 && alt <= 0)
+    if (crossed) {
+      let lo = prevT, hi = t, loAlt = prevAlt
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2
+        const midAlt = trueAltitude(new Date(mid), lat, lon) - TARGET
+        if ((loAlt <= 0) === (midAlt <= 0)) { lo = mid; loAlt = midAlt } else hi = mid
+      }
+      return (lo + hi) / 2
+    }
+    prevT = t; prevAlt = alt
+  }
+  return null
+}
+
+// Equinox dates, not solstices: declination and the equation of time both
+// change fastest near an equinox, so a wrong-day event translated by exactly
+// 24h (rather than re-solved) drifts tens to hundreds of seconds from the
+// true crossing. At a solstice both are nearly stationary and the same bug
+// drifts by only ~13s, inside the suite's usual 60s tolerance -- which is
+// why these dates, not June 21, are the ones that catch it.
+test('sunrise lands within a few seconds of true solar altitude at the Sydney equinox', () => {
+  const lat = -33.87, lon = 151.21, zone = 'Australia/Sydney'
+  const dayStart = trueLocalMidnight(2026, 9, 23, zone)
+  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
+  const trueMs = bisectHorizon(lat, lon, dayStart, 1)
+  near(e.sunrise, new Date(trueMs), 5000, 'sunrise (Sydney equinox, vs independent bisection)')
+})
+
+test('sunrise lands within a few seconds of true solar altitude at a high-latitude equinox (Murmansk)', () => {
+  const lat = 68.97, lon = 33.0827, zone = 'Europe/Moscow'
+  const dayStart = trueLocalMidnight(2026, 5, 19, zone)
+  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
+  const trueMs = bisectHorizon(lat, lon, dayStart, 1)
+  near(e.sunrise, new Date(trueMs), 5000, 'sunrise (Murmansk equinox, vs independent bisection)')
+})
+
+test('sunset lands within a few seconds of true solar altitude at the Denver equinox', () => {
+  const lat = 39.7392, lon = -104.9903, zone = 'America/Denver'
+  const dayStart = trueLocalMidnight(2026, 3, 21, zone)
+  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
+  const trueMs = bisectHorizon(lat, lon, dayStart, -1)
+  near(e.sunset, new Date(trueMs), 5000, 'sunset (Denver equinox, vs independent bisection)')
 })
 
 const SITES = [

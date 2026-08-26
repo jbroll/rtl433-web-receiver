@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { offsetMinutes, offsetText, isDST, hhmm } from '../src/feeds/zone.js'
+import { offsetMinutes, offsetText, isDST, hhmm } from '../src/zone.js'
 
 const utc = (y, mo, d, h = 0) => new Date(Date.UTC(y, mo - 1, d, h))
 

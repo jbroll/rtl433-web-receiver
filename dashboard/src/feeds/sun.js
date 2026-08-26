@@ -1,5 +1,5 @@
 import { sunEvents } from '../astro.js'
-import { hhmm } from './zone.js'
+import { hhmm } from '../zone.js'
 
 // The scheduler caches fields through JSON, so a Date in a rich value would
 // come back a string. Events ride as epoch ms instead.

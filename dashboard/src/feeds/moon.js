@@ -1,5 +1,5 @@
 import { moonPhase, moonTimes } from '../astro.js'
-import { hhmm } from './zone.js'
+import { hhmm } from '../zone.js'
 
 export default {
   id: 'moon',

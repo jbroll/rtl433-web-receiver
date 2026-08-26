@@ -133,7 +133,7 @@
   the Place field, which is `useState`-backed. The list cannot change during a page load.
 - Intl formatters are constructed rather than cached in three places. The `clock` renderer
   in `renderers.jsx` builds a new `Intl.DateTimeFormat` every second; `formatTime` in
-  `feeds/zone.js` builds one per call and `sun.js` calls `hhmm` eleven times per run; and
+  `zone.js` builds one per call and `sun.js` calls `hhmm` eleven times per run; and
   `isDST` builds three. Construction is the expensive half of Intl and formatting is cheap,
   so a module-level Map keyed on zone and format covers all three.
 - `main.jsx` stringifies every payload, including the ones it discards. The SSE frame
@@ -174,6 +174,14 @@
   point. Nothing shows which station, or how far.
 - Moonrise and moonset are found by sampling altitude every ten minutes and
   interpolating, so they are good to a couple of minutes, not seconds.
+- `moonTimes` in `astro.js` starts its scan window at `zoneDayStart(date, zone) -
+  offsetMinutes(date, zone) * 60000`, using the offset at the instant passed in rather
+  than the offset at true local midnight. Across a DST transition the two differ by an
+  hour, so the window can start up to about 24 hours from true local midnight instead of
+  the 14 the comment discloses. Confirmed wrong: New York (`America/New_York`) on
+  2027-11-07 reports a real 01:00 local moonset as `null` because the window already
+  closed by then. Self-corrects the next day; happens twice a year per zone, at its DST
+  transitions.
 - Sun events degrade above about 60° latitude, where the sun grazes the horizon
   and a truncated series loses precision. The tests relax to five minutes there.
 - "Use my location" cannot work on the page the receiver serves, because plain

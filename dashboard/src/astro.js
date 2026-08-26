@@ -1,7 +1,7 @@
 // Every event is the one falling inside the given zone's calendar day for the
 // Date passed in; zone defaults to UTC.
 
-import { offsetMinutes } from './feeds/zone.js'
+import { offsetMinutes } from './zone.js'
 
 const RAD = Math.PI / 180
 const DAY = 86400000
@@ -68,15 +68,23 @@ function hourAngle (lat, decl, zenith) {
 }
 
 // `m` is minutes since UTC midnight (zoneDayStart), so it can land on the
-// wrong side of local midnight; shift by 1440 until it doesn't.
-function toLocalDay (start, m, zone, dayKey) {
+// wrong side of local midnight. When it does, the event that actually falls
+// on the local day is a different instant, roughly a day away but not
+// exactly one -- declination and the equation of time both drift over a day.
+// So this re-solves `solve` at an anchor shifted a day earlier or later,
+// rather than adding/subtracting 86400000 from the answer, and returns the
+// result re-based to the original `start` so callers keep using one origin.
+function inLocalDay (start, zone, dayKey, solve) {
+  const m = solve(start)
+  if (m === null) return null
   const key = zoneDateKey(new Date(start + m * 60000), zone)
-  if (key < dayKey) return m + 1440
-  if (key > dayKey) return m - 1440
-  return m
+  if (key === dayKey) return m
+  const shiftMs = key < dayKey ? DAY : -DAY
+  const m2 = solve(start + shiftMs)
+  return m2 === null ? null : m2 + shiftMs / 60000
 }
 
-function eventMinutes (start, lat, lon, zenith, dir, zone, dayKey) {
+function solveEventMinutes (start, lat, lon, zenith, dir) {
   const noon = solarPosition(new Date(start + 43200000))
   let ha = hourAngle(lat, noon.declination, zenith)
   if (ha === null) return null
@@ -89,20 +97,28 @@ function eventMinutes (start, lat, lon, zenith, dir, zone, dayKey) {
     const next = 720 - 4 * (lon + dir * ha) - sp.eqOfTime
     m = next + 1440 * Math.round((m - next) / 1440)
   }
-  return toLocalDay(start, m, zone, dayKey)
+  return m
+}
+
+function eventMinutes (start, lat, lon, zenith, dir, zone, dayKey) {
+  return inLocalDay(start, zone, dayKey, anchor => solveEventMinutes(anchor, lat, lon, zenith, dir))
 }
 
 export function sunEvents (date, lat, lon, zone = 'UTC') {
   const start = zoneDayStart(date, zone)
   const dayKey = zoneDateKey(date, zone)
   const at = m => m === null ? null : new Date(start + m * 60000)
-  const noon = solarPosition(new Date(start + 43200000))
-  let mid = 720 - 4 * lon - noon.eqOfTime
-  mid -= 1440 * Math.floor(mid / 1440)
-  const midday = solarPosition(new Date(start + mid * 60000))
-  mid = 720 - 4 * lon - midday.eqOfTime
-  mid -= 1440 * Math.floor(mid / 1440)
-  mid = toLocalDay(start, mid, zone, dayKey)
+  const solveNoon = anchor => {
+    const noon = solarPosition(new Date(anchor + 43200000))
+    let mid = 720 - 4 * lon - noon.eqOfTime
+    mid -= 1440 * Math.floor(mid / 1440)
+    const midday = solarPosition(new Date(anchor + mid * 60000))
+    mid = 720 - 4 * lon - midday.eqOfTime
+    mid -= 1440 * Math.floor(mid / 1440)
+    return mid
+  }
+  const midday = solarPosition(new Date(start + solveNoon(start) * 60000))
+  const mid = inLocalDay(start, zone, dayKey, solveNoon)
 
   const rise = eventMinutes(start, lat, lon, 90.833, 1, zone, dayKey)
   const set = eventMinutes(start, lat, lon, 90.833, -1, zone, dayKey)

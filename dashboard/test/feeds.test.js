@@ -1,6 +1,6 @@
 globalThis.DEVICE_MAX = 24
 
-import { test, beforeEach } from 'node:test'
+import { test, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { devices } from '../src/devices.js'
@@ -181,14 +181,25 @@ test('repeated failures climb the backoff ladder and stop at six hours', async (
 
 test('two feed ids that are anagrams of each other get different jitter', async () => {
   atBoulder()
-  registerFeed(fakeFeed({ id: 'abc', run: async () => { throw new Error('down') } }))
-  registerFeed(fakeFeed({ id: 'cba', run: async () => { throw new Error('down') } }))
+  // Freeze Date.now() so nextAt - now is exactly the jitter term: comparing
+  // raw nextAt lets two calls a millisecond apart mask an equal jitter, which
+  // is exactly the bug this test exists to catch (fails 4/5 runs if the
+  // jitter's id-mixing is reverted to a plain sum).
+  const now = Date.now()
+  mock.method(Date, 'now', () => now)
+  try {
+    registerFeed(fakeFeed({ id: 'abc', run: async () => { throw new Error('down') } }))
+    registerFeed(fakeFeed({ id: 'cba', run: async () => { throw new Error('down') } }))
 
-  pump(Date.now())
-  await settle()
+    pump(now)
+    await settle()
 
-  assert.notEqual(feedState.value.get('abc').nextAt, feedState.value.get('cba').nextAt,
-    'anagram ids landed on the same retry jitter')
+    const jitterAbc = feedState.value.get('abc').nextAt - now
+    const jitterCba = feedState.value.get('cba').nextAt - now
+    assert.notEqual(jitterAbc, jitterCba, 'anagram ids landed on the same retry jitter')
+  } finally {
+    mock.restoreAll()
+  }
 })
 
 test('an unsupported location stops the feed instead of retrying', async () => {

@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { offsetMinutes } from './feeds/zone.js'
+import { offsetMinutes } from './zone.js'
 import { sources } from './sources.js'
 import { authHeader } from './auth.js'
 import { showToast } from './toast.js'
