@@ -543,16 +543,21 @@ test("the mode a card shows a value in matches its row in the devices tab", asyn
 
 test("hiding a value in a card smaller than its value count grows the rest", async ({ page }) => {
   await open(page, [LONGNAME]);
-  await setSize(page, LONG_KEY, 2, 1);
   const font = () => page.locator(LONG_CARD + ' .val[data-f="temperature_F"] .fv')
     .evaluate(n => parseFloat(n.style.fontSize));
+  const initial = await font();
 
+  // fitValues() runs from a useEffect deferred to the next frame, so read
+  // after it lands rather than racing it: wait for the font to move off the
+  // pre-resize value before treating it as the settled "before" size.
+  await setSize(page, LONG_KEY, 2, 1);
+  await expect.poll(font).not.toBe(initial);
   // Seven values in two columns need four rows; hiding one drops it to three.
   const before = await font();
   await page.click("#tab-devices");
   await mode(page, LONG_KEY, "rain_mm").selectOption("hidden");
   await page.click("#tab-cards");
-  expect(await font()).toBeGreaterThan(before);
+  await expect.poll(font).toBeGreaterThan(before);
 });
 
 test("hiding a card drops it in edit mode as well as normal mode", async ({ page }) => {
@@ -1265,14 +1270,18 @@ test("a card resized larger renders larger type", async ({ page }) => {
   const cell = await page.evaluate(() => cellSide);
   const font = () => page.locator(CARD + ' .val[data-f="temperature_F"] .fv')
     .evaluate(n => parseFloat(n.style.fontSize));
+  const initial = await font();
 
   await dragHandle(page, CARD, -4000, -4000);
   expect(await spans(page, CARD)).toEqual({ col: "span 1 auto", row: "span 1 auto" });
+  // fitValues() runs from a useEffect deferred to the next frame, so wait for
+  // the font to move off its pre-resize value instead of racing the fit.
+  await expect.poll(font).not.toBe(initial);
   const small = await font();
 
   await dragHandle(page, CARD, 3 * cell, 3 * cell);
   expect(await spans(page, CARD)).toEqual({ col: "span 4 auto", row: "span 4 auto" });
-  expect(await font()).toBeGreaterThan(small);
+  await expect.poll(font).toBeGreaterThan(small);
 });
 
 test("a value shrinks to fit its box instead of ellipsizing", async ({ page }) => {
@@ -1284,11 +1293,13 @@ test("a value shrinks to fit its box instead of ellipsizing", async ({ page }) =
       .filter(fv => fv.scrollWidth > fv.clientWidth)
       .map(fv => fv.textContent + " @" + fv.style.fontSize));
 
-  expect(await clipped()).toEqual([]);
+  await expect.poll(clipped).toEqual([]);
 
   for (const [w, h] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]]) {
     await setSize(page, LONG_KEY, w, h);
-    expect(await clipped(), `${w}x${h}`).toEqual([]);
+    // fitValues() runs from a useEffect deferred to the next frame, so a read
+    // taken right after the resize could still see the pre-fit font size.
+    await expect.poll(clipped, { message: `${w}x${h}` }).toEqual([]);
   }
 });
 
