@@ -46,33 +46,6 @@ because it needs a message still in flight — the two `POST`s to one topic in
 `test/broker.test.js` and `test/http.test.js`, and the late subscriber in
 `test/events.test.js` — gets 40 ms, or the setting if it is higher.
 
-## Verifying the build's dependencies
-
-`scripts/build-dashboard.js` calls into `dashboard/build.js`, which imports
-`esbuild`. `esbuild` is pinned in the bridge's own `devDependencies`, at the
-version `dashboard/package.json` pins, so `npm ci` in `bridge/` alone
-resolves it even where `dashboard/node_modules` does not exist yet. Confirm
-this after touching `package.json` or `scripts/build-dashboard.js`:
-
-```
-cp -r bridge /tmp/bridge-check
-cp -r dashboard /tmp/dashboard-check   # same relative position: ../dashboard
-rm -rf /tmp/dashboard-check/node_modules
-cd /tmp/bridge-check
-rm -rf node_modules
-npm install
-npm run build
-```
-
-Expect an `esbuild` bundling error (`Could not resolve "preact"` and
-similar), not `ERR_MODULE_NOT_FOUND` for `esbuild` itself — that's the
-difference this dependency makes. `dashboard/`'s own runtime dependencies
-(`preact`, `@preact/signals`, `pigeon-maps`, and the rest) still need
-`npm install` run in `dashboard/`, same as before; run it there and repeat
-`npm run build` in `/tmp/bridge-check` to see the full build succeed and
-print the output path and byte count. Delete `/tmp/bridge-check` and
-`/tmp/dashboard-check` afterward.
-
 ## Adding a test
 
 Match the existing file per module: `test/topic.test.js` for

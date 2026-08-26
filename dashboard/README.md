@@ -19,4 +19,5 @@ firmware-served build works with no setup. The settings panel adds and removes b
 - [`docs/user-manual.md`](docs/user-manual.md) — the tabs, the card grid, edit mode, and
   the source list
 - [`docs/architecture.md`](docs/architecture.md) — the modules and the build
+- [`docs/development.md`](docs/development.md) — building for the receiver and the bridge
 - [`docs/backlog.md`](docs/backlog.md) — what is deliberately left undone

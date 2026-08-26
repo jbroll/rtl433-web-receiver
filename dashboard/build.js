@@ -101,6 +101,13 @@ async function main() {
     const { raw, gz } = await writeProgmem(path)
     process.stderr.write(`${path} ${gz} bytes gzipped from ${raw}\n`)
   }
+
+  if (process.argv.includes('--bridge-public')) {
+    const out = join(HERE, '..', 'bridge', 'public', 'index.html')
+    await mkdir(dirname(out), { recursive: true })
+    await writeFile(out, html)
+    process.stderr.write(`${out} ${html.length} bytes\n`)
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await main()

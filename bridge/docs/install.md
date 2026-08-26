@@ -95,16 +95,12 @@ that file once at startup and serves it, byte for byte, on every `GET /` — the
 same split the receiver firmware makes between its own `/` route and everything
 else.
 
-`npm run build` (`scripts/build-dashboard.js`) builds `../dashboard` in place
-and writes `public/index.html`, the same self-contained artifact
-`dashboard/build.js` produces for the receiver firmware. It needs `dashboard/`
-checked out alongside `bridge/` and `dashboard/node_modules` installed
-(`npm install` in `dashboard/`) for the dashboard's own runtime dependencies
-(`preact` and the rest) — it is not resolvable from a `bridge/`-only deploy.
-`esbuild` itself, the one dependency `dashboard/build.js` needs before it gets
-that far, is pinned in the bridge's own `devDependencies` too, so `npm run
-build` doesn't fail on a missing `esbuild` even before `dashboard/`'s own
-`npm install` has run.
+The bridge does not build the dashboard itself. `npm run build:bridge` in
+`dashboard/` builds it and writes `../bridge/public/index.html` directly,
+the same self-contained artifact `dashboard/build.js` produces for the
+receiver firmware. It needs `dashboard/` checked out alongside `bridge/` and
+`dashboard/node_modules` installed (`npm install` in `dashboard/`) — it is
+not resolvable from a `bridge/`-only deploy.
 
 ## Deploying to weather.rkroll.com
 
@@ -113,9 +109,10 @@ for that deploy, using the `deploy.sh` system. Copy `secrets.env.example` to
 `secrets.env` (gitignored) and fill in `AUTH_TOKEN` — generate one with
 `openssl rand -hex 24`. `DASHBOARD_HTML` is prefilled to match
 `NODE_APP_DEPLOY_DIRS="src bin public"` in `deploy.conf`, which ships
-`npm run build`'s output alongside the app; `deploy.sh`'s node_app module runs
-`npm run build` itself when `package.json` has a `build` script, so a plain
-`deploy init` builds and deploys the dashboard together with the bridge.
+`bridge/public/` alongside the app. `bridge/package.json` has no `build`
+script, so `deploy.sh`'s node_app module does not build anything itself: run
+`npm run build:bridge` in `dashboard/` before `deploy init` to populate
+`bridge/public/index.html`.
 
 TCP 8883 opens automatically during `deploy init` via the firewall module,
 set in `DEPLOY_TYPES` and `NODE_APP_PUBLIC_PORTS="8883"`. The module runs

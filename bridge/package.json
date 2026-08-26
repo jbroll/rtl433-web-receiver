@@ -7,15 +7,11 @@
   "bin": { "mqtt-http-bridge": "bin/mqtt-http-bridge.js" },
   "files": ["bin", "src", "public", "README.md"],
   "scripts": {
-    "build": "node scripts/build-dashboard.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "aedes": "^0.51.3",
     "mqtt": "^5.10.1"
-  },
-  "devDependencies": {
-    "esbuild": "^0.24.0"
   },
   "license": "MIT"
 }

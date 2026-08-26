@@ -88,12 +88,6 @@
   `src/sse.js`'s keepalive timer is never exercised, so nothing would notice it stop
   emitting and let an idle proxy drop every stream; and `test/rotate.test.js` covers wrong,
   missing, non-JSON and empty-string tokens but not a non-object body.
-- `scripts/build-dashboard.js` reaches into `../../dashboard` to build, which only works
-  with both projects checked out side by side. The bridge does not otherwise know the
-  dashboard exists, and `DASHBOARD_HTML` is a path rather than a build step, so the
-  dashboard's own build writing directly into `bridge/public/` would be the cleaner shape.
-  Deferred here because it moves a documented workflow (`docs/development.md`) across two
-  projects rather than changing one.
 - `POST` validates a different byte sequence than it publishes. `src/server.js` parses
   `body.toString('utf8')`, which substitutes U+FFFD for invalid bytes rather than failing,
   and then publishes the raw `body`. A body with invalid UTF-8 inside a JSON string literal

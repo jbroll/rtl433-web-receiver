@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "node build.js",
+    "build:bridge": "node build.js --bridge-public",
     "start": "node build.js && node --run serve",
     "serve": "node -e \"import('node:http').then(({default:h})=>import('node:fs').then(({default:f})=>h.createServer((q,s)=>{s.writeHead(200,{'content-type':'text/html'});s.end(f.readFileSync('dist/index.html'))}).listen(8000,()=>console.log('http://127.0.0.1:8000'))))\"",
     "test": "node --test test/*.test.js && playwright test"

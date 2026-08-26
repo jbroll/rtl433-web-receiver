@@ -14,8 +14,10 @@
   since `topic.js` rejects the empty string.
 - `bin/mqtt-http-bridge.js` — wires the above together, reads config, starts
   listening, handles shutdown.
-- `scripts/build-dashboard.js` — builds `../dashboard` into `public/index.html`
-  for `DASHBOARD_HTML` to point at; not part of the request path.
+
+`public/index.html`, what `DASHBOARD_HTML` points at, is written by
+`dashboard/`'s own build (`npm run build:bridge` there), not by anything in
+the bridge. The bridge only reads the file; not part of the request path.
 
 ## Caching everything
 
