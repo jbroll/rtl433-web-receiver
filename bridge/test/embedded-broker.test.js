@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import tls from 'node:tls'
 
 import mqtt from 'mqtt'
 
@@ -208,14 +209,44 @@ test('TLS: passing a tokenStore, rotating it gates new CONNECTs by the new token
   }
 })
 
-function selfSignedCertFiles() {
-  const dir = mkdtempSync(path.join(tmpdir(), 'bridge-embedded-cert-'))
+test('TLS: overwriting the cert and key files reloads the secure context', async () => {
+  const { certPath, keyPath, dir } = selfSignedCertFiles({ subject: '/CN=original' })
+  try {
+    const embedded = await startEmbeddedBroker({
+      mqttPort: 0,
+      mqttsPort: 0,
+      tlsCert: certPath,
+      tlsKey: keyPath,
+      authToken: 's3cr3t',
+    })
+    try {
+      selfSignedCertFiles({ dir, subject: '/CN=rotated' })
+
+      const port = new URL(embedded.url.replace('mqtts:', 'https:')).port
+      await waitFor(() => new Promise((resolve) => {
+        const socket = tls.connect({ port, host: '127.0.0.1', rejectUnauthorized: false }, () => {
+          const subject = socket.getPeerCertificate().subject.CN
+          socket.end()
+          resolve(subject === 'rotated')
+        })
+        socket.once('error', () => resolve(false))
+      }), 5000)
+    } finally {
+      await embedded.close()
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+function selfSignedCertFiles({ dir, subject = '/CN=test-only' } = {}) {
+  dir = dir ?? mkdtempSync(path.join(tmpdir(), 'bridge-embedded-cert-'))
   const keyPath = path.join(dir, 'key.pem')
   const certPath = path.join(dir, 'cert.pem')
   execFileSync('openssl', [
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
     '-keyout', keyPath, '-out', certPath,
-    '-days', '1', '-subj', '/CN=test-only',
+    '-days', '1', '-subj', subject,
   ])
   return { certPath, keyPath, dir }
 }

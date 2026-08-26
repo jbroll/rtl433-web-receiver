@@ -1,6 +1,7 @@
 import net from 'node:net'
 import tls from 'node:tls'
 import fs from 'node:fs'
+import path from 'node:path'
 
 import Aedes from 'aedes'
 
@@ -36,6 +37,8 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
     ? tls.createServer({ cert: fs.readFileSync(tlsCert), key: fs.readFileSync(tlsKey) }, aedes.handle)
     : net.createServer(aedes.handle)
 
+  const certWatch = tlsEnabled ? watchCertFiles({ tlsCert, tlsKey, server }) : null
+
   const port = tlsEnabled ? mqttsPort : mqttPort
   const host = tlsEnabled ? '0.0.0.0' : '127.0.0.1'
 
@@ -56,6 +59,62 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
     // here too.
     url: tlsEnabled ? `mqtts://127.0.0.1:${boundPort}` : `mqtt://127.0.0.1:${boundPort}`,
     tlsOptions: tlsEnabled ? { rejectUnauthorized: false } : undefined,
-    close: () => new Promise((resolve) => aedes.close(() => server.close(resolve))),
+    close: () => new Promise((resolve) => {
+      certWatch?.close()
+      aedes.close(() => server.close(resolve))
+    }),
+  }
+}
+
+// certbot renews in place: it writes a new file into the archive directory
+// and repoints the live symlink at it, so a watch on the literal path alone
+// can miss the change once the old target is gone. Watching each path's
+// directory plus its resolved target's directory, re-resolved on every
+// event, survives that dance.
+function watchCertFiles({ tlsCert, tlsKey, server }) {
+  let watchers = []
+  let debounceTimer
+
+  const reload = () => {
+    clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => {
+      try {
+        server.setSecureContext({ cert: fs.readFileSync(tlsCert), key: fs.readFileSync(tlsKey) })
+      } catch (err) {
+        // A debounce firing mid-write can still catch a truncated file;
+        // keeping the running context beats dropping TLS entirely.
+        console.error('embedded broker: failed to reload TLS cert/key, keeping current context:', err.message)
+      }
+      rewatch()
+    }, 1000)
+    debounceTimer.unref()
+  }
+
+  const rewatch = () => {
+    for (const watcher of watchers) watcher.close()
+    const dirs = new Set()
+    for (const filePath of [tlsCert, tlsKey]) {
+      dirs.add(path.dirname(filePath))
+      try {
+        dirs.add(path.dirname(fs.realpathSync(filePath)))
+      } catch {
+        // Target may briefly not exist mid-rotation; the literal path's
+        // directory watch still catches the eventual change.
+      }
+    }
+    watchers = [...dirs].map((dir) => {
+      const watcher = fs.watch(dir, reload)
+      watcher.unref()
+      return watcher
+    })
+  }
+
+  rewatch()
+
+  return {
+    close: () => {
+      clearTimeout(debounceTimer)
+      for (const watcher of watchers) watcher.close()
+    },
   }
 }

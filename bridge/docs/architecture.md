@@ -148,6 +148,18 @@ an optional `tls` option (`{ rejectUnauthorized: false }` in this one case)
 to skip hostname verification for that self-connection specifically. Every
 other caller leaves it unset and keeps today's behavior exactly.
 
+`tlsCert` and `tlsKey` are read once at startup, then watched: certbot
+renews every 60 days against a 90-day certificate lifetime, so a bridge
+left running has to pick up the renewed pair without a restart. On a
+change, `watchCertFiles` in `src/embedded-broker.js` debounces for a
+second, rereads both files, and calls `server.setSecureContext({ cert,
+key })`; a failed read or call is logged and the running context is kept,
+since a debounce firing mid-write can catch a truncated file. Certbot
+replaces the live symlink's target rather than editing it in place, so the
+watch covers each path's directory and its resolved target's directory,
+re-resolving after every reload to follow the renewal into a new archive
+file.
+
 ## One token store shared by HTTP and MQTT
 
 `src/token-store.js`'s `createTokenStore` is the only mutable piece of
