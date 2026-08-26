@@ -82,13 +82,11 @@ test('the alias column sorts by the published name', () => {
   assert.deepEqual(names([A, O, F]), ['Oregon-THN132N', 'Acurite-5n1', 'Fineoffset-WH2'])
 })
 
-test('names differing only in case sort by the collator, not code point', () => {
+test('names differing only in case keep stable insertion order', () => {
   const lower = dev('acurite-5n1', { id: 1 })
   const upper = dev('Acurite-5n1', { id: 2 })
-  // Code-point order would put 'Acurite' before 'acurite' ('A' < 'a'); the
-  // locale collator treats the pair as equal and falls through to the tie
-  // break, which is stable insertion order for equal keys.
   assert.deepEqual(names([lower, upper]), ['acurite-5n1', 'Acurite-5n1'])
+  assert.deepEqual(names([upper, lower]), ['Acurite-5n1', 'acurite-5n1'])
 })
 
 test('the collator is constructed once, not per comparison', async () => {

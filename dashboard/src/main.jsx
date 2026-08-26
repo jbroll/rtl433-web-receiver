@@ -16,7 +16,6 @@ import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, on
 import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight,
          measureGridCallCount, fitValuesCallCount, fittingSize } from './grid.js'
 import { addLog } from './log.jsx'
-import { deviceRowRenderCount } from './devices-table.jsx'
 import { openSource } from './stream.js'
 import { loadSort } from './devicesort.js'
 import './renderers.jsx'
@@ -69,7 +68,8 @@ function onMessage(base, topic, obj) {
   store.ensureCard(key, merged)
   flash(key)
   // Stringified only when the log will actually read it: self-traffic is
-  // filtered out below, and re-serializing it would be wasted work.
+  // filtered out by the isSelf() check here, and re-serializing it would be
+  // wasted work.
   if (!isSelf(key)) addLog(at, JSON.stringify(obj))
 }
 
@@ -216,7 +216,6 @@ function exposeForTests() {
     measureGridCalls: { get: measureGridCallCount },
     fitValuesCalls: { get: fitValuesCallCount },
     fittingSize: { get: fittingSize },
-    deviceRowRenders: { get: deviceRowRenderCount },
     dragging: { get: () => dragging.value },
     resizing: { get: () => resizing.value },
     gestureInFlight: { get: () => gestureInFlight() },

@@ -7,7 +7,7 @@ export const log = signal([])
 let nextId = 0
 
 export function addLog(at, raw) {
-  const next = [{ id: nextId++, at, time: new Date(at).toLocaleTimeString(), raw }, ...log.value]
+  const next = [{ id: nextId++, time: new Date(at).toLocaleTimeString(), raw }, ...log.value]
   if (next.length > LOG_MAX) next.length = LOG_MAX
   log.value = next
 }

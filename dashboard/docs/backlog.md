@@ -165,9 +165,11 @@
 - A prior backlog entry claimed the devices table re-renders every row on every packet.
   Measured: `Rows()` in `devices-table.jsx` does re-run its whole loop on any one device's
   change, since it reads every device's `r.merged.value` to compute field lists, but
-  `@preact/signals` already gives `DeviceRow` its own subscription to the signals it reads,
-  so an unrelated row's function body never runs — confirmed by counting `DeviceRow` calls
-  across a packet to one of two devices. `Rows()`'s own per-packet work (`sortDevices()` and
+  `@preact/signals`'s global `Component.prototype.shouldComponentUpdate` already skips a
+  signal-reading component when no state changed and every prop is reference-equal, and
+  `upsert()` mutates the record in place so `props.r` keeps its identity — confirmed by
+  counting `DeviceRow` calls across a packet to one of two devices. `Rows()`'s own
+  per-packet work (`sortDevices()` and
   a `cardFields()` call per device) is real but untouched by this correction.
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
