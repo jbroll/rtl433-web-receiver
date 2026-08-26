@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import tls from 'node:tls'
@@ -236,6 +236,60 @@ test('TLS: overwriting the cert and key files reloads the secure context', async
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('TLS: renewing through a certbot-style live symlink reloads the secure context', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'bridge-embedded-certbot-'))
+  try {
+    const archive1 = path.join(root, 'archive1')
+    const live = path.join(root, 'live')
+    mkdirSync(archive1)
+    mkdirSync(live)
+    const { certPath: realCert1, keyPath: realKey1 } = selfSignedCertFiles({ dir: archive1, subject: '/CN=original' })
+    const certPath = path.join(live, 'cert.pem')
+    const keyPath = path.join(live, 'key.pem')
+    symlinkSync(realCert1, certPath)
+    symlinkSync(realKey1, keyPath)
+
+    const embedded = await startEmbeddedBroker({
+      mqttPort: 0,
+      mqttsPort: 0,
+      tlsCert: certPath,
+      tlsKey: keyPath,
+      authToken: 's3cr3t',
+    })
+    try {
+      const port = new URL(embedded.url.replace('mqtts:', 'https:')).port
+      const peerSubject = () => new Promise((resolve) => {
+        const socket = tls.connect({ port, host: '127.0.0.1', rejectUnauthorized: false }, () => {
+          const subject = socket.getPeerCertificate().subject.CN
+          socket.end()
+          resolve(subject)
+        })
+        socket.once('error', () => resolve(undefined))
+      })
+      assert.equal(await peerSubject(), 'original')
+
+      const archive2 = path.join(root, 'archive2')
+      mkdirSync(archive2)
+      const { certPath: realCert2, keyPath: realKey2 } = selfSignedCertFiles({ dir: archive2, subject: '/CN=rotated' })
+
+      // certbot repoints the live symlink by writing a new link at a temp
+      // name and renaming it over the old one, not by editing the target file.
+      const certTmp = path.join(live, 'cert.pem.tmp')
+      symlinkSync(realCert2, certTmp)
+      renameSync(certTmp, certPath)
+      const keyTmp = path.join(live, 'key.pem.tmp')
+      symlinkSync(realKey2, keyTmp)
+      renameSync(keyTmp, keyPath)
+
+      await waitFor(async () => (await peerSubject()) === 'rotated', 5000)
+    } finally {
+      await embedded.close()
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })
 

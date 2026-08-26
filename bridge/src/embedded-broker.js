@@ -66,11 +66,8 @@ export async function startEmbeddedBroker({ mqttPort = 1883, mqttsPort = 8883, t
   }
 }
 
-// certbot renews in place: it writes a new file into the archive directory
-// and repoints the live symlink at it, so a watch on the literal path alone
-// can miss the change once the old target is gone. Watching each path's
-// directory plus its resolved target's directory, re-resolved on every
-// event, survives that dance.
+// Watching directories, not the files, survives certbot repointing the
+// live symlink at a new archive file instead of editing it in place.
 function watchCertFiles({ tlsCert, tlsKey, server }) {
   let watchers = []
   let debounceTimer
