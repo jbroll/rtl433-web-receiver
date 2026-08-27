@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { julianDay, solarPosition, sunEvents, moonPhase, moonTimes } from '../src/astro.js'
+import { julianDay, solarPosition, sunEvents, moonPhase, moonTimes, localMidnight } from '../src/astro.js'
 import { offsetMinutes } from '../src/zone.js'
 
 const utc = (y, mo, d, h = 0, mi = 0) => new Date(Date.UTC(y, mo - 1, d, h, mi))
@@ -320,6 +320,69 @@ test('no astroDusk is reported on a spring-forward day that holds no crossing', 
     const e = sunEvents(new Date(from + (to - from) / 2), lat, lon, zone)
     assert.equal(e.astroDusk, null, `${zone} ${y}-${mo}-${d}: astroDusk was ${e.astroDusk}`)
   }
+})
+
+// A local day near the polar summer boundary can hold two crossings of one
+// altitude in one direction: one left over from the previous evening, one
+// belonging to this day's own. Reporting the first put Tromso's civil dusk
+// 21.5 hours before the sunset it follows, and its sunset before its sunrise.
+test('a day holding two crossings of one direction reports the one its daylight ends with', () => {
+  const lat = 69.65, lon = 18.96, zone = 'Europe/Oslo'
+
+  const [from, to] = localDay(2026, 8, 15, zone)
+  const e = sunEvents(new Date(from + (to - from) / 2), lat, lon, zone)
+  const dusks = []
+  for (let t = from; t < to; t = t + 60000) {
+    const next = Math.min(t + 60000, to)
+    if (trueAltitude(new Date(t), lat, lon) > -6 && trueAltitude(new Date(next), lat, lon) <= -6) dusks.push(next)
+  }
+  assert.equal(dusks.length, 2, `expected two civil dusks, got ${dusks.length}`)
+  near(e.civilDusk, new Date(bisectCrossing(lat, lon, dusks[1] - 60000, to, -6, -1)), 1000, 'civilDusk')
+  assert.ok(e.civilDusk > e.sunset, `civilDusk ${e.civilDusk?.toISOString()} is not after sunset ${e.sunset?.toISOString()}`)
+
+  const [f2, t2] = localDay(2026, 7, 27, zone)
+  const e2 = sunEvents(new Date(f2 + (t2 - f2) / 2), lat, lon, zone)
+  assert.ok(e2.sunset > e2.sunrise, `sunset ${e2.sunset?.toISOString()} is not after sunrise ${e2.sunrise?.toISOString()}`)
+  assert.equal(localDateKey(e2.sunset, zone), '2026-07-27')
+})
+
+// At the edge of the midnight-sun season a local day holds a sunrise and no
+// sunset. dayLength used to fall through to 0, which reads as "0h 0m" and
+// puts the dial's sun below the horizon on a day with 22 hours of it.
+test('dayLength on a day holding one horizon crossing runs to the window edge', () => {
+  const lat = 78.22, lon = 15.65, zone = 'Arctic/Longyearbyen'
+  const [from, to] = localDay(2026, 4, 17, zone)
+  const e = sunEvents(new Date(from + (to - from) / 2), lat, lon, zone)
+  assert.ok(e.sunrise instanceof Date, `sunrise was ${e.sunrise}`)
+  assert.equal(e.sunset, null, `sunset was ${e.sunset}`)
+  assert.equal(e.alwaysUp, false)
+  assert.ok(Math.abs(e.dayLength - (to - e.sunrise.getTime())) < 1, `dayLength ${e.dayLength} vs ${to - e.sunrise.getTime()}`)
+  assert.ok(e.dayLength > 21.5 * 3600000, `dayLength ${e.dayLength / 3600000}h`)
+})
+
+// Santiago springs forward at 24:00, so 2026-09-06 has no 00:00 and begins at
+// 01:00 local. Reading an offset twice oscillated between -04 and -03 and
+// settled on 23:00 the previous day, stretching one window and truncating the
+// other by an hour.
+test('localMidnight starts the day where the zone actually starts it', () => {
+  for (const [zone, y, mo, d] of [
+    ['America/Santiago', 2026, 9, 6], ['America/Santiago', 2027, 9, 5],
+    ['America/Santiago', 2026, 4, 5], ['America/Havana', 2026, 3, 8],
+    ['Pacific/Apia', 2026, 9, 27], ['Arctic/Longyearbyen', 2026, 3, 29]
+  ]) {
+    const key = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    const t = localMidnight(y, mo, d, zone)
+    assert.equal(localDateKey(new Date(t), zone), key, `${zone} ${key} starts on the wrong date`)
+    assert.notEqual(localDateKey(new Date(t - 1), zone), key, `${zone} ${key} starts a minute late`)
+  }
+})
+
+test('the Santiago 24:00 spring-forward days are bounded 24 hours apart in real time', () => {
+  const start = localMidnight(2026, 9, 5, 'America/Santiago')
+  const mid = localMidnight(2026, 9, 6, 'America/Santiago')
+  const end = localMidnight(2026, 9, 7, 'America/Santiago')
+  assert.equal(mid - start, 24 * 3600000, 'the day before the transition is not 24 hours')
+  assert.equal(end - mid, 23 * 3600000, 'the transition day is not 23 hours')
 })
 
 const SITES = [

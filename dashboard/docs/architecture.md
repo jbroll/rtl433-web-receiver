@@ -374,12 +374,20 @@ day. A card in a zone hours from UTC otherwise shows yesterday's or tomorrow's s
 
 `sunEvents` takes the two instants that bound that local day, samples solar altitude
 across them every minute, and bisects each event's altitude crossing inside the window.
-The window is 23 to 25 hours long across a DST transition, and its start is read from
-the offset at local midnight rather than at UTC midnight, so a transition day is bounded
-as it actually runs. An event has no representation outside the window, so none can be
-dated on the wrong day and none can be reported on a day whose crossing does not exist.
-Solar noon is the one instant of zero hour angle inside the window, solved rather than
-searched. An earlier version solved each event at a fixed anchor and corrected the
+The window is 23 to 25 hours long across a DST transition. Each bound is the first
+instant carrying that local date, bisected against the zone rather than derived from an
+offset, which reads the wrong side of a transition and has no answer at all where local
+midnight is skipped (Santiago springs forward at 24:00) or happens twice. An event has
+no representation outside the window, so none can be dated on the wrong day and none can
+be reported on a day whose crossing does not exist. Solar noon is the one instant of
+zero hour angle inside the window, solved rather than searched.
+
+A day near the polar summer boundary can hold two crossings of one altitude in the same
+direction, one left over from the previous evening. The dawn reported is the first and
+the dusk the last, so each pairs with that day's own sunrise and sunset. A day holding
+one horizon crossing has its daylight measured to the window edge; falling through to
+zero there printed "0h 0m" and put the dial's sun below the horizon on a day with 22
+hours of it. An earlier version solved each event at a fixed anchor and corrected the
 answer afterwards, which mistimed the events it had to correct by up to 1,951 s and
 emitted spurious ones on short days.
 

@@ -69,8 +69,14 @@ const CX = 50, CY = 38, R = 30
 function sunAngle(v, now) {
   if (v.alwaysUp) return 270
   if (v.alwaysDown) return 90
-  if (v.sunrise === null || !v.dayLength) return 90
-  const into = ((now - v.sunrise) % DAY + DAY) % DAY
+  if (!v.dayLength) return 90
+  // A day whose sunrise fell before local midnight still has a sunset and a
+  // daylight span, so the arc can be walked back from its end.
+  const rise = v.sunrise === null
+    ? (v.sunset === null ? null : v.sunset - v.dayLength)
+    : v.sunrise
+  if (rise === null) return 90
+  const into = ((now - rise) % DAY + DAY) % DAY
   if (into <= v.dayLength) return 180 + 180 * (into / v.dayLength)
   return 180 * (into - v.dayLength) / (DAY - v.dayLength)
 }

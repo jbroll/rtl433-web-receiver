@@ -1,12 +1,7 @@
 // Sweeps sunEvents against an independent bisection of true solar altitude,
-// over two years of local days at sites chosen to cover every latitude band
-// and DST rule. Not a *.test.js: it takes minutes and is run by hand.
-//
-//   node test/astro-sweep.js [--module ../src/astro.js] [--years 2026,2027]
-//
-// A module under test may set globalThis.__sweepCounters to a counter object;
-// whatever it holds is printed with the results, which is how the pre-fix
-// anchor-and-correct fallback rate was measured.
+// over two years of local days at sites covering every latitude band and DST
+// rule. Not a *.test.js: it takes minutes and is run by hand. See
+// docs/development.md.
 
 import { offsetMinutes } from '../src/zone.js'
 
@@ -80,9 +75,14 @@ const SITES = [
   ['Null', 0, 0, 'UTC']
 ]
 
+const keyFormatters = new Map()
 function zoneKey (t, zone) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' })
-    .formatToParts(new Date(t))
+  let f = keyFormatters.get(zone)
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    keyFormatters.set(zone, f)
+  }
+  const parts = f.formatToParts(new Date(t))
   const p = Object.create(null)
   for (const { type, value } of parts) p[type] = value
   return `${p.year}-${p.month}-${p.day}`
@@ -98,10 +98,16 @@ function refAltitude (t, lat, lon) {
   return Math.asin(rsin(lat) * rsin(declination) + rcos(lat) * rcos(declination) * rcos(h)) / RAD
 }
 
+// The first minute whose zone-local date is y-mo-d: an offset guess walked to
+// the boundary, so the reference window shares no arithmetic with astro.js.
 function refMidnight (y, mo, d, zone) {
   const utcMidnight = Date.UTC(y, mo - 1, d)
+  const key = zoneKey(utcMidnight, 'UTC')
   const guess = utcMidnight - offsetMinutes(new Date(utcMidnight), zone) * 60000
-  return utcMidnight - offsetMinutes(new Date(guess), zone) * 60000
+  let t = utcMidnight - offsetMinutes(new Date(guess), zone) * 60000
+  while (zoneKey(t, zone) >= key) t -= 60000
+  while (zoneKey(t, zone) < key) t += 60000
+  return t
 }
 
 // Every crossing of `target` in the local day, from an independent
@@ -148,7 +154,10 @@ for (const [name, lat, lon, zone] of SITES) {
       for (const [event, target, dir] of EVENTS) {
         const got = e[event]
         const all = refCrossings(from, to, lat, lon, target, dir)
-        const want = all.length ? all[0] : null
+        // Chosen here independently of the implementation: of two crossings in
+        // one direction the dawn is the first and the dusk the last, so this
+        // line disagrees if sunEvents ever picks the other one.
+        const want = all.length ? (dir === 1 ? all[0] : all[all.length - 1]) : null
         if (all.length > 1) ambiguous++
         if (got === null && want === null) continue
         if (got === null) { missed++; continue }
@@ -156,8 +165,6 @@ for (const [name, lat, lon, zone] of SITES) {
         if (zoneKey(got.getTime(), zone) !== key) wrongDay++
         if (want === null) { spurious++; continue }
         const err = Math.abs(got.getTime() - want) / 1000
-        // A day holding two crossings of one direction: reporting the other
-        // one is a different choice, not a mistimed event.
         if (err > 40000 && all.length > 1) { alternate++; continue }
         if (err > 1) over1s++
         if (err > 60) over60s++
@@ -181,7 +188,7 @@ console.log(`missed        ${missed} (crossing in the local day reported as null
 console.log(`over 1s       ${over1s} (${(100 * over1s / emitted).toFixed(3)}%)`)
 console.log(`over 60s      ${over60s}`)
 console.log(`two-crossing  ${ambiguous} events on a day holding two crossings of that direction`)
-console.log(`alternate     ${alternate} of those reported as the later crossing`)
+console.log(`alternate     ${alternate} of those reported as the other crossing`)
 if (worst) console.log(`worst         ${worst.err.toFixed(1)}s  ${worst.name} ${worst.lat} ${worst.event} ${worst.key}`)
 if (counters) for (const [k, v] of Object.entries(counters)) console.log(`counter ${k}  ${v}`)
 const ranked = [...worstPerSite].sort((a, b) => b[1].err - a[1].err).slice(0, 8)

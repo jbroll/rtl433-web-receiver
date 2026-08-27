@@ -1,7 +1,9 @@
 // Every event is the one falling inside the given zone's calendar day for the
-// Date passed in; zone defaults to UTC.
+// Date passed in; zone defaults to UTC. Where that day holds two crossings of
+// one direction, the dawn is the first and the dusk the last, so each belongs
+// to the same night as the day's own sunrise and sunset.
 
-import { offsetMinutes } from './zone.js'
+import { offsetMinutes, zoneFormatter } from './zone.js'
 
 const RAD = Math.PI / 180
 const DAY = 86400000
@@ -22,7 +24,7 @@ export function julianDay (date) {
 // Y-M-D of `date` as seen in `zone`, zero-padded so two keys compare
 // correctly with plain string comparison.
 function zoneDateKey (date, zone) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' })
+  const parts = zoneFormatter(zone, { year: 'numeric', month: '2-digit', day: '2-digit' }, 'en-US')
     .formatToParts(date)
   const p = Object.create(null)
   for (const { type, value } of parts) p[type] = value
@@ -37,14 +39,20 @@ function zoneDayStart (date, zone) {
   return Date.UTC(y, mo - 1, d)
 }
 
-// The instant the zone-local day y-mo-d begins. The offset read at UTC
-// midnight is the wrong one within an hour of a transition, so it is read
-// again at the instant that first guess names; on a day whose local midnight
-// does not exist this settles on the instant the day does start.
-function localMidnight (y, mo, d, zone) {
+// The first instant whose zone-local date is y-mo-d. Bisected rather than
+// derived from an offset, which reads the wrong side of a transition and has
+// no answer at all where local midnight is skipped or repeated.
+export function localMidnight (y, mo, d, zone) {
   const utcMidnight = Date.UTC(y, mo - 1, d)
-  const guess = utcMidnight - offsetMinutes(new Date(utcMidnight), zone) * 60000
-  return utcMidnight - offsetMinutes(new Date(guess), zone) * 60000
+  const key = zoneDateKey(new Date(utcMidnight), 'UTC')
+  let lo = utcMidnight - 26 * 3600000
+  let hi = utcMidnight + 26 * 3600000
+  while (hi - lo > 1) {
+    const t = Math.floor((lo + hi) / 2)
+    if (zoneDateKey(new Date(t), zone) < key) lo = t
+    else hi = t
+  }
+  return hi
 }
 
 // [start, end) of the zone-local day `date` falls on. 23 to 25 hours long
@@ -88,11 +96,12 @@ function solarAltitude (t, lat, lon) {
   return Math.asin(sin(lat) * sin(declination) + cos(lat) * cos(declination) * cos(h)) / RAD
 }
 
-// The first crossing of `target` altitude inside the sampled window, rising
-// (dir 1) or falling (dir -1), bisected within the minute that brackets it.
-// A crossing outside the window has no representation, so no event can be
-// reported on a day that does not contain one.
+// The crossing of `target` altitude inside the sampled window, rising (dir 1)
+// or falling (dir -1), bisected within the minute that brackets it. Of two in
+// one direction, the rising one wanted is the first and the falling one the
+// last, which pairs each with this day's own daylight rather than yesterday's.
 function crossing (alt, times, lat, lon, target, dir) {
+  let last = null
   for (let i = 1; i < alt.length; i++) {
     const a = alt[i - 1] - target
     const b = alt[i] - target
@@ -103,14 +112,15 @@ function crossing (alt, times, lat, lon, target, dir) {
       if ((solarAltitude(mid, lat, lon) - target <= 0) === (a <= 0)) lo = mid
       else hi = mid
     }
-    return (lo + hi) / 2
+    last = (lo + hi) / 2
+    if (dir === 1) return last
   }
-  return null
+  return last
 }
 
 // Solar transit is where the hour angle is zero, so it is solved rather than
-// searched; the candidate UTC days on either side cover a longitude far from
-// its zone and a window stretched by a DST transition.
+// searched. The candidate UTC days on either side cover a longitude far from
+// its zone.
 function solarTransit (from, to, lon) {
   const first = Math.floor(from / DAY) - 1
   for (let d = first; d <= Math.floor(to / DAY) + 1; d++) {
@@ -154,11 +164,15 @@ export function sunEvents (date, lat, lon, zone = 'UTC') {
     alwaysUp: up,
     alwaysDown: rise === null && set === null && !up
   }
+  // Daylight inside the window: a day holding one crossing runs to the window
+  // edge rather than to a complement that is not there.
   if (rise !== null && set !== null) {
     let len = set - rise
-    if (len < 0) len += DAY
+    if (len < 0) len += to - from
     events.dayLength = len
-  } else events.dayLength = up ? DAY : 0
+  } else if (rise !== null) events.dayLength = to - rise
+  else if (set !== null) events.dayLength = set - from
+  else events.dayLength = up ? to - from : 0
   return events
 }
 
