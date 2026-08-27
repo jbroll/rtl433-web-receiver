@@ -234,7 +234,7 @@ void rtl_433_Callback(char* message) {
   item.rssi = rtl_433_ESP::signalRssi;
   if (rtl433Queue == nullptr || xQueueSend(rtl433Queue, &item, 0) != pdTRUE) {
     rtl433QueueDropped++;
-    Log.warning(F("signal queue full, dropped %lu total" CR),
+    Log.warning(F("signal queue full, dropped %u total" CR),
                 (unsigned long)rtl433QueueDropped);
   }
 }
@@ -581,7 +581,7 @@ void setup() {
   health_store::begin();
   bootCoredumpPending = esp_core_dump_image_check() == ESP_OK;
   health_store::noteBoot((uint8_t)esp_reset_reason());
-  Log.notice(F("boot: build=%s reset=%d boot_count=%lu heap=%lu coredump=%d" CR),
+  Log.notice(F("boot: build=%s reset=%d boot_count=%u heap=%u coredump=%d" CR),
              BUILD_ID, (int)health_store::resetReason(),
              (unsigned long)health_store::bootCount(),
              (unsigned long)ESP.getFreeHeap(), bootCoredumpPending ? 1 : 0);
