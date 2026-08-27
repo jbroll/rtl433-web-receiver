@@ -58,4 +58,8 @@ function topicOf(payload, source) {
   return (source || SOURCE) + "/" + payload.model + "/" + id;
 }
 
+// Keep this a literal object, not built up by assignment or a loop:
+// dashboard/test/fixtures.js re-exports this CommonJS module via `export *`,
+// which only works because cjs-module-lexer can read named exports out of a
+// literal `module.exports = { ... }` shape.
 module.exports = { ACURITE, ACURITE_WIND, ACURITE_RAIN, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, SOURCE, topicOf };

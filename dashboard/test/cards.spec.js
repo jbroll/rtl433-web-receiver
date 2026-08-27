@@ -408,7 +408,7 @@ test("an Acurite 5n1 with three readings defaults to 2x2", async ({ page }) => {
   expect(await spans(page, CARD)).toEqual({ col: "span 2 auto", row: "span 2 auto" });
 });
 
-test("a 1x1 card's rendered box matches --cell, including at the 20px floor", async ({ page }) => {
+test("a 1x1 card's rendered box matches --cell across resizes, including at the 20px floor", async ({ page }) => {
   await open(page, [ACURITE]);
   await setGrid(page, 6, 4);
   await setSize(page, ACURITE_KEY, 1, 1);
@@ -424,6 +424,9 @@ test("a 1x1 card's rendered box matches --cell, including at the 20px floor", as
     };
   });
 
+  // width and cell both derive from the same `cell` variable, so this loop
+  // catches CSS decoupling but not a wrong formula (a uniform scale of `fit`
+  // would pass); the floor case below is what pins the arithmetic.
   for (const [w, h] of [[1200, 800], [900, 900], [1400, 500]]) {
     await page.setViewportSize({ width: w, height: h });
     await page.waitForTimeout(120);
@@ -1132,7 +1135,7 @@ test("a card dropped into the empty bottom row beside a tall card moves there", 
   expect(after.y).toBeGreaterThan(before.y + before.height / 2);
 });
 
-test("a live signal does not re-render mid-drag", async ({ page }) => {
+test("another device's live signal does not disturb a card mid-drag", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
   const box = await page.locator(CARD + " .lbl").boundingBox();
@@ -1144,20 +1147,15 @@ test("a live signal does not re-render mid-drag", async ({ page }) => {
   server.emit(OREGON);
   await page.waitForTimeout(200);
   await expect(page.locator(".ghostcard")).toHaveCount(1);
-  // A re-render would rebuild the card and lose the class the drag put on it.
+  // OREGON isn't the dragged card, so this never exercises its own signal
+  // read; see the next test for that.
   await expect(page.locator(CARD)).toHaveClass(/lifting/);
   await page.mouse.up();
   await expect(page.locator(".ghostcard")).toHaveCount(0);
   await expect(page.locator(CARD)).not.toHaveClass(/lifting/);
 });
 
-// Settles whether the memo(Card, areEqual) gesture freeze (cards.jsx:72) survives a
-// live reading for the card being dragged. It does not: Card reads rec.merged.value
-// directly, and @preact/signals re-renders a component that read a changed signal on
-// its own, independent of memo/areEqual. The drag mechanics (ghost, `lifting`, drop
-// zones) are untouched, since none of them live in Card's render output -- only the
-// displayed value updates underneath the gesture. See docs/architecture.md's "Card
-// memo" and docs/backlog.md.
+// See docs/architecture.md's "Card memo".
 test("a card's own signal update reaches its DOM mid-gesture, despite areEqual", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
@@ -1229,12 +1227,8 @@ test("values spread across the card without overflowing it", async ({ page }) =>
   expect(spanY).toBeGreaterThan(bodyBox.height * 0.7);
 });
 
-// scrollWidth/scrollHeight only see content past the right/bottom edge, not
-// above or left of it -- .lbl sits at top:-.65em by design. The value-level
-// guarantee (a reading never getting cut) is "every value in a card shares
-// the size its widest reading needs", below; overflow:hidden on .card .val
-// and .card .fv (style.css:72,97) clips before this test's metrics can see
-// a value overflowing its own box, so that case isn't duplicated here.
+// See docs/architecture.md's "Value fit" for why this only checks the right
+// and bottom edges, and doesn't duplicate the value-level overflow case.
 test("no card's content extends past its right or bottom edge", async ({ page }) => {
   await open(page, [LONGNAME, ACURITE, OREGON]);
   await page.click("#tab-cards");

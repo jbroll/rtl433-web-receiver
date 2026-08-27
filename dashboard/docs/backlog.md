@@ -19,7 +19,9 @@
   at script level. 44 of its 122 tests reach for `window.` or `page.evaluate`. Deliberate
   and endorsed, since rewriting them would destroy the evidence that the extraction lost
   nothing, but it is debt: delete the hook when the suite drives the DOM instead.
-  `store.js`'s `getCardState`/`setCardState` exist only to serve it.
+  `store.js`'s `getCardState`/`setCardState` exist only to serve it. `store.js`'s
+  `isStorageBroken()` and `exposeForTests()`'s `window.storageBroken` grew the same
+  hook further.
 - `dashboard/README.md` carries the install and build commands and the test commands.
   The bridge splits the same material into `docs/install.md` and `docs/development.md`.
   The dashboard should match.

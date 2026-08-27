@@ -124,7 +124,7 @@ displayed values in place while the drag continues (`test/cards.spec.js`, "a car
 signal update reaches its DOM mid-gesture, despite areEqual"). The gesture's own imperative
 state (the ghost element, the `lifting` class, drop zones) is untouched, because none of it
 lives in `Card`'s render output, so the drag itself keeps working; only the frozen-values
-guarantee `areEqual` was written for does not exist. Filed in `docs/backlog.md`.
+guarantee `areEqual` was written for does not exist.
 
 ## Keys
 
@@ -279,6 +279,13 @@ At extreme aspect ratios (e.g. a 2x1 card) the fit is height-bound rather than
 width-bound, so measuring width fill alone legitimately reads well below full;
 checking whichever of width or height fill is tighter stays near full
 regardless of which dimension bound the fit.
+
+`test/cards.spec.js`'s "no card's content extends past its right or bottom
+edge" only checks those two edges: `scrollWidth`/`scrollHeight` can't see
+content above or left of the box, where `.lbl` sits by design (`top:-.65em`).
+It also can't catch a value overflowing its own `.val`/`.fv` box, since
+`overflow:hidden` (`style.css:72,97`) clips that before the metric sees it —
+the value-level guarantee is the width/height-bound fit described above.
 
 ## Feed cards
 
