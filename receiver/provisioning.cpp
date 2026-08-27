@@ -139,7 +139,7 @@ static void handleRoot() {
   page +=
       "\"><button type=\"button\" onclick=\"copyToken()\">Copy</button></label><br><br>"
       "<label><input type=\"checkbox\" name=\"clear_token\" value=\"1\"> Clear stored "
-      "update token"
+      "update token (overrides any token entered above)"
 #ifdef OTA_TOKEN
       " (falls back to the build's compiled-in token, not disabled)"
 #else
@@ -195,7 +195,12 @@ static void handleSave() {
   }
 
   if (clearToken) {
-    ota_token_store::clear();
+    if (!ota_token_store::clear()) {
+      // Non-fatal, same as a failed set() below: WiFi is the essential part
+      // of this form. _stored is emptied in RAM either way, but a failed NVS
+      // remove leaves the key behind, so it comes back on the next boot.
+      Log.warning(F("provisioning: could not clear stored update token" CR));
+    }
   } else if (token.length() > 0 && !ota_token_store::set(token.c_str())) {
     // Non-fatal: WiFi is the essential part of this form. A failed token
     // save just leaves OTA on its prior token (stored, or .env), same as

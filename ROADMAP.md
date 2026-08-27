@@ -10,8 +10,8 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 
 - **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
-  The host suite (`receiver/test/host/run.sh`, twelve firmware modules
-  including `signal_store` and `alias_store` into thirteen test binaries)
+  The host suite (`receiver/test/host/run.sh`, thirteen firmware modules
+  including `signal_store` and `alias_store` into fourteen test binaries)
   runs in `ci/android` on the `gpu` host, and on a developer's machine. The
   deployed board runs the current build and reports
   it as `build` in its `Receiver/0` telemetry, which is what makes live

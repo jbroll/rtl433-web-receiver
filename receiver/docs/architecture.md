@@ -280,7 +280,7 @@ rather than leaving a stale one paired with a new ssid. Boot order tries
 these stored credentials first; see "Boot order" below.
 
 **`ota_token_store.h` / `ota_token_store.cpp`** — persists the `/$update`
-bearer token to `Preferences` namespace `"ota"`, in a fixed 33-byte buffer
+bearer token to `Preferences` namespace `"ota"`, in a fixed 65-byte buffer
 (`OTA_TOKEN_STORE_MAX`). Mirrors `wifi_store`'s fixed-buffer/NVS shape.
 `token()` returns the stored value if one exists, else the `.env`-supplied
 `OTA_TOKEN` build flag, else an empty string — `hasToken()` is false only in
@@ -305,7 +305,9 @@ IP is what makes a phone or laptop auto-open the captive portal. The page's
 third field, the OTA update token, is regenerated with `esp_random()` on
 every `GET` and stored via `ota_token_store::set()` only if submitted
 non-empty, so leaving it blank on a re-provisioning pass keeps whatever
-token was already set.
+token was already set. A "Clear stored update token" checkbox calls
+`ota_token_store::clear()` instead, overriding any token entered in the
+field on the same submit; the page says so next to the checkbox.
 
 **`mqtt_publish_store.h` / `mqtt_publish_store.cpp`** — persists up to
 `MQTT_PUBLISH_SLOTS` (3) dashboard-configured broker url/token pairs to

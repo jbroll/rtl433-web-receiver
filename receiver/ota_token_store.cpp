@@ -114,11 +114,23 @@ bool selfTest() {
               validToken("0123456789abcdef0123456789abcdef"));
   ok &= check("a rejected set leaves the prior token in place",
               strcmp(token(), "0123456789abcdef0123456789abcdef") == 0);
-  ok &= check("submitting an empty token leaves the prior token in place",
-              !set("") && strcmp(token(), "0123456789abcdef0123456789abcdef") == 0);
 
-  clear();
-  ok &= check("clear empties a stored token", _stored[0] == '\0');
+  // The checks above run with NVS closed, so set() always fails on the
+  // !_open gate and never reaches _prefs.putString()/remove() at all.
+  // Open the shim's real Preferences and flip _open on to exercise set()
+  // and clear() end to end, the same way location_store::selfTest() does.
+  ok &= check("open NVS via the shim", _prefs.begin("ota", false));
+  _open = true;
+  ok &= check("set() with NVS open writes through and round-trips",
+              set("fedcba9876543210fedcba9876543210") &&
+                  strcmp(token(), "fedcba9876543210fedcba9876543210") == 0 &&
+                  strcmp(_prefs.getString("token", "").c_str(),
+                         "fedcba9876543210fedcba9876543210") == 0);
+  ok &= check("clear() with NVS open removes the NVS key",
+              clear() && strcmp(_prefs.getString("token", "absent").c_str(), "absent") == 0);
+  ok &= check("clear() also empties the in-RAM buffer", _stored[0] == '\0');
+  _prefs.remove("token"); // tidy up regardless of the assertions above
+  _open = false;
 
   copyTruncated(_stored, sizeof(_stored), saved);
   _open = saved_open;
