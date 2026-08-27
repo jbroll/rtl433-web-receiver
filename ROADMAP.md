@@ -65,6 +65,27 @@ done.
 5. **Desktop app (Electron).** Done when an `electron/` sub-project wraps the
    built dashboard and ships installers for Linux, macOS, and Windows.
    Deferred last; the browser page already covers desktop.
+6. **Ingest path for non-433 sensors.** The receiver's own card already proves
+   the shape: anything recorded through `signal_store::record()` becomes a
+   device the dashboard already knows how to draw, alias, and lay out (see
+   the BMP280 in `receiver/docs/architecture.md`). Needs a design pass first —
+   whether an ingested record authenticates with the OTA token or a second
+   credential, what rate limit it carries, and whether it counts toward
+   `totalRecorded()` — before it's an implementation goal.
+7. **Source naming.** A source — the receiver or bridge a device's cards
+   point at — can be renamed, not just the individual cards it reports. On
+   the receiver, `MDNS_PREFIX` only takes effect at build time; a portal
+   field needs a small NVS-backed store and `mdnsHostname()` preferring the
+   stored value, but the prefix also feeds `signal_store::source()`, so
+   renaming it orphans the stored `$layout` and every alias, which key on
+   the full topic. On the dashboard, Settings has no field for a source's
+   own label. One goal covers both halves; the dashboard's backlog entry for
+   this is deleted on a later branch.
+8. **Deferred: clearing a location clears only the local receiver's copy.**
+   No `DELETE`/empty-body path exists on the receiver's `$location` route,
+   so a dashboard "Clear" only clears what it holds locally, not what the
+   receiver has stored. Deferred by decision, not by a blocker; the
+   dashboard's half of this entry is deleted on a later branch.
 
 ## Sequencing
 

@@ -70,6 +70,14 @@ A receiver built with a custom `MDNS_PREFIX` won't be found by the app's
 mDNS scan, which filters on the default `rtl433-` prefix; add it manually
 by URL instead.
 
+`WIFI_PASSWORD`, `OTA_TOKEN`, and `MQTT_TOKEN` link into the built image as
+plain strings — `load_env.py` passes them to `platformio.ini` as `-D` macros,
+which `.rodata` then carries verbatim. `.env` itself is gitignored, so
+nothing reaches git history, but a `.bin` shared for flashing, or a flash
+dump read back off a recovered board, hands over all three. Never share a
+`.bin` built from a populated `.env`, and provision WiFi and the OTA token
+through the portal instead for any board that leaves the bench.
+
 `MQTT_BROKER_URL` and `MQTT_TOKEN` are optional and off by default: setting
 neither leaves the device publishing nothing through this build-flag path.
 Set `MQTT_BROKER_URL` to publish every record, retained, to a remote broker

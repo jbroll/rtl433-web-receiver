@@ -19,7 +19,8 @@ namespace signal_store {
 // SIGNAL_PAYLOAD_MAX payload shaped as one string field filling the payload,
 // with room for ArduinoJson's own bookkeeping (per platformio.ini's
 // ARDUINOJSON_POOL_CAPACITY=16 chunking). Other shapes under the same cap
-// cost more per byte; see docs/backlog.md.
+// cost more per byte: 5632 for a 595-byte object of 54 four-character keys,
+// against 758 for realistic rtl_433 field names. See docs/architecture.md.
 #define SIGNAL_JSON_POOL_BYTES 4096
 
 // The arena's alignment constant must cover ArduinoJson's slot union

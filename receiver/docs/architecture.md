@@ -69,7 +69,16 @@ requests a whole `ARDUINOJSON_POOL_CAPACITY`-slot chunk up front rather than
 growing to fit the document — even a small message costs a few-hundred-byte
 heap round trip per parse; the project's build now sets
 `ARDUINOJSON_POOL_CAPACITY=16` (`platformio.ini`) so that first chunk, and the
-arena that has to hold it, stay small. `RecordAllocator::allocate` returns
+arena that has to hold it, stay small. The 4 KB arena is sized against a
+payload shaped as one string field filling `SIGNAL_PAYLOAD_MAX`, not the
+worst case: arena cost is per-slot plus per-string, and ArduinoJson inlines
+keys of about three characters or less, so short-but-not-inline keys cost
+more per byte — a 595-byte object of 54 four-character keys with float
+values needs 5,632 bytes and returns `NoMemory` at 4,096. Realistic rtl_433
+field names parse to 758 bytes, well under the cap. Every `record()` call
+site is internal (the decoder queue, the two BMP280 paths, and fake
+signals), so that worst-case shape does not come off the radio; the arena
+is not sized to it on that basis. `RecordAllocator::allocate` returns
 `nullptr` on exhaustion rather than falling back to the heap, which ArduinoJson
 already treats as an ordinary out-of-memory parse error (`DeserializationError::
 NoMemory`) rather than a crash; `reallocate` keeps a block's size in a header
@@ -272,6 +281,19 @@ compare against. Six SSE client slots (`WEB_UI_SSE_CLIENTS`), each a
 `WiFiClient` plus up to four filters and one replay cursor, are fixed arrays
 sized at compile time — there is no dynamic connection list.
 
+`ChunkedResponse::flush()` gives each chunk a bounded wait, `CHUNK_WAIT_US`
+150 ms, before dropping the client, up to a `CHUNK_BUDGET_MS` 1.5 s total.
+Aborting on the first not-ready probe was tried and rejected: it truncated
+the page mid-send, and a truncated page runs no script at all, so the
+browser was left with nothing rather than a slow load. The bound instead
+lets a slow reader hold `loop()` — and the two-deep pulse-train ring behind
+it — for up to 1.5 s before the client is cut loose. `handleUpdateUpload()`
+runs the same way but with no such bound: it executes synchronously inside
+`_server.handleClient()` for every chunk of the OTA upload's multipart body,
+so `loop()` doesn't run again until the transfer completes, likely several
+seconds for a ~1.2 MB image over WiFi. Moving the upload off the loop task
+would need a second task, which the single-task design deliberately avoids.
+
 **`mqtt_routes.h` / `mqtt_routes.cpp`** — the `/$mqtt` and `/$mqtt/remove`
 request handling, split out of `web_ui.cpp` so it can be host-tested.
 `dispatch(method, path, sameOrigin, body)` returns the status, content type
@@ -408,6 +430,25 @@ escaping used to live in `web_ui.cpp`; it moved to its own
 `json_string.h`/`.cpp` so `mqtt_publish.cpp` (and its host test) don't have
 to pull in `web_ui.h`'s `WebServer`/`Update`/lwIP dependencies, none of which
 build on host.
+
+Every `mqtts://` connection is pinned to that one compiled-in CA, with no way
+to configure another, so a broker not chained to Let's Encrypt — a
+commercial cloud broker, a self-signed LAN broker — fails its handshake
+silently, showing only a dot that never turns green. `connectOnce()` logs
+`WiFiClientSecure::lastError()` alongside PubSubClient's own `state()` on a
+failed connect, since `state()` alone can't tell a bad CA or handshake
+apart from a broker that simply refused the connection. A configurable CA
+needs a form field, a multi-KB NVS entry on a partition already tight for
+blobs (see "The partition table" below), and a decision about whether to
+allow no verification at all; it waits until someone has a broker that
+needs it.
+
+`mqtt_publish::onRecord` writes each record's `JsonDocument` into a 601-byte
+stack buffer before publishing it, and `signal_store::record()` writes the
+identical doc into `sub.payload` a few lines later — the same record
+serialised twice. Publishing from `sub.payload` instead would mean changing
+the hook contract from "gets the doc" to "gets the serialised payload",
+worth doing only if the decode path measures hot; nothing has measured it.
 
 `onRecord()`, registered as a second `signal_store` record hook,
 publishes the hook's `JsonDocument` unmodified to the topic `key` already

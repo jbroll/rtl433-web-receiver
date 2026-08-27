@@ -1,7 +1,7 @@
 # Backlog
 
-Known gaps in the receiver, in rough priority order. None break it as it stands; each was
-found during review or hardware testing and deliberately left.
+Work blocked on a board being on the bench. Nothing here breaks the receiver
+as it stands; each item needs hardware in hand to verify or land safely.
 
 ## The provisioning portal is an open AP that hands out an OTA token
 
@@ -24,50 +24,6 @@ Deferred on lockout risk. A password derived wrongly, or printed in a format the
 not actually accept, leaves a board that cannot be provisioned at all except by reflashing
 over USB, and the portal is the path back from a bad flash. It needs proving on a bench
 board before it goes anywhere near a board that is not physically reachable.
-
-## Build-time secrets are readable in the firmware image
-
-`load_env.py` passes `WIFI_PASSWORD`, `OTA_TOKEN` and `MQTT_TOKEN` from `.env` to
-`platformio.ini` as `-D` string macros, and `ota_token_store.cpp:35` and
-`mqtt_publish.cpp`'s `begin()` (the `MQTT_BROKER_URL`/`MQTT_TOKEN` build-flag
-default) return them as fallbacks, so the literals link into
-`.rodata`. `.env` is gitignored and untracked, so nothing is in git history, but a `.bin`
-shared for flashing or an `esptool.py read_flash` on a recovered board yields all three as
-plain strings. Provisioning through the portal avoids it; the build-time path does not.
-
-Removing the build-time path removes the dev and CI shortcut, so the answer for now is an
-operational rule instead: never share a `.bin` built from a populated `.env`, and provision
-through the portal for any board that leaves the bench. Revisit if CI ever publishes an
-image.
-
-## No path in for sensors that are not 433 MHz decodes
-
-The receiver's own card proved the shape: anything recorded through
-`signal_store::record()` becomes a device the page already knows how to draw,
-alias, and lay out. The wired I2C half is done (see the BMP280 in
-`architecture.md`); ingest from elsewhere is not.
-
-An authenticated `POST /api/signal` taking the same rtl_433 JSON is about twenty lines
-and no new dependency, but it is a feature rather than a defect and needs its own design
-pass first: whether it authenticates with the OTA token or a second credential, what rate
-limit it carries, and whether an ingested record counts toward `totalRecorded()`. An MQTT
-subscription instead needs a broker and roughly 10 KB of flash, against 144 KB free.
-ESP-NOW suits battery nodes but pins them to the station's WiFi channel.
-
-Egress is done: see `mqtt_publish.h`/`mqtt_publish.cpp` in `architecture.md`
-and "Publishing to a remote broker" in `user-manual.md`.
-
-## A slow HTTP client can still stall the receive path
-
-`ChunkedResponse::flush()` waits up to `CHUNK_WAIT_US` 150 ms per chunk with a
-`CHUNK_BUDGET_MS` 1.5 s total budget (`web_ui.cpp:118-119`) before dropping the
-client. That bound exists because aborting on the first not-ready probe
-truncated the page and left the browser running no script at all. The cost is
-that a genuinely slow reader can hold `loop()` for up to 1.5 s, and the
-library's pulse-train ring is only two deep, so signals arriving during a stall
-are overwritten. A healthy client never waits. Removing the risk entirely means
-serving the page off a second task, which the single-task design deliberately
-avoids.
 
 ## The firmware self-test has never been read on a live device
 
@@ -97,55 +53,11 @@ before is covered only host-side, against `arduino_shim`'s `Preferences`
 fake; proving it means starting from a board still running the pre-`putBytes`
 firmware with aliases already set, then flashing this one.
 
-## `MDNS_PREFIX` has no runtime equivalent
+## The raised OTA_TOKEN_STORE_MAX is unverified against a stored 32-character token
 
-`.env`'s `MDNS_PREFIX` only takes effect at build time. The captive portal has
-no field for it, so a device provisioned entirely through SoftAP always uses
-the `rtl433` mDNS prefix default.
-
-A portal field for it needs a small NVS-backed store and `mdnsHostname()` preferring the
-stored value over the macro. The catch is that the prefix also feeds
-`signal_store::source()`, the first segment of every topic key, so changing it renames
-every device on the dashboard and orphans the stored `$layout` and every alias, both of
-which key on the full topic. The form has to say so, or the portal has to warn.
-
-## A `POST /$update` upload blocks `loop()` for the whole transfer
-
-`handleUpdateUpload()` runs synchronously inside `_server.handleClient()`
-for every chunk of the multipart body, so `loop()` — and with it `rf.loop()`
-— doesn't run until the upload finishes. The rtl_433 library's pulse-train
-ring is only two deep (see the slow-HTTP-client entry above), so signals
-arriving during the transfer can be dropped, and SSE keepalives stall for
-the duration. Worse than the `CHUNK_BUDGET_MS` 1.5 s stall above, which is
-about a slow *reader*; this is about a slow or large *upload*, likely
-several seconds for a ~1.2 MB image over WiFi.
-
-## The 4 KB record() arena is not sufficient for every shape under SIGNAL_PAYLOAD_MAX
-
-`SIGNAL_JSON_POOL_BYTES` (`signal_store.cpp`) was sized against a payload shaped
-as one string field filling `SIGNAL_PAYLOAD_MAX`. Arena cost is per-slot plus
-per-string, and ArduinoJson inlines keys of about three characters or less, so
-the worst density is short-but-not-inline keys: a 595-byte object of 54
-four-character keys with float values needs a 5632-byte arena and returns
-`NoMemory` at 4096. Realistic rtl_433 field names parse to 758 bytes, well
-under that. Every `record()` call site is internal — the decoder queue, the
-two BMP280 paths, and fake signals — so this worst-case shape does not come
-off the radio. Not raising the arena again on this basis; noted here in case a
-future call site changes that assumption.
-
-## Smaller items
-
-- Every `mqtts://` bridge is pinned to the ISRG Root X1 CA with no way to
-  configure another; a broker not chained to Let's Encrypt (a commercial cloud
-  broker, a self-signed LAN broker) will fail its handshake silently, showing
-  only a dot that never turns green. A configurable CA needs a form field, a
-  multi-KB NVS entry on a partition already tight for blobs, and a decision
-  about whether to allow no verification at all, so it waits until someone has
-  a broker that needs it. The cheap mitigation is to log the
-  `WiFiClientSecure` handshake error rather than only PubSubClient's
-  `state()`, so the reason reaches the serial log.
-- Each record is serialised twice: `mqtt_publish::onRecord` writes the doc into a
-  601-byte stack buffer and `signal_store::record()` writes the identical doc into
-  `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
-  from there means changing the hook contract from "gets the doc" to "gets the
-  serialised payload", so it is worth doing only if the decode path measures hot.
+`OTA_TOKEN_STORE_MAX` is now 65 bytes, raised from a smaller buffer sized
+for a 32-character token. Nothing has confirmed that a board with a
+32-character token already stored under the old cap still reads it back
+correctly once flashed with firmware built against the new one; proving it
+needs a board with that token set before the flash, not a freshly
+provisioned one.
