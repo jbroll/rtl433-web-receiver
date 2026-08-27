@@ -27,6 +27,14 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `location.jsx` | the location controls inside settings |
 | `geocode.js` | Nominatim search |
 | `astro.js` | solar and lunar arithmetic, no I/O |
+| `zone.js` | zone-local date arithmetic over a cache of `Intl.DateTimeFormat` instances |
+| `tick.js` | the one-second signal that is the app's only timer |
+| `settings.jsx` | the settings pane, and the panels below it |
+| `sources.jsx` | the source list controls and the mDNS scan |
+| `bridges.jsx` | the push-bridge panel and its add and remove forms |
+| `toast.js` | the transient message signal, expired off `tick.js` |
+| `toast.jsx` | the message itself |
+| `layout_template.js` | the source-published `$layout`, and the latch that stops adopting one |
 | `feeds/` | the feed scheduler, its cache, and one module per feed |
 
 `build.js` pins `absWorkingDir` to the dashboard directory. PlatformIO runs it
@@ -61,7 +69,10 @@ the first place. The page scrolls instead.
 
 When the height-derived count instead raises `cols` up to the saved `grid.cols`,
 the cell falls into the other branch, `min(usableWidth/cols, usableHeight/g.rows)`,
-which carries no 110px floor — only the 20px legibility minimum noted below. A
+which carries no 110px floor. The only floor there is 20px, and it is a
+legibility minimum rather than a guarantee: `grid.js` raises the cell to 20px
+only when the width alone already allows it, since forcing it when the viewport
+cannot fit `g.cols` at 20px would overflow the page sideways. A
 short, wide window (a landscape phone, a resized desktop window) can still land
 a cell under 110px there: raising columns to avoid scrolling and keeping every
 cell legible are in tension, and this branch resolves it in favor of not
@@ -70,6 +81,13 @@ scrolling. That is a deliberate exception to the 110px floor, not a bug.
 Both cell-size formulas subtract the grid's `column-gap`/`row-gap` from the
 usable width and height before dividing by column and row counts — `(cols-1)`
 and `(rows-1)` gaps sit between cells, not around them.
+
+A stored layout is read back through two different repairs, on purpose. A card's `w`
+and `h` go through `clampGrid`, which pulls an out-of-range value into `GRID_MIN` to
+`GRID_MAX`, because a card that is too wide is still that card and its position is worth
+keeping. `grid.cols` and `grid.rows` go through `gridNum`, which discards an
+out-of-range value for the default, because a bad grid size would carry every card on
+the page with it, and the default is a page that can be read.
 
 `.card`'s bottom padding (`1.2rem`) reserves the band `.btm` and `.age` are
 absolutely placed in. `.body` is `height:100%` of what is left, so the bottom
@@ -109,6 +127,17 @@ The grid flows sparsely (`grid-auto-flow: row`). Dense packing would backfill a
 dropped card into an earlier hole left by mixed card sizes, so a drop into an
 empty cell would reorder the DOM without moving the card on screen.
 
+A gesture excludes the layout writers that are not part of it. `setValueMode`,
+`setCardHidden` and `setGrid` in `store.js` return early while a drag or resize is in
+flight; `moveCard`, `moveValue` and `setCardSize` do not, because they are how a gesture
+commits itself. `store.js` cannot import `grid.js` without closing a cycle, so `grid.js`
+registers `dragOrResizeInFlight` through `setGestureHook`, the same shape `setEditHook`
+already uses. `dragOrResizeInFlight` deliberately excludes `renaming.value` where
+`gestureInFlight()` includes it, so a rename can commit its own name through the same
+writers. Nothing corrupts today without these guards — an in-flight resize has written
+nothing, and `endResize` re-renders over whatever a second finger did — so this closes a
+rule violation rather than an observed bug.
+
 ## Card memo
 
 `Card` in `cards.jsx` is wrapped in `memo(Card, areEqual)`. `areEqual` returns `false`
@@ -125,6 +154,27 @@ signal update reaches its DOM mid-gesture, despite areEqual"). The gesture's own
 state (the ghost element, the `lifting` class, drop zones) is untouched, because none of it
 lives in `Card`'s render output, so the drag itself keeps working; only the frozen-values
 guarantee `areEqual` was written for does not exist.
+
+## Render cost per message
+
+Two render costs that look obvious from reading the source turn out not to be there, both
+measured by counting calls rather than inferred.
+
+A message does not force two synchronous layouts in `cards.jsx`. A repeat message to a
+device already on the page re-renders `CardsView` zero times, because `upsert()` on an
+existing record writes only that device's own signals, and a new device coalesces the
+`devices.value` and `cardState.value` writes into a single render. The layout effects run
+once per render, not twice. The dependency arrays those effects carry do have one real
+effect: a change to `devices.value` alone — an eviction, `clearSource()`, `clear()` — no
+longer refits the grid on its own, so the refit is driven explicitly where it is needed.
+
+The devices table does not re-render every row per packet either. `Rows()` in
+`devices-table.jsx` does re-run its whole loop on any one device's change, since it reads
+every device's `r.merged.value` to build the field lists. But `@preact/signals` installs a
+global `shouldComponentUpdate` that skips a signal-reading component when no state changed
+and every prop is reference-equal, and `upsert()` mutates the record in place, so
+`props.r` keeps its identity and `DeviceRow` does not re-render. What is real is `Rows()`'s
+own per-packet work: one `sortDevices()` and one `cardFields()` call per device.
 
 ## Keys
 
@@ -319,6 +369,17 @@ A record with `seenAt` of 0 shows no age. The sun, moon and clock come off the
 system clock and are never stale; weather stamps the time its data came from, so
 its age corner reads as genuine staleness.
 
+Sun and moon events are solved against the local day of the card's zone, not the UTC
+day: `astro.js` takes `zoneDayStart(date, zone)` and a `zoneDateKey`, and keeps only the
+events that fall inside that local day. A card in a zone hours from UTC otherwise shows
+yesterday's or tomorrow's sunrise.
+
+The sun dial's `riseText` and `setText` are `''` when there is no event that day, not an
+em dash. The renderer tests the field for emptiness to decide whether to draw the label
+at all, and a placeholder character is not empty. The flat `sunrise`/`sunset` fields go
+through `zone.js`'s formatter, which does render `—` for a null, because those go down
+the ordinary scalar path where a placeholder is what a reader wants.
+
 ## Value renderers
 
 A merged field's value is normally a scalar. A feed may instead supply an object
@@ -398,8 +459,9 @@ proxy.
 
 Nominatim caps callers at one request a second and rules out autocomplete, so
 searching happens on submit, one request at a time, with every answered query
-cached. Browsers send `Referer` automatically, which is the identification the
-policy asks for.
+cached. That cache holds 100 queries and evicts the oldest key when it overflows, so a
+long session of searching cannot grow it without bound. Browsers send `Referer`
+automatically, which is the identification the policy asks for.
 
 A failed run keeps the last good values on the card and adds the error as a
 plain string, so it renders through the scalar path and can be hidden like any
@@ -434,6 +496,15 @@ not affect another. Connection state shows as a dot in the settings panel and ne
 becomes a column in the device table. With no sources configured the dashboard reads the
 origin it was served from, so the firmware-served build works with no setup.
 
+`stream.js` retries on a backoff ladder rather than a fixed interval:
+`Math.min(30000, 1000 * 2 ** attempt) * (0.8 + 0.4 * Math.random())`, with `attempt`
+reset to zero in `onopen`. It doubles from a second to a thirty-second ceiling, and the
+jitter spreads the retries of several sources that dropped together instead of having
+them all reconnect on the same beat. A flat 5 s was both too slow for a momentary blip
+and too fast against a source that is off for the afternoon. `onerror` retries only when
+the socket it fired on is still the current one and has reached `CLOSED`, so a socket
+superseded by `close()` cannot overwrite the attempt count or leak a timer.
+
 ## Bridges
 
 The reverse of Sources: `bridges.js` fetches `GET /$mqtt` against
@@ -454,15 +525,18 @@ Playwright against the built bundle, served by `startServer()`'s own outer HTTP 
 (`bridge/test/helpers/dashboard-fixture.js`), so the suite exercises the real HTTP
 binding rather than a model of it.
 
-Two of the dashboard's own `POST` paths are intercepted by the harness itself instead of
-proxied, because neither works against a real bridge over MQTT: `$tz`, because MQTT
-excludes topic names beginning with `$` from a `#` wildcard subscription, so the bridge
-can never see its own `$tz` publish echo back and always answers `503`; and `$alias`
-posted with an empty body, because the bridge stores that as an ordinary 2-byte retained
-message rather than treating it as a delete. Both are filed as bugs in
-[`bridge/docs/backlog.md`](../../bridge/docs/backlog.md). The harness reproduces the
-receiver firmware's actual behavior for both, so the suite's assertions keep meaning what
-they say.
+Five of the dashboard's own `POST` paths are intercepted by the harness itself instead of
+proxied, because they belong to the receiver's binding rather than the bridge's. MQTT
+excludes topic names beginning with `$` from a `#` wildcard subscription, so a bare
+`$tz`, `$layout`, `$location`, or `$units` publish never echoes back on the bridge's
+subscription and its `POST` answers `503`. The receiver sidesteps that by canonicalizing
+to `<source>/$tz` and friends before broadcasting whatever path was posted, so the
+harness does the same before handing off. `$alias` with an empty body is the fifth: it
+means delete the retained message, and the bridge stores it as the string it is.
+`$layout` still goes through the bridge's own auth-gated `POST`, since `auth.spec.js`
+drives it against a token-protected bridge and a missing token has to `401` there. All
+five match what `receiver/test/binding-server.js` does, so the suite's assertions keep
+meaning what they say.
 
 Nothing in the suite reaches the network. Setting a location makes the weather feed
 fetch the National Weather Service, and opening the settings tab makes the map fetch

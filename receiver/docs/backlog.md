@@ -11,8 +11,20 @@ sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
 into the form on every GET; `handleSave()` stores whatever the form returns.
 Anyone in range of a board sitting in the portal can join, submit their own SSID and a token they chose,
 and take the board onto their network with an OTA credential they control. `POST /$update`
-then accepts arbitrary firmware. A WPA2 password on the SoftAP, printed on the device or
-derived from the chip ID, is the smallest fix.
+then accepts arbitrary firmware.
+
+The smallest fix is a WPA2 password on the SoftAP, derived from the chip ID so it is
+reproducible without a label on the case. The AP name already uses the last two MAC bytes;
+the password would use more of the MAC, or a hash of `esp_efuse_mac_get_default()`,
+rendered as 8 to 10 hex characters and printed over serial at portal start alongside the
+existing `provisioning: AP "%s" up at %s` line, which is how an operator learns it.
+`install.md` and `quickstart.md` both currently tell the reader the AP takes no password,
+so both change with it.
+
+Deferred on lockout risk. A password derived wrongly, or printed in a format the AP does
+not actually accept, leaves a board that cannot be provisioned at all except by reflashing
+over USB, and the portal is the path back from a bad flash. It needs proving on a bench
+board before it goes anywhere near a board that is not physically reachable.
 
 ## Build-time secrets are readable in the firmware image
 
@@ -24,34 +36,27 @@ default) return them as fallbacks, so the literals link into
 shared for flashing or an `esptool.py read_flash` on a recovered board yields all three as
 plain strings. Provisioning through the portal avoids it; the build-time path does not.
 
+Removing the build-time path removes the dev and CI shortcut, so the answer for now is an
+operational rule instead: never share a `.bin` built from a populated `.env`, and provision
+through the portal for any board that leaves the bench. Revisit if CI ever publishes an
+image.
+
 ## No path in for sensors that are not 433 MHz decodes
 
 The receiver's own card proved the shape: anything recorded through
 `signal_store::record()` becomes a device the page already knows how to draw,
-alias, and lay out. Nothing else uses it. Two directions remain open:
+alias, and lay out. The wired I2C half is done (see the BMP280 in
+`architecture.md`); ingest from elsewhere is not.
 
-- A wired sensor on the I2C bus at GPIO 47 (SCL) and GPIO 21 (SDA), recorded
-  the same way. The BMP280 driver reads temperature and pressure every 30 s
-  and records them through `signal_store::record()`. The bus is sized for an
-  AHT20 later. Add 10k pull-ups to 3V3 at the sensor header unless the breakout
-  provides them.
-- Ingest from elsewhere: an authenticated `POST /api/signal` taking the same
-  rtl_433 JSON is about twenty lines and no new dependency. An MQTT
-  subscription needs a broker and roughly 10 KB of flash, against 144 KB free.
-  ESP-NOW suits battery nodes but pins them to the station's WiFi channel.
+An authenticated `POST /api/signal` taking the same rtl_433 JSON is about twenty lines
+and no new dependency, but it is a feature rather than a defect and needs its own design
+pass first: whether it authenticates with the OTA token or a second credential, what rate
+limit it carries, and whether an ingested record counts toward `totalRecorded()`. An MQTT
+subscription instead needs a broker and roughly 10 KB of flash, against 144 KB free.
+ESP-NOW suits battery nodes but pins them to the station's WiFi channel.
 
 Egress is done: see `mqtt_publish.h`/`mqtt_publish.cpp` in `architecture.md`
 and "Publishing to a remote broker" in `user-manual.md`.
-
-## A below-floor noise reading has no error marking on the card
-
-The health monitor already surfaces the signature: `NOISE_FLOOR_DBM` feeds a
-floor at or below the SX1231's measurement floor (about -120 dBm, e.g. the
--125 dBm seen when the chip was stuck refusing OP_MODE writes) into the
-`pinned` state, and the telemetry carries `radio_ok`, `noise_dBm`, and
-`rssi_thresh`. But the receiver card still renders `noise_dBm` as a plain
-value with no error marking, so a broken radio reads as merely quiet. Add a
-page indicator keyed on `radio_ok`.
 
 ## A slow HTTP client can still stall the receive path
 
@@ -65,14 +70,6 @@ are overwritten. A healthy client never waits. Removing the risk entirely means
 serving the page off a second task, which the single-task design deliberately
 avoids.
 
-## The compiled decoders are 15% of the image
-
-The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in the fork's
-`rtl_433_devices.h` is what narrows them. Space is not the reason to: `app0` is 4 MB and
-the image uses 28% of it. False decodes are filtered by firmware now (see
-`architecture.md`), so nothing currently motivates narrowing the compiled decoder set
-either.
-
 ## The firmware self-test has never been read on a live device
 
 `signal_store::selfTest()` and `alias_store::selfTest()` also run at startup
@@ -81,7 +78,7 @@ but nobody has seen those lines there. The board flashes and runs, and
 `ArduinoLog` writes to `Serial0`, a hardware UART at 921600 baud, while the
 port exposed over USB is the S3's CDC device. Reading the self-test needs a
 UART adapter on the TX pin, or the sketch pointing `Log.begin()` at `Serial`
-so it comes out over USB. `signal_store`'s 63 checks and `alias_store`'s 22
+so it comes out over USB. `signal_store`'s 87 checks and `alias_store`'s 30
 now run and are checked on every commit via `test/host/run.sh` (see
 `architecture.md`); only the on-device serial output is still unread.
 
@@ -104,6 +101,12 @@ firmware, which is what actually proves the migration.
 no field for it, so a device provisioned entirely through SoftAP always uses
 the `rtl433` mDNS prefix default.
 
+A portal field for it needs a small NVS-backed store and `mdnsHostname()` preferring the
+stored value over the macro. The catch is that the prefix also feeds
+`signal_store::source()`, the first segment of every topic key, so changing it renames
+every device on the dashboard and orphans the stored `$layout` and every alias, both of
+which key on the full topic. The form has to say so, or the portal has to warn.
+
 ## A `POST /$update` upload blocks `loop()` for the whole transfer
 
 `handleUpdateUpload()` runs synchronously inside `_server.handleClient()`
@@ -117,28 +120,37 @@ several seconds for a ~1.2 MB image over WiFi.
 
 ## The stored OTA token is capped shorter than `.env`'s
 
-`ota_token_store`'s `OTA_TOKEN_STORE_MAX` is 32 characters; `.env`'s `OTA_TOKEN`
-is 48. Submitting the provisioning portal's form with that token gets a 400
-("Update token is too long") and nothing is stored, so the board falls back to
-the compiled-in `.env` token for OTA and has no portal-settable token at all.
-Shortening `OTA_TOKEN` to 32 characters or raising `OTA_TOKEN_STORE_MAX` fixes
-it.
+`OTA_TOKEN_STORE_MAX` (`ota_token_store.h:6`) is 33, which is 32 usable characters plus
+the NUL — not 32, and a fix that sets the constant to 32 would allow only 31. The `.env`
+on this machine holds a 48-character `OTA_TOKEN`, so `provisioning.cpp:178` rejects it
+with a 400 and nothing is stored: the board falls back to the compiled-in token and has no
+portal-settable token at all.
 
-## A pending core dump has no ELF to symbolize it
+`.env.example` and `install.md`'s `openssl rand -hex 16` both land on 32, so the local
+`.env` is the outlier. What makes this hard to diagnose is the portal's own
+`maxlength="32"` on the token field (`provisioning.cpp:137`): a 48-character paste is
+truncated by the browser before it is submitted, so the visible symptom is a silently
+shortened token rather than the 400 at all.
 
-A core dump from an earlier panic is still in flash (`coredump_pending: 1`).
-Fetching it needs USB (`tools/fetch_coredump.sh`), and the ELF of the build
-that panicked is no longer on disk, so the dump may only be useful for its
-backtrace addresses. Keeping the ELF for a build until any coredump it left
-behind is fetched would avoid losing the symbols.
+The chosen fix is to raise `OTA_TOKEN_STORE_MAX` to 65, which fits any hex token up to 64
+characters, at 32 bytes of static RAM. It removes a class of confusing 400 and asks nobody
+to notice a length rule. `begin()` reads NVS into that buffer through `copyTruncated`, so
+an already-stored 32-character token still loads after the cap is raised — verify that on
+a board that had one set before flashing one that does not.
 
 ## No way to clear or disable a set OTA token
 
-`ota_token_store` has no `clear()`, and the SoftAP portal always overwrites
-the stored token with a freshly generated one on every provisioning pass
-(`provisioning.cpp`). Once a token has been set there's no path back to the
-"OTA disabled" (`404`) state short of erasing NVS entirely. Not a bug, just
-a gap for anyone who wants to disable OTA after enabling it.
+`ota_token_store` has no `clear()`, and `set()` rejects an empty string, so once a token
+is stored there is no path back to the "OTA disabled" (`404`) state short of erasing NVS.
+The portal stores a submitted token only when it is non-empty (`provisioning.cpp:188`), so
+clearing the field leaves the old token in place rather than removing it.
+
+`clear()` itself is a few lines: `_prefs.remove("token")` and empty `_stored`. What needs
+care is where it is reachable from. Not an HTTP route on the live device — anything that
+can reach `/$update`'s neighbour could then turn OTA off — so it belongs behind the
+provisioning portal, where physical access is already implied. Note also that clearing the
+NVS token falls back to the `OTA_TOKEN` build macro rather than to disabled, so on a build
+carrying that macro `clear()` disables nothing.
 
 ## `POST /$mqtt/remove` returns 204 for a url it never removed
 
@@ -186,30 +198,29 @@ future call site changes that assumption.
 ## Smaller items
 
 - The OTA token is compared with Arduino `String::operator==`
-  (`web_ui.cpp:593-598`), which returns on the first differing byte. Over a LAN
+  (`web_ui.cpp:545-546`), which returns on the first differing byte. Over a LAN
   with a TCP handshake per request, jitter swamps a one-byte delta, so this is
   not practically exploitable; it is worth a constant-time compare only because
-  it guards the firmware-flash path.
-- `tools/fetch_coredump.sh` executes `$HOME/.platformio` paths with no existence
-  check and hardcodes the `0xFF0000 0x10000` offset rather than reading `partitions.csv`, so
-  a re-laid-out partition table reads the wrong 64 KiB and reports a corrupt dump.
-- `tools/flash-ota.js:65` calls `main()` with no `.catch()`, so an unreachable
-  host prints a raw `TypeError: fetch failed` stack instead of a message, and
-  `readEnvToken` (`:14`) does not strip a leading `export ` the way
-  `load_env.py:28-29` does, so a `.env` the firmware build accepts makes
-  flash-ota report "no OTA_TOKEN in the environment or receiver/.env".
-- `monitor.py:80-91` declares `--reset/-r` as `action="store_true",
-  default=True`, so the flag is a no-op and `args.reset` is never read (`:138`
-  tests `args.no_reset`). Harmless today, wrong the moment the default changes.
+  it guards the firmware-flash path. The replacement checks the lengths
+  separately and then ORs the byte differences over a fixed length, which also
+  drops the two `String` allocations the current
+  `String("Bearer ") + token()` makes on every request.
 - Every `mqtts://` bridge is pinned to the ISRG Root X1 CA with no way to
   configure another; a broker not chained to Let's Encrypt (a commercial cloud
   broker, a self-signed LAN broker) will fail its handshake silently, showing
-  only a dot that never turns green.
+  only a dot that never turns green. A configurable CA needs a form field, a
+  multi-KB NVS entry on a partition already tight for blobs, and a decision
+  about whether to allow no verification at all, so it waits until someone has
+  a broker that needs it. The cheap mitigation is to log the
+  `WiFiClientSecure` handshake error rather than only PubSubClient's
+  `state()`, so the reason reaches the serial log. That has not been done.
 - Each record is serialised twice: `mqtt_publish::onRecord` writes the doc into a
   601-byte stack buffer and `signal_store::record()` writes the identical doc into
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
   from there means changing the hook contract from "gets the doc" to "gets the
   serialised payload", so it is worth doing only if the decode path measures hot.
+- No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly, and there
+  is no host-testable seam for `web_ui.cpp` routes at all.
 - `test/binding-server.js`, the model of the firmware's wire format, checks alias name
   length with JavaScript's `value.length` (UTF-16 code units), while `web_ui.cpp`'s
   `handleAliasPost` checks `strlen(name)` (bytes). The two agree for ASCII but disagree for

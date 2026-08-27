@@ -6,17 +6,15 @@
   the card changed.
 - A device seen through two bridges is two cards. Nothing merges them.
 - A reading that cannot fit even at 11px still ellipsizes.
-- A prior backlog entry claimed every message forced two synchronous layouts in
-  `cards.jsx` because neither `useLayoutEffect` nor `useEffect` had a dependency array.
-  Measured call counts before commit 6125356 disproved that: a repeat message to an
-  existing device re-renders `CardsView` 0 times (`upsert` on an existing record writes
-  only per-device signals), and a new device coalesces `devices.value` and
-  `cardState.value` into one render, so the effects ran once, not twice. The commit's
-  only real effect was that a `devices.value`-only change (eviction, `clearSource`,
-  `clear`) stopped refitting the grid, which it now does again.
+- A below-floor noise reading has no error marking on the receiver's card. The firmware
+  already publishes the signature: `radio_ok`, `noise_dBm` and `rssi_thresh` are all in
+  the telemetry, and a radio stuck refusing `OP_MODE` writes reads at or below the
+  SX1231's own measurement floor of about -120 dBm. The card renders `noise_dBm` as a
+  plain value, so a broken radio reads as merely quiet. Needs an indicator keyed on
+  `radio_ok`.
 - `src/main.jsx` exposes page internals on `window` through `exposeForTests()`, because
   tests in `test/cards.spec.js` drive the page through the globals the firmware version had
-  at script level. 44 of its 122 tests reach for `window.` or `page.evaluate`. Deliberate
+  at script level. 39 of its 88 tests reach for `window.` or `page.evaluate`. Deliberate
   and endorsed, since rewriting them would destroy the evidence that the extraction lost
   nothing, but it is debt: delete the hook when the suite drives the DOM instead.
   `store.js`'s `getCardState`/`setCardState` exist only to serve it. `store.js`'s
@@ -35,7 +33,10 @@
 - `test/android-smoke.js` was updated for the gear-panel split (dropped the dead
   `#settings summary` click, switched to `#subtab-devices`) without a run against the
   tablet — no device was attached to verify it. Needs one manual run to confirm the
-  selectors.
+  selectors. Its assertions also assume the Capacitor shell's origin probe aborts, since
+  they wait for the devices sub-tab to be selected with an empty source list, which is
+  what `abortProbe()` leaves behind. Nothing has confirmed the probe fails there. If it
+  succeeds instead, the script lands on the cards tab and fails at its first wait.
 
 - `Card`'s gesture freeze (`memo(Card, areEqual)` in `cards.jsx`) does not survive a
   live reading arriving for the card being dragged, resized, or renamed: `Card` reads
@@ -96,15 +97,6 @@
   secure.
 - The DST flag is inferred by comparing offsets across the year and is wrong for
   a zone that changed its rules mid-year.
-- A prior backlog entry claimed the devices table re-renders every row on every packet.
-  Measured: `Rows()` in `devices-table.jsx` does re-run its whole loop on any one device's
-  change, since it reads every device's `r.merged.value` to compute field lists, but
-  `@preact/signals`'s global `Component.prototype.shouldComponentUpdate` already skips a
-  signal-reading component when no state changed and every prop is reference-equal, and
-  `upsert()` mutates the record in place so `props.r` keeps its identity — confirmed by
-  counting `DeviceRow` calls across a packet to one of two devices. `Rows()`'s own
-  per-packet work (`sortDevices()` and
-  a `cardFields()` call per device) is real but untouched by this correction.
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.
@@ -116,10 +108,9 @@
   receiver's own published `$location` immediately supplies the fallback, so the
   feed cards stay and the location the user just cleared still resolves. There is
   no delete for the published value.
-- No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly — there's no
-  host-testable seam for `web_ui.cpp` routes at all, receiver-wide.
-- The alias rename input has no `maxlength` and ignores the POST response. The
-  firmware's `ALIAS_NAME_MAX` (`receiver/alias_store.h`) is 32; a name of 32 or more
-  characters is silently rejected with a 400 that today's dashboard just drops, where it
-  previously stored the first 31 characters. Needs a `maxlength` on the input and a
-  response check that surfaces the failure.
+- The alias rename input has no `maxlength`. `postAlias` now reads the POST response,
+  but only a `401` reaches the user; every other failure goes to the console. The
+  firmware's `ALIAS_NAME_MAX` (`receiver/alias_store.h`) is 32, so a name of 32 or more
+  characters is rejected with a `400` the user never sees, and the local alias map keeps
+  the name the device refused. Needs a `maxlength` on the input and a toast on the
+  non-401 failures.

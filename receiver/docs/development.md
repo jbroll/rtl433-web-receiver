@@ -116,4 +116,6 @@ exist yet.
 
 `test/binding.spec.js` covers the HTTP binding against `test/binding-server.js`, a JS
 model of the same surface, so it runs without a board: `npm install` once, then `npx
-playwright test`. The dashboard has [its own suite](../../dashboard/README.md).
+playwright test`. It proves the contract, not the firmware. A change to firmware
+behaviour that the binding describes has to be mirrored into `binding-server.js` too, or
+the spec keeps passing while the device disagrees with it. The dashboard has [its own suite](../../dashboard/README.md).

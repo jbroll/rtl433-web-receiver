@@ -1,7 +1,8 @@
 # User manual
 
 Three tabs — Devices, Log, Cards — and the page opens on Cards. The status
-indicator in the header reads `connecting`, `live`, or `reconnecting`.
+indicator in the header reads `no sources` when none is configured, `live` when every
+source is up, `reconnecting` when none is, and `N/M live` when some are.
 
 ## Drag-and-drop in edit mode
 
@@ -297,6 +298,15 @@ immediately. This panel only appears when the dashboard is served by a
 receiver — a standalone bridge or a dashboard build with no `/$mqtt` shows
 nothing here. There's no way to see or edit a stored token; re-adding the
 same url with a new token replaces it.
+
+Adding and removing both report what happened. An add that the receiver
+rejects marks the URL field invalid and shows "Add failed. Check the URL and
+try again." A remove that fails outright shows "Remove failed for <url>." The
+third case is a remove the receiver answers `204` to while the row is still
+there on the refetch: `/$mqtt/remove` answers `204` even for a URL it never
+held, which is what a bridge baked into the firmware build does, so the
+dashboard refetches `/$mqtt` and shows "<url> was not removed." rather than
+letting the row silently reappear. A success is silent in all cases.
 
 ## Access token
 

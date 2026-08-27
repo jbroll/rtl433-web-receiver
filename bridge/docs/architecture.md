@@ -72,6 +72,12 @@ filters against a topic and `write(frame)` puts bytes on the wire, so
 filtering never touches the frame and building the frame never touches a
 client's filters.
 
+The payload is parsed and re-stringified rather than spliced into the frame as
+the raw text that arrived. Splicing would skip the round trip, but it would also
+change the bytes on the wire: parsing and stringifying normalises whitespace,
+number forms, and duplicate keys, so a subscriber would see the publisher's
+exact text where today it sees a normalised form.
+
 The `deleted` flag comes from `cacheMessage`'s return value (`src/broker.js`),
 which `bin/mqtt-http-bridge.js`'s `onMessage` passes through to `broadcast`
 alongside the topic and payload it always carried.

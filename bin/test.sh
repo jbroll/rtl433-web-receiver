@@ -3,9 +3,9 @@
 # failure. Each suite still runs standalone from its own directory; this is
 # the one command that runs all of them.
 #
-# `pio test` is not included: it has no PlatformIO `native` environment yet
-# (see receiver/docs/backlog.md), so it tries to build and flash
-# esp32s3-generic and errors without a connected board.
+# `pio test` is not included: receiver/platformio.ini has no `native`
+# environment, so it tries to build and flash esp32s3-generic and errors
+# without a connected board. receiver/test/host/run.sh covers that ground.
 set -e
 root=$(cd "$(dirname "$0")/.." && pwd)
 

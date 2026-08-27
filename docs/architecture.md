@@ -108,6 +108,9 @@ request, so both the bridge and the receiver answer every request with
 `Access-Control-Allow-Origin: *`. The dashboard is also on the other side of that
 arrangement for its information feeds: weather.gov, Nominatim and the OSM tile server each
 answer `Access-Control-Allow-Origin: *`, which is what lets the page call them without a
-proxy. Neither has authentication, so this exposes nothing a
-direct request did not already expose. It does mean a page on any site the user visits
-can read a reachable bridge; see the bridge's backlog.
+proxy. Reads on the bridge and the receiver are unauthenticated, so the wildcard exposes
+nothing a direct request did not already expose, and a page on any site the user visits
+can read either of them if it is reachable. Writes are authenticated: the bridge requires
+a bearer token on `POST` once `AUTH_TOKEN` is set, and the receiver requires one on
+`POST /$update`. The wildcard origin does not weaken those, because a cross-origin caller
+has no way to learn the token.

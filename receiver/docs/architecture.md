@@ -3,11 +3,12 @@
 ## Module boundaries
 
 **`topic.h` / `topic.cpp`** — topic and filter parsing, with no Arduino
-dependency, so it is the one module `test/host/run.sh` compiles and runs on
-the host rather than only under PlatformIO. It mirrors
-`mqtt-http-bridge/src/topic.js`, the bridge's own implementation of the same
-rules, so the two agree on what a valid topic or filter looks like without
-sharing code.
+dependency, so `test/host/run.sh` compiles and runs it on the host with
+nothing on the include path but the firmware directory itself, as it does
+`radio_health.cpp`. Most of the other modules the script builds need
+`test/host/arduino_shim/`. It mirrors `bridge/src/topic.js`, the
+bridge's own implementation of the same rules, so the two agree on what a
+valid topic or filter looks like without sharing code.
 
 **`alias_store.h` / `alias_store.cpp`** — a fixed table of 32 topic/name pairs,
 persisted as one JSON blob in a single `Preferences` entry (namespace `alias`,
@@ -135,6 +136,18 @@ confirmed decode resets the module's state. A constant `RECOVERY_BACKOFF_MS`
 must re-confirm before the next attempt. The window lengths and thresholds are
 build flags.
 
+**The BMP280 sensor** (in `WebReceiver.ino`, no module of its own) — a wired
+temperature and pressure sensor on the I2C bus at GPIO 21 (SDA) and GPIO 47
+(SCL), read through the Adafruit BMP280 library, probed at 0x76 then 0x77 at
+boot, and read every 30 s from `loop()`. It has no separate path into the page:
+`recordBMP280()` builds the same rtl_433-shaped JSON a decoder would
+(`model`, `id`, `channel`, `temperature_C`, `pressure_hPa`) and hands it to
+`signal_store::record()`, so it becomes a device the dashboard already knows
+how to draw, alias and lay out. It reports raw absolute station pressure, not
+sea-level-corrected, which is why `device_hooks::validate()`'s pressure range
+reaches down to 300 hPa. A board with no sensor on the bus logs the failed
+probe once and records nothing.
+
 **`health_store.h` / `health_store.cpp`** — persists the radio health state
 to `Preferences` namespace `"health"`. Writes are bounded: once at boot
 (`boot_count`, `last_reset_reason`), once on first SNTP sync (`last_boot_utc`,
@@ -213,8 +226,10 @@ instead keeps its own persist-before-adopt order (write to NVS first, only
 copy the new value into `_blob` once that succeeds), which needs no second
 buffer at all, since a failed write never touches the in-RAM blob in the
 first place. `layout_store` also needs the two-key blob migration above,
-which neither of the other two has ever needed since they were
-`putBytes()` from the start. `alias_store` and `mqtt_publish_store` don't fit either — they
+which neither of the other two has ever needed: both still write with
+`putString()`, and at 512 and 256 bytes their blobs are far short of the
+2.7 KB where the single-page free run an NVS string needs started failing.
+`alias_store` and `mqtt_publish_store` don't fit either — they
 serialize a table rather than storing a blob verbatim.
 
 **`location_store.h` / `location_store.cpp`** — persists the dashboard's
