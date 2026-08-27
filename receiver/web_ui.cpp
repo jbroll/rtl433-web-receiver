@@ -16,6 +16,7 @@
 #include "units_store.h"
 #include "mqtt_publish.h"
 #include "mqtt_publish_store.h"
+#include "mqtt_routes.h"
 #include "ota_token_store.h"
 #include "signal_store.h"
 #include "topic.h"
@@ -458,77 +459,31 @@ static void handleTzPost(const char* path) {
   _server.send(204, "text/plain", "");
 }
 
-static void handleMqttOptions() {
+// The parsing and dispatch behind these routes lives in mqtt_routes.cpp so it
+// can be host-tested; everything here is transport.
+static void sendMqttResponse(const mqtt_routes::Response& res) {
+  if (res.reloadConnections) {
+    mqtt_publish::begin(signal_store::source());
+  }
   sendCors();
-  _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  _server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-  _server.sendHeader("Access-Control-Max-Age", "600");
-  _server.send(204, "text/plain", "");
+  if (res.preflight) {
+    _server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    _server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    _server.sendHeader("Access-Control-Max-Age", "600");
+  } else {
+    _server.sendHeader("Cache-Control", "no-store");
+  }
+  _server.send(res.status, res.contentType, res.body);
 }
 
-static void handleMqttGet() {
-  JsonDocument doc;
-  JsonArray    arr = doc.to<JsonArray>();
-  for (uint8_t i = 0; i < mqtt_publish::count(); i++) {
-    JsonObject o = arr.add<JsonObject>();
-    o["url"] = mqtt_publish::urlAt(i);
-    o["connected"] = mqtt_publish::connectedAt(i);
-    const char* reason = mqtt_publish::reasonAt(i);
-    if (reason != nullptr) o["reason"] = reason;
-  }
-  String body;
-  serializeJson(doc, body);
-  sendCors();
-  _server.sendHeader("Cache-Control", "no-store");
-  _server.send(200, "application/json", body);
+static void handleMqtt(mqtt_routes::Method method) {
+  sendMqttResponse(mqtt_routes::dispatch(method, _server.uri().c_str(), sameOriginOrBare(),
+                                         _server.arg("plain")));
 }
 
-static void handleMqttPost() {
-  if (!sameOriginOrBare()) {
-    sendStatus(403, "off-origin");
-    return;
-  }
-  String       body = _server.arg("plain");
-  JsonDocument doc;
-  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>() ||
-      !doc["url"].is<const char*>()) {
-    sendStatus(400, "body must be a JSON object with a url");
-    return;
-  }
-  const char* url   = doc["url"];
-  const char* token = doc["token"].is<const char*>() ? doc["token"].as<const char*>() : "";
-  if (!mqtt_publish_store::add(url, token)) {
-    sendStatus(400, "invalid url/token, or the bridge table is full");
-    return;
-  }
-  mqtt_publish::begin(signal_store::source());
-  sendCors();
-  _server.sendHeader("Cache-Control", "no-store");
-  _server.send(204, "text/plain", "");
-}
-
-static void handleMqttRemovePost() {
-  if (!sameOriginOrBare()) {
-    sendStatus(403, "off-origin");
-    return;
-  }
-  String       body = _server.arg("plain");
-  JsonDocument doc;
-  if (deserializeJson(doc, body) != DeserializationError::Ok || !doc.is<JsonObject>() ||
-      !doc["url"].is<const char*>()) {
-    sendStatus(400, "body must be a JSON object with a url");
-    return;
-  }
-  const char* url = doc["url"];
-  if (!mqtt_publish_store::remove(url)) {
-    sendStatus(404, "not found");
-    return;
-  }
-  mqtt_publish::begin(signal_store::source());
-  sendCors();
-  _server.sendHeader("Cache-Control", "no-store");
-  _server.send(204, "text/plain", "");
-}
+static void handleMqttOptions() { handleMqtt(mqtt_routes::Method::Options); }
+static void handleMqttGet() { handleMqtt(mqtt_routes::Method::Get); }
+static void handleMqttPost() { handleMqtt(mqtt_routes::Method::Post); }
 
 // Set at UPLOAD_FILE_START, read once by handleUpdateComplete() and reset
 // there — WebServer only invokes the upload callback for a multipart part
@@ -911,7 +866,7 @@ void begin() {
   _server.on("/$mqtt", HTTP_GET, handleMqttGet);
   _server.on("/$mqtt", HTTP_POST, handleMqttPost);
   _server.on("/$mqtt", HTTP_OPTIONS, handleMqttOptions);
-  _server.on("/$mqtt/remove", HTTP_POST, handleMqttRemovePost);
+  _server.on("/$mqtt/remove", HTTP_POST, handleMqttPost);
   _server.on("/$mqtt/remove", HTTP_OPTIONS, handleMqttOptions);
   // Topics are arbitrary paths, so every other request is dispatched here.
   _server.onNotFound(handleTopic);

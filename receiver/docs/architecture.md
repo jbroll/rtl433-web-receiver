@@ -263,13 +263,26 @@ neither is a topic. `/$update` uses `WebServer::on()`'s two-callback form so
 the ~1.2 MB firmware image streams through `Update::write()` in chunks
 instead of buffering whole. `/$mqtt` reports `mqtt_publish`'s active
 connections (url and connect state, never the token) and lets a `POST` add
-or update a bridge and a `POST /$mqtt/remove` drop one; both mutating routes
+or update a bridge and a `POST /$mqtt/remove` drop one; the parsing and
+dispatch behind those three routes lives in `mqtt_routes.cpp`. Both mutating routes
 check the request's `Origin` header against the receiver's own `Host` rather
 than using the bare-path-or-own-source convention `$tz`, `$layout`,
 `$location`, and `$units` use, since `$mqtt` has no source-prefixed form to
 compare against. Six SSE client slots (`WEB_UI_SSE_CLIENTS`), each a
 `WiFiClient` plus up to four filters and one replay cursor, are fixed arrays
 sized at compile time — there is no dynamic connection list.
+
+**`mqtt_routes.h` / `mqtt_routes.cpp`** — the `/$mqtt` and `/$mqtt/remove`
+request handling, split out of `web_ui.cpp` so it can be host-tested.
+`dispatch(method, path, sameOrigin, body)` returns the status, content type
+and body to send, plus two flags: `preflight`, which selects the
+`OPTIONS` answer's headers over the `Cache-Control: no-store` every other
+answer carries, and `reloadConnections`, which tells the caller to call
+`mqtt_publish::begin()` after the table changed. The origin check and that
+`begin()` stay in `web_ui.cpp`: one reads `WebServer` headers, the other
+does WiFi work, and neither belongs in a function a host test drives.
+`web_ui.cpp`'s three `/$mqtt` handlers are one line each on top of it, and
+`test/host/mqtt_routes_test.cpp` covers the routes directly.
 
 **`wifi_store.h` / `wifi_store.cpp`** — persists WiFi credentials to
 `Preferences` namespace `"wifi"`, in fixed `_ssid`/`_pass` buffers sized
