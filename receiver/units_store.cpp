@@ -57,6 +57,9 @@ bool selfTest() {
   // set() checks strcmp before checking open, so the dedup skip is testable
   // without opening real NVS.
   _store.openForTest() = true;
+#ifdef PREFERENCES_TRACKS_CALLS
+  // Call counts are only tracked by the host test shim's Preferences; see
+  // location_store::selfTest() for why this is host-only.
   Preferences::resetCallCounts();
   ok &= CHECK("first set with NVS open writes once",
               set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}") &&
@@ -64,6 +67,12 @@ bool selfTest() {
   ok &= CHECK("setting the same value again does not write",
               set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}") &&
                   Preferences::putStringCallCount() == 1);
+#else
+  ok &= CHECK("first set with NVS open writes once",
+              set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}"));
+  ok &= CHECK("setting the same value again does not write",
+              set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}"));
+#endif
   _store.openForTest() = false;
 
   strncpy(_store.blobForTest(), saved_blob, sizeof(saved_blob) - 1);

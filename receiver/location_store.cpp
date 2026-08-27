@@ -57,6 +57,10 @@ bool selfTest() {
   // set() checks strcmp before checking open, so the dedup skip is testable
   // without opening real NVS.
   _store.openForTest() = true;
+#ifdef PREFERENCES_TRACKS_CALLS
+  // Call counts are only tracked by the host test shim's Preferences; the
+  // real ESP32 library has no equivalent, so the dedup write-skip itself is
+  // asserted here and its NVS-write-count proof stays host-only below.
   Preferences::resetCallCounts();
   ok &= CHECK("first set with NVS open writes once",
               set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}") &&
@@ -64,6 +68,12 @@ bool selfTest() {
   ok &= CHECK("setting the same value again does not write",
               set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}") &&
                   Preferences::putStringCallCount() == 1);
+#else
+  ok &= CHECK("first set with NVS open writes once",
+              set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}"));
+  ok &= CHECK("setting the same value again does not write",
+              set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}"));
+#endif
   _store.openForTest() = false;
 
   strncpy(_store.blobForTest(), saved_blob, sizeof(saved_blob) - 1);

@@ -163,11 +163,19 @@ bool selfTest() {
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
 
+#ifdef PREFERENCES_TRACKS_CALLS
+    // Call counts are only tracked by the host test shim's Preferences; see
+    // location_store::selfTest() for why this is host-only.
     Preferences::resetCallCounts();
     ok &= CHECK("first set with NVS open writes once",
                 set("{\"grid\":{\"cols\":7,\"rows\":7}}") && Preferences::putBytesCallCount() == 1);
     ok &= CHECK("setting the same value again does not write",
                 set("{\"grid\":{\"cols\":7,\"rows\":7}}") && Preferences::putBytesCallCount() == 1);
+#else
+    ok &= CHECK("first set with NVS open writes once", set("{\"grid\":{\"cols\":7,\"rows\":7}}"));
+    ok &= CHECK("setting the same value again does not write",
+                set("{\"grid\":{\"cols\":7,\"rows\":7}}"));
+#endif
 
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);

@@ -375,9 +375,15 @@ bool selfTest() {
 
     memset(_used, 0, sizeof(_used));
     set("s/M/1/$alias", "Steady");
+#ifdef PREFERENCES_TRACKS_CALLS
+    // Call counts are only tracked by the host test shim's Preferences; see
+    // location_store::selfTest() for why this is host-only.
     Preferences::resetCallCounts();
     ok &= CHECK("re-setting the same name does not write to NVS",
                 set("s/M/1/$alias", "Steady") && Preferences::putBytesCallCount() == 0);
+#else
+    ok &= CHECK("re-setting the same name does not write to NVS", set("s/M/1/$alias", "Steady"));
+#endif
 
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);

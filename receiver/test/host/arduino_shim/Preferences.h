@@ -12,6 +12,10 @@
 
 #include "Arduino.h"
 
+// Lets production selfTest()s guard call-count assertions to compile only
+// where this shim (not the real ESP32 Preferences library) provides them.
+#define PREFERENCES_TRACKS_CALLS 1
+
 class Preferences {
  public:
   bool begin(const char* name, bool readOnly) {

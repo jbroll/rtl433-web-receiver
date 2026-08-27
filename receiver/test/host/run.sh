@@ -84,3 +84,10 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
 g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \
     -o "$out/frame_test" "$root/test/host/frame_test.cpp"
 "$out/frame_test"
+# The default 'pio run' compiles every selfTest() out entirely, since they
+# only exist under #ifdef FAKE_SIGNALS. That let af16f45 add calls to
+# host-shim-only Preferences methods inside a selfTest() and pass three
+# reviews' 'pio run', because none of that code was ever compiled for the
+# target. Build the real firmware with FAKE_SIGNALS on (without touching
+# platformio.ini) so that gap can't reopen.
+(cd "$root" && PLATFORMIO_BUILD_FLAGS="-DFAKE_SIGNALS=true" pio run >/dev/null)
