@@ -1,12 +1,12 @@
-import { connectBroker } from '../../src/broker.js'
-import { createCache } from '../../src/cache.js'
-import { createBridge } from '../../src/server.js'
+import { connectStartupBroker, finishStartupBridge } from '../../src/start.js'
 import { startBroker } from './broker.js'
 
 // Split from startBridge below so a test can hold the gap between this and
 // finishBridge open: the window bin/mqtt-http-bridge.js's `bridge?.broadcast`
-// guard exists for, where a message can arrive before the `bridge` variable
-// wiring it to broadcast is assigned.
+// guard (src/start.js) exists for, where a message can arrive before the
+// `bridge` variable wiring it to broadcast is assigned. Mirrors
+// connectStartupBroker/finishStartupBridge exactly, with no await between
+// them, so that window matches production's.
 export async function connectBridgeBroker({
   url,
   delayMs,
@@ -17,32 +17,23 @@ export async function connectBridgeBroker({
   password,
 } = {}) {
   const mqttBroker = url ? null : await startBroker(0, { delayMs })
-  const cache = createCache()
-  let bridge
-  const broker = connectBroker({
+  const started = connectStartupBroker({
     url: url ?? mqttBroker.url,
-    cache,
-    onMessage: (topic, payload, deleted) => bridge?.broadcast(topic, payload, deleted),
     echoTimeoutMs,
     reconnectMs,
     cacheSettleMs,
     username,
     password,
   })
-  // Unbounded, a subscription that never lands hangs `node --test` instead of
-  // failing it.
-  if (mqttBroker) await withTimeout(broker.subscribed, 5000, 'the # subscription')
 
   return {
-    broker,
-    cache,
+    ...started,
     mqttBroker,
     mqttUrl: url ?? mqttBroker.url,
-    setBridge: (value) => { bridge = value },
   }
 }
 
-export async function finishBridge({ broker, cache, mqttBroker, mqttUrl, setBridge }, {
+export async function finishBridge(built, {
   delayMs,
   authToken,
   dashboardHtml,
@@ -53,10 +44,9 @@ export async function finishBridge({ broker, cache, mqttBroker, mqttUrl, setBrid
   maxBufferedBytes,
   keepaliveMs,
 } = {}) {
+  const { broker, cache, mqttBroker, mqttUrl } = built
   let currentMqttBroker = mqttBroker
-  const bridge = createBridge({
-    broker,
-    cache,
+  const bridge = finishStartupBridge(built, {
     authToken,
     dashboardHtml,
     bodyLimitBytes,
@@ -66,7 +56,12 @@ export async function finishBridge({ broker, cache, mqttBroker, mqttUrl, setBrid
     maxBufferedBytes,
     keepaliveMs,
   })
-  setBridge(bridge)
+
+  // Unbounded, a subscription that never lands hangs `node --test` instead of
+  // failing it. Waited here, after the bridge is built, so this safety net
+  // does not delay bridge creation past connectBridgeBroker the way
+  // production's bin/mqtt-http-bridge.js never does either.
+  if (mqttBroker) await withTimeout(broker.subscribed, 5000, 'the # subscription')
 
   await new Promise((resolve) => bridge.httpServer.listen(0, '127.0.0.1', resolve))
   const { port } = bridge.httpServer.address()

@@ -46,8 +46,7 @@ test('a message that arrives before the bridge variable is assigned does not thr
   const foreign = await mqtt.connectAsync(built.mqttBroker.directUrl)
   let bridge
   try {
-    // built.setBridge (the bridge?.broadcast guard's target) has not run
-    // yet: this is the window bin/mqtt-http-bridge.js's guard exists for.
+    // built.setBridge has not run yet: this is that window.
     await foreign.publishAsync('src/Acurite/1', '{"temperature_C":21.4}', { qos: 0, retain: true })
     await waitFor(() => built.cache.get('src/Acurite/1') !== undefined)
 

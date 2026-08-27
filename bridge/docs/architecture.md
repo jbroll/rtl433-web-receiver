@@ -12,7 +12,12 @@
   `sse.js`; owns the set of open streams. `GET /` is carved out ahead of
   topic routing to optionally serve a dashboard build — never a real topic,
   since `topic.js` rejects the empty string.
-- `bin/mqtt-http-bridge.js` — wires the above together, reads config, starts
+- `src/start.js` — the two-phase startup wiring: `connectStartupBroker`
+  connects the broker and cache, wiring a `bridge?.broadcast` guard closed
+  over a `bridge` variable that is not set yet; `finishStartupBridge` builds
+  the bridge and assigns it, closing the window. Used by both
+  `bin/mqtt-http-bridge.js` and the test helpers, so the guard has one home.
+- `bin/mqtt-http-bridge.js` — reads config, calls `start.js`, starts
   listening, handles shutdown.
 
 `public/index.html`, what `DASHBOARD_HTML` points at, is written by

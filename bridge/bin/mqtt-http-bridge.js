@@ -2,11 +2,11 @@
 import { parseArgs } from 'node:util'
 import { readFileSync } from 'node:fs'
 
-import { connectBroker, ECHO_TIMEOUT_MS } from '../src/broker.js'
-import { createCache } from '../src/cache.js'
+import { ECHO_TIMEOUT_MS } from '../src/broker.js'
 import { brokerLabel, readConfig } from '../src/config.js'
 import { startEmbeddedBroker } from '../src/embedded-broker.js'
-import { BODY_IDLE_TIMEOUT_MS, createBridge } from '../src/server.js'
+import { BODY_IDLE_TIMEOUT_MS } from '../src/server.js'
+import { connectStartupBroker, finishStartupBridge } from '../src/start.js'
 import { createTokenStore } from '../src/token-store.js'
 
 const { values } = parseArgs({
@@ -77,27 +77,20 @@ if (config.embedBroker) {
 }
 
 const brokerName = brokerLabel(brokerUrl)
-const cache = createCache()
 
-let bridge
-const broker = connectBroker({
+const started = connectStartupBroker({
   url: brokerUrl,
   tls: brokerTls,
-  cache,
-  // A message delivered before `bridge` is assigned is already in the cache,
-  // and any subscriber connecting later is replayed from it, so it is safe
-  // to drop.
-  onMessage: (topic, payload, deleted) => bridge?.broadcast(topic, payload, deleted),
   username: brokerUsername,
   password: brokerPassword,
   onConnect: () => console.log(`broker ${brokerName} connected`),
   onDisconnect: () => console.error(`broker ${brokerName} disconnected, retrying`),
   onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
 })
+const { broker, cache } = started
+
 const dashboardHtml = config.dashboardHtmlPath ? readFileSync(config.dashboardHtmlPath, 'utf8') : undefined
-bridge = createBridge({
-  broker,
-  cache,
+const bridge = finishStartupBridge(started, {
   tokenStore,
   dashboardHtml,
   maxSseClients: config.maxSseClients,
