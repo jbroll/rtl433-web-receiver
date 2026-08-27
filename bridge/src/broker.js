@@ -189,27 +189,38 @@ export function redact(message, { username, password } = {}) {
   const credentials = [username, password].filter((credential) => credential)
   if (credentials.length === 0) return message
 
-  let redacted = ''
-  let i = 0
-  while (i < message.length) {
-    let matchLength = 0
+  // Credentials can partially overlap (username 'abc', password 'cde' in
+  // 'abcde') without either containing the other, so a single left-to-right
+  // pass that commits to one match per position can strand a fragment of the
+  // other. Collect every match at every position first, then merge any that
+  // touch or overlap into one redacted run.
+  const matches = []
+  for (let i = 0; i < message.length; i++) {
     for (const credential of credentials) {
-      if (
-        credential.length > matchLength &&
-        message.startsWith(credential, i)
-      ) {
-        matchLength = credential.length
+      if (message.startsWith(credential, i)) {
+        matches.push([i, i + credential.length])
       }
     }
-    if (matchLength > 0) {
-      redacted += '***'
-      i += matchLength
+  }
+  matches.sort((a, b) => a[0] - b[0])
+
+  const runs = []
+  for (const [start, end] of matches) {
+    const last = runs[runs.length - 1]
+    if (last && start <= last[1]) {
+      last[1] = Math.max(last[1], end)
     } else {
-      redacted += message[i]
-      i += 1
+      runs.push([start, end])
     }
   }
-  return redacted
+
+  let redacted = ''
+  let cursor = 0
+  for (const [start, end] of runs) {
+    redacted += message.slice(cursor, start) + '***'
+    cursor = end
+  }
+  return redacted + message.slice(cursor)
 }
 
 // A zero-length publish carrying the retain flag deletes a retained message

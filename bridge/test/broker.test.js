@@ -470,10 +470,14 @@ test('redact does not leave a username fragment when the password is a prefix of
 })
 
 test('redact handles partially overlapping credentials that contain neither one another', () => {
-  // 'abc' (username) and 'cde' (password) overlap on the shared 'c' at index 2, so
-  // both can never match: the scan takes 'abc' at position 0, leaving 'de' with no
-  // credential left that starts there.
-  assert.equal(redact('abcde', { username: 'abc', password: 'cde' }), '***de')
+  assert.equal(redact('abcde', { username: 'abc', password: 'cde' }), '***')
+})
+
+test('redact handles a realistic partial overlap between username and password', () => {
+  assert.equal(
+    redact('login as admin2024temp failed', { username: 'admin2024', password: '2024temp' }),
+    'login as *** failed',
+  )
 })
 
 test('redact handles a username equal to the password', () => {
