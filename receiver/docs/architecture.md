@@ -30,24 +30,36 @@ orders a device's subs, newest first. `claimSlot()` evicts the slot with the
 lowest `_seq` once the table is full. `sweepStale()` frees a slot unheard
 from for longer than `DEVICE_STALE_HOURS`, comparing with unsigned
 subtraction so it stays correct across a `millis()` wraparound too. It also
-sweeps a sub unheard from for longer than `SUB_STALE_MS` (1 hour), and frees
-the slot once its last sub is gone.
+calls `sweepSubStale()`, which reclaims a splitter's stale secondary
+`message_type` subs unheard from for longer than `SUB_STALE_MS` (1 hour) but
+always spares each slot's newest sub — it never frees a device slot itself,
+so `DEVICE_STALE_HOURS` is the only thing that ends a slot's life.
 
-`record()` stamps `time`, `rssi`, and `count` into the decoded JSON before
-serialising it into the sub for that `message_type`. Up to `SIGNAL_MAX_HOOKS`
-(2) record hooks can be registered with `addRecordHook()`, run in
-registration order right after the stamp and before the size check —
-`device_hooks::dispatch` and `mqtt_publish::onRecord` are the two the
-firmware wires up. `SIGNAL_PAYLOAD_MAX` is
-600 bytes against the library's own 512-byte message buffer, room for the
+`buildKey()` rejects rather than truncates every segment that doesn't fit,
+`id` included: a source or model too long to fit its buffer already returned
+false, and the `id` segment now compares `strlen()` against its 16-byte
+buffer the same way rather than truncating and risking two sensors sharing a
+long id prefix colliding on one slot.
+
+`record()` stamps `time`, `rssi`, and `count` into the decoded JSON, then
+checks `measureJson(doc) > SIGNAL_PAYLOAD_MAX` before running any hook, so a
+message the store is about to drop is never handed to one. Up to
+`SIGNAL_MAX_HOOKS` (2) record hooks can be registered with `addRecordHook()`,
+run in registration order right after the size check — `device_hooks::dispatch`
+and `mqtt_publish::onRecord` are the two the firmware wires up. `SIGNAL_PAYLOAD_MAX`
+is 600 bytes against the library's own 512-byte message buffer, room for the
 roughly 56 bytes the three stamped fields add. A message that still doesn't
 fit is dropped rather than truncated: the SSE frame embeds a device's payload
 as the JSON object it
 already is, not as an escaped string, so a payload cut mid-object would put
 unparseable JSON on the wire. Truncating and then fixing up the JSON is not
 attempted; dropping the message and counting it in `droppedCount()` is
-simpler. Its `FAKE_SIGNALS` `selfTest()` is host-tested by `test/host/run.sh`
-against the same `arduino_shim/` fakes as `alias_store`.
+simpler. A device slot is claimed only once a sub is confirmed available for
+it, and undone if `claimSub()` then fails — the sub table full and the new
+slot with nothing of its own to evict — so a refused sub claim never leaves a
+device slot with no payload behind. Its `FAKE_SIGNALS` `selfTest()` is
+host-tested by `test/host/run.sh` against the same `arduino_shim/` fakes as
+`alias_store`.
 
 **`radio_health.h` / `radio_health.cpp`** — an Arduino-free decision module,
 host-tested by `test/host/run.sh` like `topic`. It watches the radio through
@@ -329,13 +341,17 @@ it to `broadcast()`, which builds one SSE frame and sends it to every
 subscriber whose filters match and whose replay cursor has already passed
 that device's newest sub.
 
-Before the size check, `record()` calls each registered record hook in turn.
+After the size check, `record()` calls each registered record hook in turn.
 `device_hooks::dispatch` reads the model from the payload, calls the matching
 hook, and the rain hook computes `rain_today_mm` from the cumulative `rain_mm`
 and a per-device baseline reset at local midnight, writing back into the
 `JsonDocument` before it is serialized into the sub. `mqtt_publish::onRecord`
 runs after it, so a configured remote broker gets `rain_today_mm` and every
-other hook-added field too, not just what rtl_433 originally decoded.
+other hook-added field too, not just what rtl_433 originally decoded. The rain
+hook does nothing until SNTP has synced: `localDay()` reads 0 before then, and
+a baseline recorded against day 0 would be the permanent target of
+`claimRain()`'s lowest-day eviction and its delta meaningless anyway, since the
+day-rollover branch never fires against a day that never changes.
 
 ## The replay design
 

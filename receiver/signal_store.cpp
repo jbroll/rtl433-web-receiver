@@ -80,7 +80,11 @@ static bool buildKey(const JsonDocument& doc, char* key, size_t keySize) {
   char id[16];
   if (doc["id"].is<const char*>() || doc["id"].is<long>() ||
       doc["id"].is<unsigned long>()) {
-    copyTruncated(id, sizeof(id), doc["id"].as<String>().c_str());
+    String idStr = doc["id"].as<String>();
+    if (idStr.length() >= sizeof(id)) {
+      return false;
+    }
+    copyTruncated(id, sizeof(id), idStr.c_str());
   } else if (!doc["channel"].isNull()) {
     copyTruncated(id, sizeof(id), doc["channel"].as<String>().c_str());
   } else {
@@ -236,18 +240,20 @@ bool record(const char* payload, int rssi, bool isDecode) {
   doc["rssi"] = rssi;
   doc["count"] = count;
 
-  for (uint8_t h = 0; h < _hookCount; h++) {
-    _hooks[h](key, doc);
-  }
-
   // The frame embeds the payload as JSON rather than as an escaped string, so a
-  // truncated one would be unparseable on the wire. Drop it instead.
+  // truncated one would be unparseable on the wire. Drop it instead, before any
+  // hook runs, so a message the store refuses is never published either.
   if (measureJson(doc) > SIGNAL_PAYLOAD_MAX) {
     _dropped++;
     return false;
   }
 
-  if (idx < 0) {
+  for (uint8_t h = 0; h < _hookCount; h++) {
+    _hooks[h](key, doc);
+  }
+
+  bool newSlot = idx < 0;
+  if (newSlot) {
     idx = claimSlot();
     copyTruncated(_devices[idx].key, SIGNAL_KEY_MAX, key);
     _devices[idx].used = true;
@@ -263,6 +269,13 @@ bool record(const char* payload, int rssi, bool isDecode) {
   if (subIdx < 0) {
     subIdx = claimSub(idx, msgType);
     if (subIdx < 0) {
+      // The sub table was full and this slot has no sub of its own to evict;
+      // undo the claim above rather than leave a slot with no payload.
+      if (newSlot) {
+        _devices[idx].used = false;
+        _deviceCount--;
+        _seq[idx] = 0;
+      }
       _dropped++;
       return false;
     }
@@ -382,25 +395,27 @@ void sweepStale(unsigned long now, unsigned long staleMs) {
   sweepSubStale(now, SUB_STALE_MS);
 }
 
+// Reclaims a splitter's stale secondary message types; it never frees a
+// device slot itself; only sweepStale's device window does that.
 void sweepSubStale(unsigned long now, unsigned long staleMs) {
   if (staleMs == 0) return;
+  int newest[SIGNAL_DEVICE_SLOTS];
+  for (uint8_t s = 0; s < SIGNAL_DEVICE_SLOTS; s++) newest[s] = -1;
+  for (uint8_t i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (!_subs[i].used || _subs[i].slotIdx >= SIGNAL_DEVICE_SLOTS) continue;
+    uint8_t slotIdx = _subs[i].slotIdx;
+    if (newest[slotIdx] < 0 || _subs[i].seq > _subs[newest[slotIdx]].seq) {
+      newest[slotIdx] = i;
+    }
+  }
   for (uint8_t i = 0; i < SIGNAL_SUB_TABLE; i++) {
     if (!_subs[i].used) continue;
     if ((unsigned long)(now - _subs[i].lastSeen) <= staleMs) continue;
     uint8_t slotIdx = _subs[i].slotIdx;
-    if (slotIdx >= SIGNAL_DEVICE_SLOTS) continue;
+    if (slotIdx < SIGNAL_DEVICE_SLOTS && newest[slotIdx] == i) continue;
     _subs[i].used = false;
     _subs[i].slotIdx = 0xFF;
     _subs[i].seq = 0;
-    bool any = false;
-    for (uint8_t j = 0; j < SIGNAL_SUB_TABLE; j++) {
-      if (_subs[j].used && _subs[j].slotIdx == slotIdx) { any = true; break; }
-    }
-    if (!any && _devices[slotIdx].used) {
-      _devices[slotIdx].used = false;
-      _seq[slotIdx] = 0;
-      _deviceCount--;
-    }
   }
 }
 
@@ -527,12 +542,18 @@ bool selfTest() {
 
   reset();
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // pending
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // promotes
-  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // promotes: sub 0
+  delay(2);
+  record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);         // sub 1, newer
   {
     unsigned long base = _subs[0].lastSeen;
-    sweepSubStale(base + SUB_STALE_MS + 1, SUB_STALE_MS);
-    ok &= check("stale sub is swept", deviceCount() == 0);
+    sweepSubStale(base + SUB_STALE_MS + 3, SUB_STALE_MS);  // both subs now past SUB_STALE_MS
+    ok &= check("the sub sweep spares a slot's newest sub and never frees the device",
+                deviceCount() == 1 && subAt(0) == NULL && subAt(1) != NULL);
+    unsigned long deviceBase = _devices[0].lastSeen;
+    sweepStale(deviceBase + 60001, 60000);
+    ok &= check("the device window, not the sub sweep, is what ends the slot's life",
+                deviceCount() == 0);
   }
 
   reset();
@@ -620,6 +641,65 @@ bool selfTest() {
 
   _hookCount = savedHookCount;
   memcpy(_hooks, savedHooks, sizeof(_hooks));
+
+  reset();
+  record("{\"model\":\"Dev\",\"id\":\"12345678901234567890\"}", -70);  // pending regardless
+  ok &= check("a 20-character id is rejected rather than truncated into a colliding key",
+              !record("{\"model\":\"Dev\",\"id\":\"12345678901234567890\"}", -70) &&
+                  deviceCount() == 0);
+
+  reset();
+  static int oversizeHookCalls = 0;
+  {
+    uint8_t    savedHookCount2 = _hookCount;
+    RecordHook savedHooks2[SIGNAL_MAX_HOOKS];
+    memcpy(savedHooks2, _hooks, sizeof(_hooks));
+    _hookCount = 0;
+    oversizeHookCalls = 0;
+    addRecordHook([](const char*, JsonDocument&) { oversizeHookCalls++; });
+    char longNote[SIGNAL_PAYLOAD_MAX];
+    memset(longNote, 'A', sizeof(longNote) - 1);
+    longNote[sizeof(longNote) - 1] = '\0';
+    snprintf(buf, sizeof(buf), "{\"model\":\"Oversize\",\"id\":1,\"note\":\"%s\"}", longNote);
+    record(buf, -70);  // first sighting: pending, no hook fires regardless
+    ok &= check("an over-long payload is dropped before any hook runs",
+                !record(buf, -70) && oversizeHookCalls == 0);
+    _hookCount = savedHookCount2;
+    memcpy(_hooks, savedHooks2, sizeof(_hooks));
+  }
+
+  reset();
+  for (int d = 0; d < 8; d++) {
+    for (int mt = 0; mt < 4; mt++) {
+      snprintf(buf, sizeof(buf), "{\"model\":\"Splitter\",\"id\":%d,\"message_type\":%d}", d, mt);
+      record(buf, -70);
+      if (mt == 0) {
+        record(buf, -70);  // first message_type needs a second sighting to promote
+      }
+    }
+  }
+  ok &= check("32 subs across 8 splitters fill the sub table", deviceCount() == 8);
+  {
+    uint8_t before = deviceCount();
+    record("{\"model\":\"NewDev\",\"id\":1}", -70);  // pending
+    record("{\"model\":\"NewDev\",\"id\":1}", -70);  // sub table is full; this device has no sub to evict
+    ok &= check("a failed sub claim does not leak a device slot", deviceCount() == before);
+    bool anyNullPayload = false;
+    for (uint8_t i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
+      const DeviceSlot* s = slotAt(i);
+      if (s != NULL && latestPayload(*s) == NULL) anyNullPayload = true;
+    }
+    ok &= check("no live slot has a NULL latestPayload", !anyNullPayload);
+  }
+
+  {
+    DeviceSlot foreign{};
+    ok &= check("indexOf rejects a slot outside the table", indexOf(foreign) < 0);
+  }
+  reset();
+  record("{\"model\":\"Dev\",\"id\":1}", -70);
+  record("{\"model\":\"Dev\",\"id\":1}", -70);
+  ok &= check("indexOf finds a slot in the table", indexOf(device(0)) == 0);
 
   Log.notice(F("selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

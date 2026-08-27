@@ -214,7 +214,7 @@ bool selfTest() {
   ok &= check("removing an entry drops the count", count() == 2);
   ok &= check("a removed entry's neighbours keep their indices",
               indexOf("s/M/1/$alias") == idx1 && indexOf("s/M/3/$alias") == idx3);
-  ok &= check("a removed entry reads as NULL", topicAt((uint8_t)idx2) == NULL &&
+  ok &= check("a removed entry reads as NULL", idx2 >= 0 && topicAt((uint8_t)idx2) == NULL &&
                                                     nameAt((uint8_t)idx2) == NULL);
   set("s/M/4/$alias", "four");
   ok &= check("a later set reuses the freed entry", indexOf("s/M/4/$alias") == idx2);

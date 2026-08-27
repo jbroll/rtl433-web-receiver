@@ -42,8 +42,8 @@ const char* source();
 #define SIGNAL_MAX_HOOKS 2
 typedef void (*RecordHook)(const char* key, JsonDocument& doc);
 // Registers a hook to run in signal_store::record(), in registration order,
-// after time/rssi/count are stamped and before the size check. Silently
-// ignored once SIGNAL_MAX_HOOKS are already registered.
+// after the size check. Silently ignored once SIGNAL_MAX_HOOKS are already
+// registered.
 void        addRecordHook(RecordHook hook);
 // isDecode false records the receiver's own telemetry: it takes a device slot
 // like any other, but stays out of the decode count.
@@ -59,6 +59,8 @@ void              sweepStale(unsigned long now, unsigned long staleMs);
 uint32_t          totalRecorded();
 uint32_t          droppedCount();
 const char*       latestPayload(const DeviceSlot& slot);
+// Reclaims a splitter's stale secondary message types; never frees a device
+// slot. sweepStale() is the only thing that ends a slot's life.
 void              sweepSubStale(unsigned long now, unsigned long staleMs);
 const DeviceSub*  subAt(uint8_t i);
 int               latestSubIndex(const DeviceSlot& slot);

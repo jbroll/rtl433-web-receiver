@@ -14,18 +14,6 @@ and take the board onto their network with an OTA credential they control. `POST
 then accepts arbitrary firmware. A WPA2 password on the SoftAP, printed on the device or
 derived from the chip ID, is the smallest fix.
 
-## A failed sub claim leaves a device slot allocated
-
-`signal_store::record()` runs `claimSlot()` (which increments `_deviceCount`), copies the
-key, and sets `used = true` at `:252-254`, before `claimSub()` can fail at `:268-272`. When
-it does, `record()` does `_dropped++; return false;` and leaves a slot with `lastSeen == 0`,
-`count == 0` and no sub. With 32 subs already allocated and a new device promoted from
-pending, the store reports one more device than exists, `device()` orders a slot whose
-`latestPayload()` is NULL, a `GET` of its key answers 404, and nothing reclaims it until
-`sweepSubStale()` measures `millis() - 0` past `SUB_STALE_MS` (see the entry on the hour
-cap below, which is what actually bounds this and not `DEVICE_STALE_HOURS`). Claiming the sub first,
-or releasing the slot on the failure path, fixes it.
-
 ## Build-time secrets are readable in the firmware image
 
 `load_env.py` passes `WIFI_PASSWORD`, `OTA_TOKEN` and `MQTT_TOKEN` from `.env` to
@@ -136,7 +124,7 @@ but nobody has seen those lines there. The board flashes and runs, and
 `ArduinoLog` writes to `Serial0`, a hardware UART at 921600 baud, while the
 port exposed over USB is the S3's CDC device. Reading the self-test needs a
 UART adapter on the TX pin, or the sketch pointing `Log.begin()` at `Serial`
-so it comes out over USB. `signal_store`'s 51 checks and `alias_store`'s 22
+so it comes out over USB. `signal_store`'s 63 checks and `alias_store`'s 22
 now run and are checked on every commit via `test/host/run.sh` (see
 `architecture.md`); only the on-device serial output is still unread.
 
@@ -196,29 +184,6 @@ begin/get/set-a-JSON-blob-in-NVS module with different sizes and namespace
 names, and every store's `selfTest()` carries its own copy of the
 `check(what, ok)` PASS/FAIL logger (eight copies). One blob-store template and
 one shared check helper would remove both.
-
-## Devices expire after an hour whatever `DEVICE_STALE_HOURS` says
-
-`sweepStale()` ends by calling `sweepSubStale(now, SUB_STALE_MS)`, and `SUB_STALE_MS` is
-hardcoded to 3600000 in `signal_store.h`. `sweepSubStale()` frees the owning device slot
-when its last sub goes, so effective retention is `min(DEVICE_STALE_HOURS, 1h)` and the
-72-hour build flag can never take effect. A sensor with a daily or weather-dependent duty
-cycle disappears from the dashboard after an hour and comes back as a new pending key,
-needing two sightings to reappear. `DEVICE_STALE_HOURS=0`, which the flag's comment says
-disables expiry, does not: the `staleMs == 0` early return skips only the device loop.
-Either stop freeing the slot from the sub sweep and let the device window own slot
-lifetime, or tie `SUB_STALE_MS` to `DEVICE_STALE_HOURS` and document the coupling.
-
-## MQTT publishes messages the store then drops
-
-`signal_store::record()` runs the hook loop before the `measureJson(doc) >
-SIGNAL_PAYLOAD_MAX` check, and `mqtt_publish::onRecord` is registered as a hook, so a
-payload too large for the store is still published retained to every broker. The bridge
-and the receiver then disagree about which messages exist, and the retained copy has no
-local counterpart to age out. The pending-key rule is checked earlier and is consistent;
-only the size check is on the wrong side. Moving it above the hook loop is the fix, since
-`SIGNAL_PAYLOAD_MAX` is a property of the message rather than of the store's write. The
-failed-sub-claim path above drops a record after the hooks have run for the same reason.
 
 ## Two stores write blobs the 20 KB NVS partition cannot promise them
 
@@ -292,10 +257,6 @@ back on the next `$alias` frame until it receives this build.
 
 ## Smaller items
 
-- `signal_store::indexOf()` and `alias_store::indexOf()` have no self-test
-  check. The alias self-test casts `indexOf()`'s result to `uint8_t`, so a `-1`
-  would read as 255 and `topicAt()` would return NULL, passing the check for
-  the wrong reason.
 - `REPLAY_PER_LOOP` bounds the frames a replay sends per `web_ui::loop()`, not
   the cursor steps it takes: a subscriber whose filters match nothing walks all
   64 indices in one pass. Bounded and cheap, but it is the loop's worst case
@@ -357,19 +318,10 @@ back on the next `$alias` frame until it receives this build.
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
   from there means changing the hook contract from "gets the doc" to "gets the
   serialised payload", so it is worth doing only if the decode path measures hot.
-- `claimRain()` in `device_hooks.cpp` always evicts the clock-less entry. `localDay()`
-  returns 0 before the first SNTP sync, so any baseline recorded pre-sync has `day == 0`
-  and is the permanent eviction victim, and its `rain_today_mm` is meaningless until the
-  clock arrives because the rollover branch never fires. Skipping the hook while
-  `localDay() == 0` would avoid both.
 - `setupConnection()` sets `enabled = false` and returns early on a broker URL it cannot
   parse, but the caller increments `_connCount` regardless, so `count()`, `urlAt()` and
   `connectedAt()` — and through them `GET /$mqtt` — list a bridge that will never connect
   and give no reason for it.
-- `buildKey()` truncates `doc["id"]` into a 16-byte buffer, so two sensors sharing a
-  15-character prefix map to one key and one slot and interleave their readings.
-  Everywhere else `buildKey` rejects rather than truncates, and has a self-test for it;
-  the `id` segment is the one inconsistent spot.
 - A `POST /<topic>/$alias` with a name longer than `ALIAS_NAME_MAX` answers `204` and
   stores 31 characters. `web_ui.cpp` checks the topic length and returns `400` for a long
   one, but nothing checks the name, and `alias_store::set` truncates. The truncation at

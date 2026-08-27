@@ -95,9 +95,12 @@ bool validate(JsonDocument& doc) {
 
 static void rainHook(const char* key, JsonDocument& doc) {
   if (!doc["rain_mm"].is<float>()) return;
+  int32_t day = localDay();
+  // Pre-sync, day is always 0, so a baseline recorded now would be
+  // claimRain()'s permanent eviction target and its delta meaningless anyway.
+  if (day == 0) return;
   float mm = doc["rain_mm"].as<float>();
 
-  int32_t day = localDay();
   int idx = findRain(key);
 
   if (idx < 0) {

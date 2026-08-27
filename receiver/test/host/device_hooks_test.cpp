@@ -65,13 +65,14 @@ int main() {
   check("counter roll resets baseline to 0 delta",
         fabs(rainToday("src/Acurite-5n1/1", "Acurite-5n1", 3.0f) - 0.0f) < 0.01f);
 
-  // Clock unset (time < 1700000000): baseline tracks, no day reset.
-  device_hooks::setNow(0);
-  check("clock-unset first reading: delta 0",
-        fabs(rainToday("src/Acurite-5n1/3", "Acurite-5n1", 100.0f) - 0.0f) < 0.01f);
-  device_hooks::setNow(0);
-  check("clock-unset second reading: delta accumulates",
-        fabs(rainToday("src/Acurite-5n1/3", "Acurite-5n1", 105.0f) - 5.0f) < 0.01f);
+  // setNow(0) means "no override" and falls back to the real clock, so a
+  // nonzero pre-epoch value simulates the clock being unset.
+  device_hooks::setNow(1);
+  check("clock-unset first reading gets no rain_today_mm",
+        rainToday("src/Acurite-5n1/3", "Acurite-5n1", 100.0f) < 0.0f);
+  device_hooks::setNow(1);
+  check("clock-unset second reading still gets none",
+        rainToday("src/Acurite-5n1/3", "Acurite-5n1", 105.0f) < 0.0f);
 
   // TZ offset change moves the day boundary. At t=1700006400 (86400*19676),
   // offset -240 gives day 19675 but offset 0 gives day 19676: shifting west 4
