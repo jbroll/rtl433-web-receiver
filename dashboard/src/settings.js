@@ -160,8 +160,8 @@ let tzThrottledUntil = 0
 // One-way-until-resolved latch: the timer-driven path (refreshTz, every
 // tick) tells the user once per unauthorized streak rather than every 10s.
 // A user-initiated post (setLocation) always toasts -- they just took an
-// action and want to know it failed -- and re-arms the latch so the next
-// timer-driven 401 gets its own single toast.
+// action and want to know it failed -- and then sets the latch like any
+// other 401, so the next timer-driven 401 in the same streak stays quiet.
 let tzUnauthorizedToasted = false
 
 // Latches lastPostedTzOffset only on a confirmed 2xx (204 today): 401 and

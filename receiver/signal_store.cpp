@@ -99,6 +99,7 @@ static uint8_t    _deviceCount = 0;
 static uint32_t   _seqCounter = 0;
 static uint32_t   _total = 0;
 static uint32_t   _dropped = 0;
+static uint32_t   _hookOverflows = 0; // times a hook grew doc past SIGNAL_PAYLOAD_MAX
 static char       _source[SIGNAL_SOURCE_MAX] = "rtl433";
 static DeviceSub  _subs[SIGNAL_SUB_TABLE];
 static RecordHook _hooks[SIGNAL_MAX_HOOKS];
@@ -121,6 +122,7 @@ void reset() {
   _seqCounter = 0;
   _total = 0;
   _dropped = 0;
+  _hookOverflows = 0;
   _lastRecordedIdx = -1;
 }
 
@@ -415,12 +417,20 @@ bool record(const char* payload, int rssi, bool isDecode) {
   }
 
   DeviceSub& sub = _subs[subIdx];
-  // Captured before any hook runs: measureJson(doc) above already fits
-  // SIGNAL_PAYLOAD_MAX, so this always fits sub.payload and is always
+  // Captured before any hook runs, only when a hook is registered: with no
+  // hooks, doc cannot change below, so the post-hook serialize can never
+  // overflow and this fallback is never read. measureJson(doc) above already
+  // fits SIGNAL_PAYLOAD_MAX, so this always fits sub.payload and is always
   // NUL-terminated. It is the fallback if a hook grows doc too far to
   // reserialize below.
-  char preHookPayload[sizeof(sub.payload)];
-  serializeJson(doc, preHookPayload, sizeof(preHookPayload));
+  char   preHookPayload[sizeof(sub.payload)];
+  size_t preHookPayloadLen = 0;
+  if (_hookCount) {
+    int preLen = serializeJson(doc, preHookPayload, sizeof(preHookPayload));
+    if (preLen > 0) {
+      preHookPayloadLen = (size_t)preLen;
+    }
+  }
 
   for (uint8_t h = 0; h < _hookCount; h++) {
     _hooks[h](key, doc);
@@ -432,9 +442,22 @@ bool record(const char* payload, int rssi, bool isDecode) {
   // unterminated, so fall back to the pre-hook serialization instead.
   int n = serializeJson(doc, sub.payload, sizeof(sub.payload));
   if (n < 0 || (size_t)n >= sizeof(sub.payload)) {
-    Log.warning(F("signal_store: hook grew %s past SIGNAL_PAYLOAD_MAX; "
-                   "storing the pre-hook payload" CR), key);
-    memcpy(sub.payload, preHookPayload, sizeof(sub.payload));
+    _hookOverflows++;
+    // Untethered from the record rate: a device parked at the ceiling would
+    // otherwise log this on every message. One line per minute is enough for
+    // an operator to notice; _hookOverflows in the telemetry JSON carries the
+    // exact count.
+    static unsigned long lastLoggedAt = 0;
+    unsigned long         now = millis();
+    if (lastLoggedAt == 0 || (unsigned long)(now - lastLoggedAt) >= 60000) {
+      lastLoggedAt = now;
+      Log.warning(F("signal_store: hook grew %s past SIGNAL_PAYLOAD_MAX; "
+                     "storing the pre-hook payload (%lu total)" CR), key,
+                  (unsigned long)_hookOverflows);
+    }
+    // preHookPayloadLen only covers what serializeJson actually wrote; the
+    // rest of preHookPayload is unused stack past that point.
+    memcpy(sub.payload, preHookPayload, preHookPayloadLen + 1);
   }
   sub.lastSeen = millis();
   slot.lastSeen = sub.lastSeen;
@@ -540,6 +563,10 @@ uint32_t totalRecorded() {
 
 uint32_t droppedCount() {
   return _dropped;
+}
+
+uint32_t hookOverflowCount() {
+  return _hookOverflows;
 }
 
 // now is a parameter rather than a millis() call so the self-test can drive

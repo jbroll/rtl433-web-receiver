@@ -61,6 +61,9 @@ int               indexOf(const DeviceSlot& slot);
 void              sweepStale(unsigned long now, unsigned long staleMs);
 uint32_t          totalRecorded();
 uint32_t          droppedCount();
+// Times a hook grew doc past SIGNAL_PAYLOAD_MAX, forcing record() to fall
+// back to the pre-hook payload for that message.
+uint32_t          hookOverflowCount();
 const char*       latestPayload(const DeviceSlot& slot);
 void              sweepSubStale(unsigned long now, unsigned long staleMs);
 const DeviceSub*  subAt(uint8_t i);

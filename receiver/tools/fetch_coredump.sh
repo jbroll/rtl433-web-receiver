@@ -35,6 +35,7 @@ fi
 # that separation, or one copied in by hand, could still carry FAKE_SIGNALS'
 # symbols; symbolicating a real dump against it produces plausible wrong
 # frames rather than an obvious failure.
+command -v strings >/dev/null 2>&1 || { echo "missing: strings (binutils)" >&2; exit 1; }
 if strings "$elf" 2>/dev/null | grep -q '^fakeSignal'; then
     echo "warning: $elf looks like a FAKE_SIGNALS build (has fakeSignal symbols)" >&2
     echo "it will not symbolicate a real coredump correctly; rebuild esp32s3-generic and retry" >&2

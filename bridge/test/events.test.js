@@ -360,8 +360,14 @@ test('the keepalive interval sends :keepalive frames on its own schedule', async
   try {
     const stream = await fetch(`${bridge.base}/events?f=src/%23`)
     try {
+      const start = Date.now()
       const frames = await readRawFrames(stream, 2, { matching: (frame) => frame === ':keepalive' })
+      const elapsedMs = Date.now() - start
       assert.deepEqual(frames, [':keepalive', ':keepalive'])
+      // keepaliveMs is 5 here; without the passthrough readRawFrames falls back
+      // to the production keepalive interval (tens of seconds) and this bound
+      // catches that rather than just running slow.
+      assert.ok(elapsedMs < 500, `expected both keepalives within 500ms, took ${elapsedMs}ms`)
     } finally {
       await closeStream(stream)
     }

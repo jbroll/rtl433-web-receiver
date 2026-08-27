@@ -449,7 +449,7 @@ static void recordReceiver() {
               "\"recovery_count\":%lu,\"last_recovery_s\":%lu,"
               "\"radio_ok\":%d,\"coredump_pending\":%d,"
               "\"temperature_C\":%.1f,\"heap_kB\":%lu,"
-              "\"decodes\":%lu,\"drops\":%lu",
+              "\"decodes\":%lu,\"drops\":%lu,\"hook_overflows\":%lu",
               (unsigned long)(millis() / 1000),
               (unsigned long)health_store::bootCount(),
               (int)health_store::resetReason(),
@@ -459,7 +459,8 @@ static void recordReceiver() {
               bootCoredumpPending ? 1 : 0,
               temperatureRead(), (unsigned long)(ESP.getFreeHeap() / 1024),
               (unsigned long)signal_store::totalRecorded(),
-              (unsigned long)signal_store::droppedCount());
+              (unsigned long)signal_store::droppedCount(),
+              (unsigned long)signal_store::hookOverflowCount());
   if (radioC != INT16_MIN) {
     n = appendf(buf, sizeof(buf), n, ",\"radio_C\":%d", radioC);
   }
