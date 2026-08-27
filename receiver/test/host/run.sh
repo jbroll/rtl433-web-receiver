@@ -69,3 +69,8 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     "$root/units_store.cpp" "$root/tz_store.cpp" \
     "$root/test/host/mqtt_publish_test.cpp"
 "$out/mqtt_publish_test"
+# frame.h is header-only: no Arduino headers beyond Print, so no shim -I needed
+# for anything but Print.h itself.
+g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \
+    -o "$out/frame_test" "$root/test/host/frame_test.cpp"
+"$out/frame_test"

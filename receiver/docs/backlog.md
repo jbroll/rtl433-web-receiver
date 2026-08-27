@@ -77,16 +77,6 @@ are overwritten. A healthy client never waits. Removing the risk entirely means
 serving the page off a second task, which the single-task design deliberately
 avoids.
 
-## SSE eviction and auto-reconnect can churn
-
-With all four stream slots busy, a new viewer evicts the longest-attached one,
-whose browser reconnects three seconds later on the server-sent `retry` and
-evicts the next. Observed while
-testing with five clients plus an open tab. It is self-limiting and only happens
-when oversubscribed, but a viewer in that state sees the table reload
-repeatedly. Raising the slot count or backing off the page's reconnect would
-both help.
-
 ## The compiled decoders are 15% of the image
 
 The 319 compiled decoders are 172,009 bytes of `.flash.text`. `MY_DEVICES` in the fork's
@@ -193,18 +183,6 @@ headroom: `set()` accepts anything under 5120 and the write either works or does
 Shrinking the per-card template on the dashboard side would help; raising the partition is
 blocked on the platform hardcoding `app0`'s offset, as `partitions.csv` notes.
 
-## The SSE frame buffer is memset on every broadcast
-
-`SizedFrame` in `web_ui.cpp` zero-initialises its storage, and `FRAME_DEVICE_CAP` is 1363,
-so each of `broadcast()`, `broadcastAlias()`, `broadcastLocation()`, `broadcastUnits()`
-and `broadcastTz()` clears 1363 bytes to write a frame of roughly 250. The zero-init is
-there so the byte past the last write is a NUL for `data()`, but `reset()` sets only
-`_buf[0]`, so that guarantee does not survive a reused buffer anyway. Appending
-`_buf[_len] = '\0'` at the end of `Frame::write`, where `_len <= _cap - 1` is already an
-invariant, is a stronger guarantee and drops the memset. `handleTopic()` compounds it by
-putting a full `FrameBuffer` on the stack to escape an alias name capped at 32 characters,
-where `mqtt_publish.cpp`'s `ALIAS_PAYLOAD_MAX` of 195 already names the worst case.
-
 ## `POST /$mqtt/remove` returns 204 for a url it never removed
 
 `handleMqttRemovePost()` in `web_ui.cpp` calls `mqtt_publish_store::remove(url)` and
@@ -238,14 +216,6 @@ future call site changes that assumption.
 
 ## Smaller items
 
-- `REPLAY_PER_LOOP` bounds the frames a replay sends per `web_ui::loop()`, not
-  the cursor steps it takes: a subscriber whose filters match nothing walks all
-  64 indices in one pass. Bounded and cheap, but it is the loop's worst case
-  and nothing states it.
-- The keepalive's write-failure path (`web_ui.cpp:985`) is the one place a
-  stopped client is not routed through `releaseSlot()`, so its filters and
-  replay cursor stay set. Inert, because every reader gates on `_sse[i]` first
-  and `handleEvents()` overwrites both when the slot is reused.
 - The OTA token is compared with Arduino `String::operator==`
   (`web_ui.cpp:593-598`), which returns on the first differing byte. Over a LAN
   with a TCP handshake per request, jitter swamps a one-byte delta, so this is
@@ -266,22 +236,11 @@ future call site changes that assumption.
   configure another; a broker not chained to Let's Encrypt (a commercial cloud
   broker, a self-signed LAN broker) will fail its handshake silently, showing
   only a dot that never turns green.
-- `web_ui::loop()` calls `reapClosedClients()` unconditionally at the top and again
-  inside the keepalive branch, and each call costs an `operator bool` plus a
-  `recv(MSG_DONTWAIT|MSG_PEEK)` syscall per SSE slot. At loop rate that is thousands
-  of syscalls a second to notice something that matters within a second or two.
-  Gating it on a ~100 ms timer like the keepalive changes slot-free latency by at
-  most that much.
 - Each record is serialised twice: `mqtt_publish::onRecord` writes the doc into a
   601-byte stack buffer and `signal_store::record()` writes the identical doc into
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
   from there means changing the hook contract from "gets the doc" to "gets the
   serialised payload", so it is worth doing only if the decode path measures hot.
-- A `POST /<topic>/$alias` with a name longer than `ALIAS_NAME_MAX` answers `204` and
-  stores 31 characters. `web_ui.cpp` checks the topic length and returns `400` for a long
-  one, but nothing checks the name, and `alias_store::set` truncates. The truncation at
-  least propagates consistently, because the handler re-reads the stored value for the
-  broadcast.
 - `signal_store::totalRecorded()` and `droppedCount()` have no caller outside
   `selfTest()`, though `_total` and `_dropped` are maintained on every record. The
   Receiver telemetry card reports heap, uptime and recovery count but not decode or drop

@@ -91,6 +91,20 @@ test("a post of a non-JSON body is 400 and leaves the alias alone", async () => 
   expect((await server.get(topic)).body).toBe(JSON.stringify("Back fence"));
 });
 
+test("a name at ALIAS_NAME_MAX is 400 and leaves the stored alias alone", async () => {
+  server = await startServer({ devices: [ACURITE] });
+  const topic = topicOf(ACURITE) + "/$alias";
+  await server.post(topic, JSON.stringify("Back fence"));
+
+  const atMax = "a".repeat(32);
+  expect((await server.post(topic, JSON.stringify(atMax))).status).toBe(400);
+  expect((await server.get(topic)).body).toBe(JSON.stringify("Back fence"));
+
+  const underMax = "a".repeat(31);
+  expect((await server.post(topic, JSON.stringify(underMax))).status).toBe(204);
+  expect((await server.get(topic)).body).toBe(JSON.stringify(underMax));
+});
+
 test("a post to a non-$alias topic is 405", async () => {
   server = await startServer({ devices: [ACURITE] });
   expect((await server.post(topicOf(ACURITE), JSON.stringify("x"))).status).toBe(405);

@@ -116,6 +116,7 @@ bridge's retained copy the same way.
     204
 
 A `POST` whose topic is 103 characters or longer is `400`, body `alias too
+long`. A name of 32 characters or longer is `400`, body `alias name too
 long`. One that would exceed the 32-alias table, or the 2 KB blob the table
 serialises to for storage, is `503`, body `alias store full`, and the alias is
 not stored. Removing an alias that existed is `503`, body `alias remove
@@ -244,7 +245,7 @@ to `#`.
     GET /events?f=rtl433-a1b2c3/Acurite-5n1/%2B&f=rtl433-a1b2c3/$alias
 
     200 text/event-stream
-    retry: 3000
+    retry: 15000
 
     data: {"topic":"rtl433-a1b2c3/Acurite-5n1/1234","payload":{...}}
 
@@ -261,11 +262,11 @@ sees it — that is how a query string is parsed, in this receiver and in the
 bridge alike — and a filter segment holding a space is invalid. A client that
 wants a single-segment wildcard has to send `%2B`, not a bare `+`.
 
-With all four stream slots in use, a new connection evicts the longest-attached
+With all six stream slots in use, a new connection evicts the longest-attached
 one by closing its socket. The evicted browser's `EventSource` reconnects on
-the server-sent `retry: 3000`, three seconds later. The five-second timer in
-the page's own reconnect logic is a separate fallback for a non-200 response,
-which eviction does not produce.
+the server-sent `retry: 15000`, fifteen seconds later. The five-second timer
+in the page's own reconnect logic is a separate fallback for a non-200
+response, which eviction does not produce.
 
 ## Topics
 
@@ -320,9 +321,6 @@ for the session, but is never written and is gone at the next reboot. That
 case logs a warning to the serial console at startup; there is no way to tell
 it apart from a normal `204` over HTTP.
 
-An alias name longer than 31 bytes is truncated when stored, rather than
-rejected.
-
 The page posts a rename optimistically to its own alias map before the
 request completes, and does not look at the response: any outcome other than
 success — the device unreachable, a `400`, a `503` — leaves that browser
@@ -350,7 +348,7 @@ stream reconnects, and every open browser picks up the new page.
   remotes, which transmit only when triggered.
 - payloads up to 600 bytes; a longer one is dropped rather than truncated
 - 32 aliases
-- 4 concurrent SSE clients, each subscribing up to 4 filters; a fifth client
+- 6 concurrent SSE clients, each subscribing up to 4 filters; a seventh client
   evicts the longest-attached one, whose browser reconnects on its own
 - the radio monitors its own health once a minute; a stuck or parked radio is
   recovered by re-running the radio init.

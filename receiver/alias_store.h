@@ -8,6 +8,9 @@
 // A device key plus "/$alias".
 #define ALIAS_TOPIC_MAX (SIGNAL_KEY_MAX + 7)
 #define ALIAS_NAME_MAX  32
+// Every one of ALIAS_NAME_MAX characters can escape to \u00xx, plus two
+// quotes and the terminator.
+#define ALIAS_PAYLOAD_MAX (ALIAS_NAME_MAX * 6 + 3)
 // NVS keys are limited to 15 characters and an alias topic runs past 100, so
 // the whole table is one blob under one key rather than an entry per alias.
 // The blob does not hold 32 full-length entries; set() fails once it is full.

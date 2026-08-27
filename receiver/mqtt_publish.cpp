@@ -167,10 +167,6 @@ static void setupConnection(Connection& c, const char* url, const char* token) {
              c.broker.host, c.broker.port, c.broker.tls ? "TLS" : "plain");
 }
 
-// Every one of ALIAS_NAME_MAX characters can escape to \u00xx, plus two
-// quotes and the terminator.
-#define ALIAS_PAYLOAD_MAX (ALIAS_NAME_MAX * 6 + 3)
-
 // A Print sink over a fixed buffer for json_string::writeJsonString, which
 // needs a Print& and would otherwise have to allocate a JsonDocument just to
 // escape one string.

@@ -10,6 +10,7 @@
 
 #include "alias_store.h"
 #include "dashboard_html.h"
+#include "frame.h"
 #include "layout_store.h"
 #include "location_store.h"
 #include "units_store.h"
@@ -31,7 +32,7 @@ namespace web_ui {
 static WebServer _server(80);
 static bool      _started = false;
 
-#define WEB_UI_SSE_CLIENTS 4
+#define WEB_UI_SSE_CLIENTS 6
 #define WEB_UI_SSE_FILTERS 4
 #define WEB_UI_FILTER_MAX  65
 #define SSE_KEEPALIVE_MS   15000
@@ -43,9 +44,11 @@ static WiFiClient    _sse[WEB_UI_SSE_CLIENTS];
 static uint32_t      _sseAttachedAt[WEB_UI_SSE_CLIENTS] = {0};
 static char          _filters[WEB_UI_SSE_CLIENTS][WEB_UI_SSE_FILTERS][WEB_UI_FILTER_MAX];
 static uint8_t       _filterCount[WEB_UI_SSE_CLIENTS] = {0};
-static int16_t       _replay[WEB_UI_SSE_CLIENTS] = {-1, -1, -1, -1};
+static int16_t       _replay[WEB_UI_SSE_CLIENTS] = {-1, -1, -1, -1, -1, -1};
 static uint32_t      _sseAttachCounter = 0;
 static unsigned long _lastKeepalive = 0;
+static unsigned long _lastReap = 0;
+#define REAP_INTERVAL_MS 100
 
 namespace {
 
@@ -183,53 +186,6 @@ class ChunkedResponse : public Print {
 // The layout blob is embedded raw and is several times any device payload, so
 // it gets its own size rather than putting 4 KB on the stack for every frame.
 #define FRAME_LAYOUT_CAP (FRAME_OVERHEAD + LAYOUT_STORE_MAX + 1)
-
-// Assembles a whole SSE frame so broadcast() sends it in one call, and flags
-// overflow rather than clamping, so a truncated frame is never put on the wire.
-class Frame : public Print {
- public:
-  size_t write(uint8_t b) override { return write(&b, 1); }
-
-  size_t write(const uint8_t* data, size_t len) override {
-    size_t n = min(len, _cap - 1 - _len);
-    if (n < len) {
-      _overflow = true;
-    }
-    memcpy(_buf + _len, data, n);
-    _len += n;
-    return n;
-  }
-
-  const char* data() const { return _buf; }
-  size_t      length() const { return _len; }
-  bool        overflowed() const { return _overflow; }
-
-  void reset() {
-    _len = 0;
-    _overflow = false;
-    _buf[0] = '\0';
-  }
-
- protected:
-  Frame(char* buf, size_t cap) : _buf(buf), _cap(cap) {}
-
- private:
-  char*  _buf;
-  size_t _cap;
-  size_t _len      = 0;
-  bool   _overflow = false;
-};
-
-// Zero-initialized so the untouched byte past the last write is always the
-// null terminator data() promises.
-template <size_t CAP>
-class SizedFrame : public Frame {
- public:
-  SizedFrame() : Frame(_storage, CAP) {}
-
- private:
-  char _storage[CAP] = {};
-};
 
 typedef SizedFrame<FRAME_DEVICE_CAP> FrameBuffer;
 typedef SizedFrame<FRAME_LAYOUT_CAP> LayoutFrameBuffer;
@@ -369,6 +325,10 @@ static void handleAliasPost(const char* path) {
   }
   if (strlen(path) >= ALIAS_TOPIC_MAX) {
     sendStatus(400, "alias too long");
+    return;
+  }
+  if (strlen(name) >= ALIAS_NAME_MAX) {
+    sendStatus(400, "alias name too long");
     return;
   }
   if (*name == '\0') {
@@ -724,7 +684,7 @@ static void handleTopic() {
       sendStatus(404, "no message");
       return;
     }
-    FrameBuffer json;
+    SizedFrame<ALIAS_PAYLOAD_MAX> json;
     writeJsonString(json, name);
     sendCors();
     _server.sendHeader("Cache-Control", "no-store");
@@ -793,7 +753,7 @@ static void handleEvents() {
                                 "Access-Control-Allow-Origin: *\r\n"
                                 "Connection: keep-alive\r\n"
                                 "\r\n"
-                                "retry: 3000\r\n\r\n";
+                                "retry: 15000\r\n\r\n";
   sendFrameOrDrop(client, header, sizeof(header) - 1);
   if (!client.connected()) {
     return;
@@ -812,6 +772,9 @@ static void handleEvents() {
 // from mid-replay is delivered with its newer payload when the cursor reaches
 // it, and one evicted mid-replay is simply not delivered. The sub table now
 // has holes like the alias table, so every index is visited and NULLs skip.
+// REPLAY_PER_LOOP bounds frames sent, not steps taken: a subscriber whose
+// filters match nothing walks the whole cursor space, SIGNAL_SUB_TABLE +
+// ALIAS_SLOTS + 4 store entries, 68 indices, in one loop() pass.
 static void drainReplay(int i, Frame& frame) {
   for (int sent = 0; sent < REPLAY_PER_LOOP && _replay[i] >= 0; ) {
     int16_t at = _replay[i]++;
@@ -942,7 +905,10 @@ void loop() {
   }
   // Ahead of the WiFi gate: a drop leaves every slot holding a dead client, and
   // nothing would free them until four more viewers had each evicted one.
-  reapClosedClients();
+  if (millis() - _lastReap >= REAP_INTERVAL_MS) {
+    _lastReap = millis();
+    reapClosedClients();
+  }
   if (!wifiReady()) {
     return;
   }
@@ -971,6 +937,9 @@ void loop() {
       }
       static const char keepalive[] = ":keepalive\n\n";
       sendFrameOrDrop(_sse[i], keepalive, sizeof(keepalive) - 1);
+      if (!_sse[i]) {
+        releaseSlot(i);
+      }
     }
   }
 }

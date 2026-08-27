@@ -208,7 +208,7 @@ or update a bridge and a `POST /$mqtt/remove` drop one; both mutating routes
 check the request's `Origin` header against the receiver's own `Host` rather
 than using the bare-path-or-own-source convention `$tz`, `$layout`,
 `$location`, and `$units` use, since `$mqtt` has no source-prefixed form to
-compare against. Four SSE client slots (`WEB_UI_SSE_CLIENTS`), each a
+compare against. Six SSE client slots (`WEB_UI_SSE_CLIENTS`), each a
 `WiFiClient` plus up to four filters and one replay cursor, are fixed arrays
 sized at compile time — there is no dynamic connection list.
 

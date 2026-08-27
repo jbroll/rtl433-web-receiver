@@ -2,6 +2,7 @@ const http = require("http");
 
 const SOURCE = "rtl433-test";
 const ALIAS_SUFFIX = "/$alias";
+const ALIAS_NAME_MAX = 32;
 const LAYOUT_SUFFIX = "/$layout";
 const LOCATION_SUFFIX = "/$location";
 const UNITS_SUFFIX = "/$units";
@@ -256,6 +257,10 @@ function startServer(opts = {}) {
       }
       if (typeof value !== "string") {
         res.writeHead(400).end("body must be a JSON string");
+        return;
+      }
+      if (value.length >= ALIAS_NAME_MAX) {
+        res.writeHead(400).end("alias name too long");
         return;
       }
       publish(topic, JSON.stringify(value));
