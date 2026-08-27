@@ -86,6 +86,7 @@ async function handle(
     maxSseClients,
     maxSseFilters,
     maxBufferedBytes,
+    keepaliveMs,
   },
 ) {
   const url = new URL(req.url, 'http://bridge.invalid')
@@ -121,7 +122,7 @@ async function handle(
       return res.end()
     }
     if (clients.size >= maxSseClients) return send(res, 503, 'too many streams')
-    return subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes })
+    return subscribe(req, res, { cache, clients, url, maxSseFilters, maxBufferedBytes, keepaliveMs })
   }
 
   // Under the reserved '/-/' prefix (docs/binding.md), so it can never
