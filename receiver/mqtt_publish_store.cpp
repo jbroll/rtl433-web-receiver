@@ -80,6 +80,14 @@ static void loadTable(const char* json) {
     if (!o["url"].is<const char*>() || !o["token"].is<const char*>()) {
       continue;
     }
+#ifdef MQTT_BROKER_URL
+    // A row equal to the build-flag broker, persisted before add()'s dedupe
+    // existed (or by some other path), would otherwise reopen the duplicate-
+    // session flap add() was made to stop. Drop it rather than load it.
+    if (strcmp(o["url"].as<const char*>(), MQTT_BROKER_URL) == 0) {
+      continue;
+    }
+#endif
     copyTruncated(_url[i], MQTT_PUBLISH_STORE_URL_MAX, o["url"].as<const char*>());
     copyTruncated(_token[i], MQTT_PUBLISH_STORE_TOKEN_MAX, o["token"].as<const char*>());
     _used[i] = true;

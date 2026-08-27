@@ -142,7 +142,12 @@ static void setupConnection(Connection& c, const char* url, const char* token) {
 
   // Grown here, before enabled is set, so nothing can connect through this
   // slot while it still holds the idle-sized buffer.
-  c.mqtt.setBufferSize(MQTT_MAX_PACKET_SIZE);
+  if (!c.mqtt.setBufferSize(MQTT_MAX_PACKET_SIZE)) {
+    Log.warning(F("mqtt publish: buffer alloc for %s failed, out of memory, skipped" CR), url);
+    c.enabled = false;
+    c.reason  = "out of memory growing publish buffer";
+    return;
+  }
 
   if (c.broker.tls) {
     c.secureClient.setCACert(ISRG_ROOT_X1);
@@ -263,6 +268,7 @@ static void teardown(Connection& c) {
   }
   c.plainClient.stop();
   c.secureClient.stop();
+  c.mqtt.setBufferSize(MQTT_PUBLISH_IDLE_BUFFER_SIZE);
   c.enabled  = false;
   c.reason   = nullptr;
   c.url[0]   = '\0';
@@ -338,10 +344,16 @@ void begin(const char* clientId) {
     }
   }
 
+  // assignedSlot[w] can only be the MQTT_PUBLISH_MAX_CONNECTIONS sentinel
+  // (unassigned) if wantCount exceeds the slot count, which the invariant
+  // above rules out; skip it rather than trust that invariant here, so a
+  // future change can't make this read _conn[MQTT_PUBLISH_MAX_CONNECTIONS].
+  uint8_t orderCount = 0;
   for (uint8_t w = 0; w < wantCount; w++) {
-    _slotOrder[w] = assignedSlot[w];
+    if (assignedSlot[w] == MQTT_PUBLISH_MAX_CONNECTIONS) continue;
+    _slotOrder[orderCount++] = assignedSlot[w];
   }
-  _connCount = wantCount;
+  _connCount = orderCount;
   if (_connCount == 0) {
     Log.notice(F("mqtt publish: no broker configured, disabled" CR));
   }
