@@ -109,6 +109,23 @@ The grid flows sparsely (`grid-auto-flow: row`). Dense packing would backfill a
 dropped card into an earlier hole left by mixed card sizes, so a drop into an
 empty cell would reorder the DOM without moving the card on screen.
 
+## Card memo
+
+`Card` in `cards.jsx` is wrapped in `memo(Card, areEqual)`. `areEqual` returns `false`
+unconditionally except while a drag, resize, or rename is in flight on that same card's
+key, when it returns `true` -- the intent being to freeze a card's DOM while a gesture
+has it, so a live reading arriving mid-drag doesn't move or resize it under the pointer.
+
+That freeze does not hold. `Card`'s own body reads `rec.merged.value` (and other signals)
+directly, and `@preact/signals`' Preact integration re-renders a component that read a
+signal whenever that signal changes, independent of props or `memo` -- `areEqual` is
+never consulted for that path. A reading arriving for the card being dragged updates its
+displayed values in place while the drag continues (`test/cards.spec.js`, "a card's own
+signal update reaches its DOM mid-gesture, despite areEqual"). The gesture's own imperative
+state (the ghost element, the `lifting` class, drop zones) is untouched, because none of it
+lives in `Card`'s render output, so the drag itself keeps working; only the frozen-values
+guarantee `areEqual` was written for does not exist. Filed in `docs/backlog.md`.
+
 ## Keys
 
 A device is keyed `<base> <topic>` — the source's base URL, a space, and the topic. A
@@ -455,3 +472,8 @@ registered route first, so a spec's own route still wins over this default. The 
 `playwright.config.js` lists the tracked spec basenames in `testMatch` rather than
 globbing `test/*.spec.js`, so a scratch file dropped into `test/` never runs. A new
 spec needs a line added there.
+
+`cards.spec.js` selects a card with `[data-key$="..."]`, an unanchored suffix match
+that is unambiguous only while a spec runs a single source (a two-source key differs
+only in its base URL prefix). A spec that opens a second source must scope through a
+per-source root locator instead of adding to the suffix.

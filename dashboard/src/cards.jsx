@@ -153,12 +153,13 @@ function RenameInput({ rec }) {
             postAlias(key, ev.target.value)
             setRenaming(false)
           } else if (ev.key === 'Escape') {
+            committed.current = true
             setRenaming(false)
           }
         }}
         onBlur={(ev) => {
-          // The unmount from Enter's setRenaming(false) can itself fire blur;
-          // committed guards against posting the same alias twice.
+          // The unmount from Enter's or Escape's setRenaming(false) can itself
+          // fire blur; committed guards against that post-closing the input.
           if (committed.current) return
           postAlias(key, ev.target.value)
           setRenaming(false)

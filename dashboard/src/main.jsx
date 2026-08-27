@@ -220,6 +220,7 @@ function exposeForTests() {
     resizing: { get: () => resizing.value },
     gestureInFlight: { get: () => gestureInFlight() },
     hideNewCards: { set: store.setHideNewCards },
+    storageBroken: { get: store.isStorageBroken },
   })
 }
 

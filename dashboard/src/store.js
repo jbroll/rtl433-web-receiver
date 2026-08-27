@@ -293,3 +293,5 @@ export function forgetLayouts() {
 }
 
 export function setHideNewCards(v) { hideNewCards = v }
+
+export function isStorageBroken() { return storageBroken }

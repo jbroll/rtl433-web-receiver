@@ -408,19 +408,19 @@ test("an Acurite 5n1 with three readings defaults to 2x2", async ({ page }) => {
   expect(await spans(page, CARD)).toEqual({ col: "span 2 auto", row: "span 2 auto" });
 });
 
-test("the cell side is the smaller of the two divisions and re-measures on resize", async ({ page }) => {
+test("a 1x1 card's rendered box matches --cell, including at the 20px floor", async ({ page }) => {
   await open(page, [ACURITE]);
   await setGrid(page, 6, 4);
+  await setSize(page, ACURITE_KEY, 1, 1);
 
   const read = () => page.evaluate(() => {
-    const g = document.getElementById("cards");
-    const cs = getComputedStyle(g);
+    const card = document.querySelector(".card:not(.ghostcard)");
+    const cs = getComputedStyle(card);
+    const outset = parseFloat(cs.marginLeft) + parseFloat(cs.marginRight);
     return {
-      cell: cellSide,
-      width: g.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
-      height: window.innerHeight - g.getBoundingClientRect().top
-              - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
-      prop: parseFloat(cs.getPropertyValue("--cell")),
+      width: card.getBoundingClientRect().width,
+      cell: parseFloat(getComputedStyle(document.getElementById("cards")).getPropertyValue("--cell")),
+      outset: outset,
     };
   });
 
@@ -428,9 +428,17 @@ test("the cell side is the smaller of the two divisions and re-measures on resiz
     await page.setViewportSize({ width: w, height: h });
     await page.waitForTimeout(120);
     const m = await read();
-    expect(m.cell).toBeCloseTo(Math.min(m.width / 6, m.height / 4), 1);
-    expect(m.prop).toBeCloseTo(m.cell, 1);
+    expect(m.width).toBeCloseTo(m.cell - m.outset, 0);
   }
+
+  // Short enough that the height division alone would give well under 20px;
+  // grid.js:44's floor should hold --cell at 20 instead. The card's own
+  // padding no longer fits in 20px, so its rendered box can legitimately
+  // overflow the track here -- only --cell itself is asserted.
+  await page.setViewportSize({ width: 1200, height: 130 });
+  await page.waitForTimeout(120);
+  const floored = await read();
+  expect(floored.cell).toBeCloseTo(20, 0);
 });
 
 test("the rendered grid never overflows the viewport width", async ({ page }) => {
@@ -799,6 +807,24 @@ test("an Enter-committed card rename posts $alias once", async ({ page }) => {
   expect(posts).toBe(1);
 });
 
+test("Escape out of a rename leaves the alias unchanged and posts nothing", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  let posts = 0;
+  await page.route("**/$alias", (route) => { posts++; route.continue(); });
+  const before = await page.locator(CARD + " .nm").textContent();
+
+  await page.dblclick(CARD + " .lbl");
+  await page.fill(CARD + " .lbl input", "Roof station");
+  await page.press(CARD + " .lbl input", "Escape");
+
+  await expect(page.locator(CARD + " .lbl input")).toHaveCount(0, { timeout: 400 });
+  await expect(page.locator(CARD + " .nm")).toHaveText(before);
+  // The unmount can fire an async blur; give it a chance to (wrongly) post.
+  await page.waitForTimeout(300);
+  expect(posts).toBe(0);
+});
+
 test("the device table keeps up after a checkbox takes focus", async ({ page }) => {
   await open(page, [ACURITE]);
   await page.click("#tab-devices");
@@ -1125,6 +1151,34 @@ test("a live signal does not re-render mid-drag", async ({ page }) => {
   await expect(page.locator(CARD)).not.toHaveClass(/lifting/);
 });
 
+// Settles whether the memo(Card, areEqual) gesture freeze (cards.jsx:72) survives a
+// live reading for the card being dragged. It does not: Card reads rec.merged.value
+// directly, and @preact/signals re-renders a component that read a changed signal on
+// its own, independent of memo/areEqual. The drag mechanics (ghost, `lifting`, drop
+// zones) are untouched, since none of them live in Card's render output -- only the
+// displayed value updates underneath the gesture. See docs/architecture.md's "Card
+// memo" and docs/backlog.md.
+test("a card's own signal update reaches its DOM mid-gesture, despite areEqual", async ({ page }) => {
+  await open(page, [ACURITE, OREGON]);
+  await edit(page);
+  const box = await page.locator(CARD + " .lbl").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 80, box.y + 40, { steps: 5 });
+  await expect(page.locator(".ghostcard")).toHaveCount(1);
+  await expect(page.locator(CARD)).toHaveClass(/lifting/);
+  const value = () => page.locator(CARD + ' .val[data-f="temperature_F"] .fv').textContent();
+  const before = await value();
+
+  await server.emit({ ...ACURITE, temperature_F: 999.9 });
+  await expect.poll(value).not.toBe(before);
+
+  // The gesture itself is unaffected by the update reaching the card's DOM.
+  await expect(page.locator(".ghostcard")).toHaveCount(1);
+  await expect(page.locator(CARD)).toHaveClass(/lifting/);
+  await page.mouse.up();
+});
+
 test("the label straddling the top border is not clipped by the card", async ({ page }) => {
   await open(page, [ACURITE]);
 
@@ -1175,7 +1229,13 @@ test("values spread across the card without overflowing it", async ({ page }) =>
   expect(spanY).toBeGreaterThan(bodyBox.height * 0.7);
 });
 
-test("no card overflows its box at any size or value count", async ({ page }) => {
+// scrollWidth/scrollHeight only see content past the right/bottom edge, not
+// above or left of it -- .lbl sits at top:-.65em by design. The value-level
+// guarantee (a reading never getting cut) is "every value in a card shares
+// the size its widest reading needs", below; overflow:hidden on .card .val
+// and .card .fv (style.css:72,97) clips before this test's metrics can see
+// a value overflowing its own box, so that case isn't duplicated here.
+test("no card's content extends past its right or bottom edge", async ({ page }) => {
   await open(page, [LONGNAME, ACURITE, OREGON]);
   await page.click("#tab-cards");
   await setGrid(page, 6, 4);
@@ -1291,6 +1351,21 @@ test("the grid size survives a reload and Forget layouts resets it", async ({ pa
   await page.click("#forget-cards");
   await expect(page.locator("#grid-rows")).toHaveValue("4");
   expect(await cardState(page)).toBeNull();
+});
+
+test("Forget layouts survives a throwing localStorage.removeItem and latches storageBroken", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await edit(page);
+  await page.evaluate(() => {
+    localStorage.removeItem = () => { throw new Error("boom") };
+  });
+
+  page.once("dialog", d => d.accept());
+  await page.click("#forget-cards");
+
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await expect(page.locator("#grid-rows")).toHaveValue("4");
+  expect(await page.evaluate(() => window.storageBroken)).toBe(true);
 });
 
 async function dragHandle(page, sel, dx, dy) {

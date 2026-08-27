@@ -14,36 +14,12 @@
   `cardState.value` into one render, so the effects ran once, not twice. The commit's
   only real effect was that a `devices.value`-only change (eviction, `clearSource`,
   `clear`) stopped refitting the grid, which it now does again.
-- Nothing covers `forgetLayouts()` against a throwing `localStorage`, or the Escape path
-  out of a rename.
-- The cell-side test re-derives `measureGrid()`'s own arithmetic and compares against the
-  global that arithmetic wrote, so a mistake mirrored in both places passes, and the 20px
-  floor is never exercised. Measuring a rendered 1×1 card's box instead would test the
-  arithmetic independently of it.
-- "no card overflows its box at any size or value count" can only catch overflow right
-  and below: `scrollWidth`/`scrollHeight` ignore content above or left of the box, and
-  `.lbl` sits at `top:-.65em` by design. The name overclaims what the test checks.
-- The same test survives a mutation that makes every value overflow its `.val`:
-  `.card .val` and `.card .fv` both carry `overflow:hidden` (`src/style.css:71, 95`), so
-  clipped text never reaches the `.card`/`.body` scroll metrics it reads. The value-level
-  guarantee is covered separately, by "every value in a card shares the size its widest
-  reading needs" (`cards.spec.js:1339`), which does fail on that mutation.
 - `src/main.jsx` exposes page internals on `window` through `exposeForTests()`, because
   tests in `test/cards.spec.js` drive the page through the globals the firmware version had
   at script level. 44 of its 122 tests reach for `window.` or `page.evaluate`. Deliberate
   and endorsed, since rewriting them would destroy the evidence that the extraction lost
   nothing, but it is debt: delete the hook when the suite drives the DOM instead.
   `store.js`'s `getCardState`/`setCardState` exist only to serve it.
-- `test/fixtures.js` started as a copy of `receiver/test/fixtures.js` and has already
-  drifted: the receiver's copy moved to CommonJS `module.exports` and gained
-  `ACURITE_WIND`/`ACURITE_RAIN` fixtures the dashboard's ESM `export const` copy lacks.
-  Nothing detects drift between them, so the receiver's binding tests and the dashboard's
-  card tests now silently disagree about what a device looks like.
-- `test/cards.spec.js`'s `[data-key$="…"]` selectors are unanchored tail matches,
-  unambiguous only while a spec file runs a single source. A second source added to that
-  file would make a suffix match two rows, and the failure would look like a page bug
-  rather than a test that needs `:not(.vrow)`-style narrowing. The drag ghost now clones
-  the card, key included, so the card selectors already carry `:not(.ghostcard)`.
 - `dashboard/README.md` carries the install and build commands and the test commands.
   The bridge splits the same material into `docs/install.md` and `docs/development.md`.
   The dashboard should match.
@@ -62,14 +38,15 @@
   tablet — no device was attached to verify it. Needs one manual run to confirm the
   selectors.
 
-- `test/card-memo.test.js` tests a function that does not ship. It defines its own
-  `areEqual` comparing `props.key`, `props.merged` and `props.alias`; the one in `cards.jsx`
-  takes `props.cardKey`, has no `merged` or `alias` props at all, and returns `false`
-  unconditionally outside a gesture. Eleven of its twelve tests exercise branches that do
-  not exist, and the file cannot fail on a regression in `cards.jsx`. Separately, because
-  the shipped `areEqual` always returns `false`, `memo()` provides no memoisation and only
-  adds a wrapper component; whether the gesture freeze it does provide survives
-  signal-driven updates, which re-render the inner component directly, is unverified.
+- `Card`'s gesture freeze (`memo(Card, areEqual)` in `cards.jsx`) does not survive a
+  live reading arriving for the card being dragged, resized, or renamed: `Card` reads
+  `rec.merged.value` directly, and `@preact/signals` re-renders a component that read a
+  changed signal on its own, bypassing `memo`/`areEqual` entirely. Confirmed by
+  `test/cards.spec.js`, "a card's own signal update reaches its DOM mid-gesture, despite
+  areEqual" (see `docs/architecture.md`'s "Card memo"). The gesture mechanics themselves
+  (ghost, `lifting` class, drop zones) are unaffected since none of it lives in `Card`'s
+  render output; only the frozen-values guarantee is missing. `areEqual` would need to
+  gate on the signal read too, not just on props, to actually freeze the display.
 
 ## Information feeds
 
