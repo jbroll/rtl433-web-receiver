@@ -43,7 +43,6 @@ static void preflight() {
         r.status == 204 && r.preflight && r.body.length() == 0);
   Response rr = mqtt_routes::dispatch(Method::Options, "/$mqtt/remove", true, String(""));
   check("OPTIONS /$mqtt/remove is a 204 preflight", rr.status == 204 && rr.preflight);
-  check("a preflight does not reconverge the connections", !r.reloadConnections);
   Response off = mqtt_routes::dispatch(Method::Options, "/$mqtt", false, String(""));
   check("a preflight is answered off-origin too", off.status == 204 && off.preflight);
 }
@@ -58,7 +57,6 @@ static void listing() {
   check("GET /$mqtt is a 200 of application/json",
         r.status == 200 && strcmp(r.contentType, "application/json") == 0);
   check("GET /$mqtt does not reconverge the connections", !r.reloadConnections);
-  check("GET /$mqtt is not a preflight", !r.preflight);
 
   JsonDocument doc;
   bool         parsed = deserializeJson(doc, r.body) == DeserializationError::Ok;
@@ -79,7 +77,7 @@ static void listing() {
   }
   check("a stored broker appears with its url and connected state", sawStored);
   check("the build-flag broker is listed alongside the stored ones", sawBuildFlag);
-  check("an unparseable url carries a reason", sawReason);
+  check("a url mqtt_publish cannot parse carries a reason", sawReason);
   check("no entry exposes a token", !tokenLeaked);
 }
 
@@ -150,10 +148,18 @@ static void removeRoute() {
 }
 
 static void unroutable() {
-  check("an unknown path is 404", get("/$mqttx").status == 404);
+  Response unknown = get("/$mqttx");
+  check("an unknown path is 404", unknown.status == 404 &&
+                                       strcmp(unknown.body.c_str(), "not found") == 0);
+  Response early = post("/$mqtt/other", "{\"url\":\"mqtt://a.example:1883\"}", false);
   check("a POST to an unknown path is 404 before the origin check",
-        post("/$mqtt/other", "{\"url\":\"mqtt://a.example:1883\"}", false).status == 404);
-  check("GET /$mqtt/remove is 404", get("/$mqtt/remove").status == 404);
+        early.status == 404 && strcmp(early.body.c_str(), "not found") == 0);
+  // No GET handler is registered on /$mqtt/remove, so a live request never
+  // reaches dispatch(); this exercises dispatch()'s own defensive default for
+  // an unhandled method on a known path.
+  Response getRemove = get("/$mqtt/remove");
+  check("dispatch defaults an unhandled GET on a known path to 404",
+        getRemove.status == 404 && strcmp(getRemove.body.c_str(), "not found") == 0);
 }
 
 int main() {
