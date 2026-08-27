@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "device_hooks.h"
+#include "selftest_check.h"
 #include "str_util.h"
 
 namespace signal_store {
@@ -555,10 +556,7 @@ uint32_t testSizeRejectCount() {
   return _sizeRejectForTest;
 }
 
-static bool check(const char* what, bool ok) {
-  Log.notice(F("selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
-  return ok;
-}
+#define check(what, ok) selfTestCheck("signal_store", what, ok)
 
 bool selfTest() {
   bool ok = true;

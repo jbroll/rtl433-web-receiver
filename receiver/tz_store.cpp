@@ -25,9 +25,10 @@ bool begin() {
 int16_t offsetMinutes() { return _offset; }
 
 void set(int16_t minutes) {
+  bool changed = minutes != _offset;
   _offset = minutes;
   device_hooks::setTzOffset(minutes);
-  if (_open) {
+  if (_open && changed) {
     _prefs.putShort(kOffset, minutes);
   }
 }

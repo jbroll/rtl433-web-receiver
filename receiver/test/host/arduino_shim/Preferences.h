@@ -23,6 +23,7 @@ class Preferences {
   void end() { _ns.clear(); }
 
   size_t putString(const char* key, const char* value) {
+    _putStringCalls++;
     _store[_ns][key] = value ? value : "";
     return _store[_ns][key].size();
   }
@@ -41,6 +42,7 @@ class Preferences {
   // NVS keys are typed, so a getBytes* on a key holding a string reads as
   // absent, which is what layout_store's migration off putString relies on.
   size_t putBytes(const char* key, const void* value, size_t len) {
+    _putBytesCalls++;
     _store[_ns][key].assign((const char*)value, len);
     _blobs[_ns].insert(key);
     return len;
@@ -77,13 +79,35 @@ class Preferences {
     return ns->second.erase(key) > 0;
   }
 
+  // Real NVS has a fixed number of entry slots per partition; the host has
+  // none, so this is a plain countdown from a plausible fresh-partition
+  // figure, present only so begin() has something to log without an #ifdef.
+  size_t freeEntries() {
+    size_t used = 0;
+    for (auto& ns : _store) used += ns.second.size();
+    return used > 126 ? 0 : 126 - used;
+  }
+
+  // Test-only: how many times a write landed in NVS, so a test can assert a
+  // same-value set() skipped the write instead of rewriting it.
+  static size_t putStringCallCount() { return _putStringCalls; }
+  static size_t putBytesCallCount() { return _putBytesCalls; }
+  static void   resetCallCounts() {
+    _putStringCalls = 0;
+    _putBytesCalls  = 0;
+  }
+
  private:
   std::string _ns;
   // Shared across instances, like real NVS namespaces, so a Preferences
   // object that goes out of scope doesn't lose what it wrote.
   static std::map<std::string, std::map<std::string, std::string>> _store;
   static std::map<std::string, std::set<std::string>>              _blobs;
+  static size_t                                                    _putStringCalls;
+  static size_t                                                    _putBytesCalls;
 };
 
 inline std::map<std::string, std::map<std::string, std::string>> Preferences::_store;
 inline std::map<std::string, std::set<std::string>>              Preferences::_blobs;
+inline size_t                                                    Preferences::_putStringCalls = 0;
+inline size_t                                                    Preferences::_putBytesCalls  = 0;

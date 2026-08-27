@@ -99,10 +99,16 @@ now run and are checked on every commit via `test/host/run.sh` (see
 
 ## An alias surviving a reboot is unverified
 
-`alias_store::selfTest()` covers the in-RAM table and the round trip through a
-serialised blob, but not `Preferences::putString()` actually landing in NVS
-and surviving a power cycle — that needs hardware, like the self-test gap
-above.
+`alias_store::selfTest()` covers the in-RAM table, the round trip through a
+serialised blob, and (host-only, against `arduino_shim`'s `Preferences` fake)
+the migration off the `putString`-based storage this store used before. None
+of that proves `Preferences::putBytes()` actually lands in NVS and survives a
+power cycle on real hardware, or that a board already holding aliases under
+the old string key comes back with them intact after this firmware lands —
+that needs hardware, like the self-test gap above. Set three aliases through
+the dashboard, power-cycle the board (not a reboot), and confirm all three
+come back; then repeat starting from a board still running the pre-`putBytes`
+firmware, which is what actually proves the migration.
 
 ## `MDNS_PREFIX` has no runtime equivalent
 
@@ -145,43 +151,6 @@ the stored token with a freshly generated one on every provisioning pass
 (`provisioning.cpp`). Once a token has been set there's no path back to the
 "OTA disabled" (`404`) state short of erasing NVS entirely. Not a bug, just
 a gap for anyone who wants to disable OTA after enabling it.
-
-## Three stores are one template written out three times
-
-`units_store`, `location_store` and `layout_store` are the same
-begin/get/set-a-JSON-blob-in-NVS module with different sizes and namespace
-names, and every store's `selfTest()` carries its own copy of the
-`check(what, ok)` PASS/FAIL logger (eight copies). One blob-store template and
-one shared check helper would remove both.
-
-## Two stores write blobs the 20 KB NVS partition cannot promise them
-
-`partitions.csv` gives nvs `0x5000`, five 4096-byte pages, one of which NVS reserves for
-GC. After per-entry overhead and the IDF's own `nvs.net80211` and `phy` namespaces that
-leaves roughly 16 KB, against a worst case of about 8.8 KB across `layout` (5120),
-`alias` (2048), `mqtt` (768), `location` (512), `units` (256), wifi and the OTA token.
-Three problems follow.
-
-`alias_store::persist()` uses `putString` for a 2048-byte blob. An NVS string is one
-variable-length item that must fit a contiguous free run inside a single page, which is
-exactly the failure `layout_store.h` documents hitting near 2.7 KB on a real device and
-worked around by switching to `putBytes`. `alias_store` never got that treatment, and
-`mqtt_publish_store`'s 768-byte `table` is on the same trajectory. When `persist()` starts
-returning false, `set()` and `remove()` revert the in-memory change, so renames fail with
-a `503` and nothing but "alias store full" to explain it. Both want `putBytes`/`getBytes`
-with the legacy-key migration `layout_store::load()` already implements.
-
-None of `layout_store`, `location_store`, `units_store` or `alias_store` compares the
-incoming value against the copy already in RAM before writing. A dashboard that autosaves
-the layout on each drag rewrites 5120 bytes per drag; each rewrite appends a new copy
-before the old one can be erased, so live utilisation briefly doubles and the flash wear
-counter advances on a four-page arena. A `strcmp` against the in-RAM blob before the
-`putBytes` is one line per store.
-
-`LAYOUT_STORE_MAX` alone is a quarter to a third of usable NVS, and nothing checks
-headroom: `set()` accepts anything under 5120 and the write either works or does not.
-Shrinking the per-card template on the dashboard side would help; raising the partition is
-blocked on the platform hardcoding `app0`'s offset, as `partitions.csv` notes.
 
 ## `POST /$mqtt/remove` returns 204 for a url it never removed
 

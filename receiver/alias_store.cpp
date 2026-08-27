@@ -4,9 +4,17 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 
+#include "selftest_check.h"
 #include "str_util.h"
 
 namespace alias_store {
+
+// NVS keys are typed: a getBytesLength on a key still holding the old
+// putString value reads as absent, which is what makes the two-key
+// migration below safe to run on every begin(). LEGACY_KEY is the string
+// this used to be written as.
+#define BLOB_KEY   "tbl"
+#define LEGACY_KEY "map"
 
 static char        _topics[ALIAS_SLOTS][ALIAS_TOPIC_MAX];
 static char        _names[ALIAS_SLOTS][ALIAS_NAME_MAX];
@@ -84,7 +92,32 @@ static bool persist() {
     // device for the session rather than answer 503 to every rename.
     return true;
   }
-  return _prefs.putString("map", blob) > 0;
+  return _prefs.putBytes(BLOB_KEY, blob, n) > 0;
+}
+
+// Read the bytes key if present; otherwise adopt the legacy string key and
+// write it back as bytes, removing the legacy key only once that write
+// succeeds. Safe to call more than once: a device already on the bytes key
+// takes the first branch every time, and a device with both keys present
+// (bytes written, legacy remove not yet run) still prefers the bytes key
+// rather than re-adopting the stale string.
+static void load() {
+  size_t n = _prefs.getBytesLength(BLOB_KEY);
+  if (n > 0 && n < ALIAS_BLOB_MAX) {
+    char blob[ALIAS_BLOB_MAX];
+    _prefs.getBytes(BLOB_KEY, blob, n);
+    blob[n] = '\0';
+    loadTable(blob);
+    return;
+  }
+  String stored = _prefs.getString(LEGACY_KEY, "");
+  if (stored.length() == 0) {
+    return;
+  }
+  loadTable(stored.c_str());
+  if (_prefs.putBytes(BLOB_KEY, stored.c_str(), stored.length()) > 0) {
+    _prefs.remove(LEGACY_KEY);
+  }
 }
 
 bool begin() {
@@ -97,9 +130,9 @@ bool begin() {
     Log.warning(F("alias store: NVS unavailable, aliases will not persist" CR));
     return false;
   }
-  String stored = _prefs.getString("map", "");
-  loadTable(stored.c_str());
-  Log.notice(F("alias store: %d aliases loaded" CR), (int)count());
+  load();
+  Log.notice(F("alias store: %d aliases loaded (%d free NVS entries)" CR), (int)count(),
+             (int)_prefs.freeEntries());
   return true;
 }
 
@@ -127,6 +160,9 @@ bool set(const char* topic, const char* name) {
     previous[0] = '\0';
   } else {
     copyTruncated(previous, sizeof(previous), _names[i]);
+    if (strcmp(previous, name) == 0) {
+      return true;
+    }
   }
   copyTruncated(_names[i], ALIAS_NAME_MAX, name);
   _used[i] = true;
@@ -177,10 +213,7 @@ int indexOf(const char* topic) {
 }
 
 #ifdef FAKE_SIGNALS
-static bool check(const char* what, bool ok) {
-  Log.notice(F("alias selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
-  return ok;
-}
+#define CHECK(what, ok) selfTestCheck("alias", what, ok)
 
 bool selfTest() {
   bool ok = true;
@@ -193,15 +226,15 @@ bool selfTest() {
   _open           = false;
 
   memset(_used, 0, sizeof(_used));
-  ok &= check("an unset topic has no alias", get("s/M/1/$alias") == NULL);
-  ok &= check("set stores a name", set("s/M/1/$alias", "Back fence"));
-  ok &= check("get returns the name",
+  ok &= CHECK("an unset topic has no alias", get("s/M/1/$alias") == NULL);
+  ok &= CHECK("set stores a name", set("s/M/1/$alias", "Back fence"));
+  ok &= CHECK("get returns the name",
               get("s/M/1/$alias") != NULL && strcmp(get("s/M/1/$alias"), "Back fence") == 0);
-  ok &= check("set of the same topic replaces in place",
+  ok &= CHECK("set of the same topic replaces in place",
               set("s/M/1/$alias", "Front gate") && count() == 1 &&
                   strcmp(get("s/M/1/$alias"), "Front gate") == 0);
-  ok &= check("an empty name removes", set("s/M/1/$alias", "") && get("s/M/1/$alias") == NULL);
-  ok &= check("removing an unset topic reports false", !remove("s/M/1/$alias"));
+  ok &= CHECK("an empty name removes", set("s/M/1/$alias", "") && get("s/M/1/$alias") == NULL);
+  ok &= CHECK("removing an unset topic reports false", !remove("s/M/1/$alias"));
 
   memset(_used, 0, sizeof(_used));
   set("s/M/1/$alias", "one");
@@ -210,14 +243,14 @@ bool selfTest() {
   int idx1 = indexOf("s/M/1/$alias");
   int idx2 = indexOf("s/M/2/$alias");
   int idx3 = indexOf("s/M/3/$alias");
-  ok &= check("removing a set topic reports true", remove("s/M/2/$alias"));
-  ok &= check("removing an entry drops the count", count() == 2);
-  ok &= check("a removed entry's neighbours keep their indices",
+  ok &= CHECK("removing a set topic reports true", remove("s/M/2/$alias"));
+  ok &= CHECK("removing an entry drops the count", count() == 2);
+  ok &= CHECK("a removed entry's neighbours keep their indices",
               indexOf("s/M/1/$alias") == idx1 && indexOf("s/M/3/$alias") == idx3);
-  ok &= check("a removed entry reads as NULL", idx2 >= 0 && topicAt((uint8_t)idx2) == NULL &&
+  ok &= CHECK("a removed entry reads as NULL", idx2 >= 0 && topicAt((uint8_t)idx2) == NULL &&
                                                     nameAt((uint8_t)idx2) == NULL);
   set("s/M/4/$alias", "four");
-  ok &= check("a later set reuses the freed entry", indexOf("s/M/4/$alias") == idx2);
+  ok &= CHECK("a later set reuses the freed entry", indexOf("s/M/4/$alias") == idx2);
 
   memset(_used, 0, sizeof(_used));
   bool capped = true;
@@ -225,26 +258,26 @@ bool selfTest() {
     snprintf(topic, sizeof(topic), "s/M/%d/$alias", i);
     capped &= set(topic, "n");
   }
-  ok &= check("the table fills to ALIAS_SLOTS", capped && count() == ALIAS_SLOTS);
-  ok &= check("a set past the cap fails", !set("s/M/99/$alias", "n"));
-  ok &= check("a failed set leaves the table alone", count() == ALIAS_SLOTS);
+  ok &= CHECK("the table fills to ALIAS_SLOTS", capped && count() == ALIAS_SLOTS);
+  ok &= CHECK("a set past the cap fails", !set("s/M/99/$alias", "n"));
+  ok &= CHECK("a failed set leaves the table alone", count() == ALIAS_SLOTS);
 
   memset(_used, 0, sizeof(_used));
   set("s/M/1/$alias", "Back \"fence\"");
   set("s/$alias", "Garage");
   size_t n = serializeTable(blob, sizeof(blob));
-  ok &= check("the table serialises", n > 0);
+  ok &= CHECK("the table serialises", n > 0);
   memset(_used, 0, sizeof(_used));
   loadTable(blob);
-  ok &= check("a serialised blob reloads", count() == 2);
-  ok &= check("a quoted name survives the round trip",
+  ok &= CHECK("a serialised blob reloads", count() == 2);
+  ok &= CHECK("a quoted name survives the round trip",
               get("s/M/1/$alias") != NULL && strcmp(get("s/M/1/$alias"), "Back \"fence\"") == 0);
-  ok &= check("a source level alias survives the round trip",
+  ok &= CHECK("a source level alias survives the round trip",
               get("s/$alias") != NULL && strcmp(get("s/$alias"), "Garage") == 0);
 
   memset(_used, 0, sizeof(_used));
   loadTable("not json at all");
-  ok &= check("an unparseable blob loads as empty", count() == 0);
+  ok &= CHECK("an unparseable blob loads as empty", count() == 0);
 
   memset(_used, 0, sizeof(_used));
   char name[ALIAS_NAME_MAX];
@@ -263,16 +296,78 @@ bool selfTest() {
     }
     filled++;
   }
-  ok &= check("a set that would overflow the blob fails", blobFailed);
-  ok &= check("a set that overflows the blob leaves the count unchanged",
+  ok &= CHECK("a set that would overflow the blob fails", blobFailed);
+  ok &= CHECK("a set that overflows the blob leaves the count unchanged",
               (int)count() == filled);
   char   lastTopic[ALIAS_TOPIC_MAX];
   int    prefixLen = snprintf(lastTopic, sizeof(lastTopic), "s/M/%d/", filled - 1);
   size_t padLen = sizeof(lastTopic) - 1 - (size_t)prefixLen;
   memset(lastTopic + prefixLen, 't', padLen);
   lastTopic[sizeof(lastTopic) - 1] = '\0';
-  ok &= check("the last name stored before the blob overflow is still readable",
+  ok &= CHECK("the last name stored before the blob overflow is still readable",
               get(lastTopic) != NULL && strcmp(get(lastTopic), name) == 0);
+
+  memset(_used, 0, sizeof(_used));
+  set("s/M/1/$alias", "Same name");
+  ok &= CHECK("re-setting an entry with the same name is a no-op",
+              set("s/M/1/$alias", "Same name") && count() == 1);
+
+  // The rest runs against NVS: the two-key migration off the string this
+  // used to be written as, its idempotency, the half-migrated case, and the
+  // dedup write skip.
+  _open = _prefs.begin("alias", false);
+  if (_open) {
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+
+    memset(_used, 0, sizeof(_used));
+    ok &= CHECK("a stored table survives a reload",
+                set("s/M/1/$alias", "Reload me") &&
+                    (memset(_used, 0, sizeof(_used)), load(), true) && count() == 1 &&
+                    get("s/M/1/$alias") != NULL &&
+                    strcmp(get("s/M/1/$alias"), "Reload me") == 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.putString(LEGACY_KEY, "{\"s/M/2/$alias\":\"Legacy name\"}");
+    memset(_used, 0, sizeof(_used));
+    load();
+    ok &= CHECK("a table stored as a string is still read",
+                count() == 1 && get("s/M/2/$alias") != NULL &&
+                    strcmp(get("s/M/2/$alias"), "Legacy name") == 0);
+    ok &= CHECK("reading one migrates it to a blob", _prefs.getBytesLength(BLOB_KEY) > 0);
+    ok &= CHECK("and drops the string it came from",
+                _prefs.getString(LEGACY_KEY, "").length() == 0);
+    ok &= CHECK("running load() again after migrating changes nothing",
+                (memset(_used, 0, sizeof(_used)), load(), true) && count() == 1 &&
+                    get("s/M/2/$alias") != NULL &&
+                    strcmp(get("s/M/2/$alias"), "Legacy name") == 0);
+
+    // Half-migrated: the bytes write landed but a crash before remove() left
+    // the legacy string key behind. load() must prefer the bytes key rather
+    // than re-adopt or duplicate the stale string.
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    _prefs.putBytes(BLOB_KEY, "{\"s/M/3/$alias\":\"Bytes name\"}",
+                     strlen("{\"s/M/3/$alias\":\"Bytes name\"}"));
+    _prefs.putString(LEGACY_KEY, "{\"s/M/2/$alias\":\"Legacy name\"}");
+    memset(_used, 0, sizeof(_used));
+    load();
+    ok &= CHECK("a half-migrated store reads the bytes key, not the stale string",
+                count() == 1 && get("s/M/3/$alias") != NULL &&
+                    strcmp(get("s/M/3/$alias"), "Bytes name") == 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+
+    memset(_used, 0, sizeof(_used));
+    set("s/M/1/$alias", "Steady");
+    Preferences::resetCallCounts();
+    ok &= CHECK("re-setting the same name does not write to NVS",
+                set("s/M/1/$alias", "Steady") && Preferences::putBytesCallCount() == 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+  }
 
   memset(_used, 0, sizeof(_used));
   _open  = saved_open;

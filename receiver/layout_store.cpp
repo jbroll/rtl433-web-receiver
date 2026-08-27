@@ -4,6 +4,8 @@
 #include <Preferences.h>
 #include <string.h>
 
+#include "selftest_check.h"
+
 namespace layout_store {
 
 // An NVS string has to fit one page's free run, which on a receiver whose
@@ -47,7 +49,8 @@ bool begin() {
     return false;
   }
   load();
-  Log.notice(F("layout store: %s" CR), _blob[0] ? "layout loaded" : "no stored layout");
+  Log.notice(F("layout store: %s (%d free NVS entries)" CR),
+             _blob[0] ? "layout loaded" : "no stored layout", (int)_prefs.freeEntries());
   return true;
 }
 
@@ -56,6 +59,9 @@ const char* get() { return _blob; }
 bool set(const char* json) {
   if (json == NULL || *json == '\0' || strlen(json) >= LAYOUT_STORE_MAX) {
     return false;
+  }
+  if (strcmp(_blob, json) == 0) {
+    return true;
   }
   // Persist first, then adopt: a failed write leaves the stored blob alone
   // without needing a second LAYOUT_STORE_MAX buffer on the caller's stack.
@@ -71,10 +77,7 @@ bool set(const char* json) {
 }
 
 #ifdef FAKE_SIGNALS
-static bool check(const char* what, bool ok) {
-  Log.notice(F("layout selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
-  return ok;
-}
+#define CHECK(what, ok) selfTestCheck("layout", what, ok)
 
 bool selfTest() {
   bool ok = true;
@@ -85,26 +88,26 @@ bool selfTest() {
   _open           = false;
 
   _blob[0] = '\0';
-  ok &= check("nothing stored reads as empty", strcmp(get(), "") == 0);
+  ok &= CHECK("nothing stored reads as empty", strcmp(get(), "") == 0);
 
-  ok &= check("set stores a blob", set("{\"grid\":{\"cols\":6,\"rows\":4}}"));
-  ok &= check("get returns the stored blob",
+  ok &= CHECK("set stores a blob", set("{\"grid\":{\"cols\":6,\"rows\":4}}"));
+  ok &= CHECK("get returns the stored blob",
               strcmp(get(), "{\"grid\":{\"cols\":6,\"rows\":4}}") == 0);
 
-  ok &= check("set of a new blob replaces in place",
+  ok &= CHECK("set of a new blob replaces in place",
               set("{\"grid\":{\"cols\":4,\"rows\":3}}") &&
                   strcmp(get(), "{\"grid\":{\"cols\":4,\"rows\":3}}") == 0);
 
-  ok &= check("a NULL blob is rejected", !set(NULL));
-  ok &= check("an empty blob is rejected", !set(""));
-  ok &= check("a rejected set leaves the stored blob alone",
+  ok &= CHECK("a NULL blob is rejected", !set(NULL));
+  ok &= CHECK("an empty blob is rejected", !set(""));
+  ok &= CHECK("a rejected set leaves the stored blob alone",
               strcmp(get(), "{\"grid\":{\"cols\":4,\"rows\":3}}") == 0);
 
   static char big[LAYOUT_STORE_MAX + 1];
   memset(big, '.', sizeof(big) - 1);
   big[sizeof(big) - 1] = '\0';
-  ok &= check("a blob at or over the cap is rejected", !set(big));
-  ok &= check("a rejected oversized set leaves the stored blob alone",
+  ok &= CHECK("a blob at or over the cap is rejected", !set(big));
+  ok &= CHECK("a rejected oversized set leaves the stored blob alone",
               strcmp(get(), "{\"grid\":{\"cols\":4,\"rows\":3}}") == 0);
 
   // The rest runs against NVS, so it covers the blob round trip and the
@@ -114,7 +117,7 @@ bool selfTest() {
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
 
-    ok &= check("a stored blob survives a reload",
+    ok &= CHECK("a stored blob survives a reload",
                 set("{\"grid\":{\"cols\":5,\"rows\":2}}") &&
                     (_blob[0] = '\0', load(), true) &&
                     strcmp(get(), "{\"grid\":{\"cols\":5,\"rows\":2}}") == 0);
@@ -123,12 +126,37 @@ bool selfTest() {
     _prefs.putString(LEGACY_KEY, "{\"grid\":{\"cols\":9,\"rows\":9}}");
     _blob[0] = '\0';
     load();
-    ok &= check("a layout stored as a string is still read",
+    ok &= CHECK("a layout stored as a string is still read",
                 strcmp(get(), "{\"grid\":{\"cols\":9,\"rows\":9}}") == 0);
-    ok &= check("reading one migrates it to a blob",
+    ok &= CHECK("reading one migrates it to a blob",
                 _prefs.getBytesLength(BLOB_KEY) == strlen(get()));
-    ok &= check("and drops the string it came from",
+    ok &= CHECK("and drops the string it came from",
                 _prefs.getString(LEGACY_KEY, "").length() == 0);
+    ok &= CHECK("running load() again after migrating changes nothing",
+                (load(), true) && strcmp(get(), "{\"grid\":{\"cols\":9,\"rows\":9}}") == 0 &&
+                    _prefs.getBytesLength(BLOB_KEY) == strlen(get()));
+
+    // Half-migrated: the bytes write landed but a crash before remove() left
+    // the legacy string key behind. load() must prefer the bytes key rather
+    // than re-adopt or duplicate the stale string.
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    _prefs.putBytes(BLOB_KEY, "{\"grid\":{\"cols\":1,\"rows\":1}}",
+                     strlen("{\"grid\":{\"cols\":1,\"rows\":1}}"));
+    _prefs.putString(LEGACY_KEY, "{\"grid\":{\"cols\":9,\"rows\":9}}");
+    _blob[0] = '\0';
+    load();
+    ok &= CHECK("a half-migrated store reads the bytes key, not the stale string",
+                strcmp(get(), "{\"grid\":{\"cols\":1,\"rows\":1}}") == 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+
+    Preferences::resetCallCounts();
+    ok &= CHECK("first set with NVS open writes once",
+                set("{\"grid\":{\"cols\":7,\"rows\":7}}") && Preferences::putBytesCallCount() == 1);
+    ok &= CHECK("setting the same value again does not write",
+                set("{\"grid\":{\"cols\":7,\"rows\":7}}") && Preferences::putBytesCallCount() == 1);
 
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);

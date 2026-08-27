@@ -4,9 +4,17 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 
+#include "selftest_check.h"
 #include "str_util.h"
 
 namespace mqtt_publish_store {
+
+// NVS keys are typed: a getBytesLength on a key still holding the old
+// putString value reads as absent, which is what makes the two-key
+// migration below safe to run on every begin(). LEGACY_KEY is the string
+// this used to be written as.
+#define BLOB_KEY   "tbl"
+#define LEGACY_KEY "table"
 
 static char        _url[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_URL_MAX];
 static char        _token[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_TOKEN_MAX];
@@ -106,7 +114,29 @@ static bool persist() {
     // work rather than answer 503 to every POST /$mqtt.
     return true;
   }
-  return _prefs.putString("table", blob) > 0;
+  return _prefs.putBytes(BLOB_KEY, blob, n) > 0;
+}
+
+// Read the bytes key if present; otherwise adopt the legacy string key and
+// write it back as bytes, removing the legacy key only once that write
+// succeeds. Safe to call more than once, same as alias_store::load().
+static void load() {
+  size_t n = _prefs.getBytesLength(BLOB_KEY);
+  if (n > 0 && n < MQTT_PUBLISH_STORE_BLOB_MAX) {
+    char blob[MQTT_PUBLISH_STORE_BLOB_MAX];
+    _prefs.getBytes(BLOB_KEY, blob, n);
+    blob[n] = '\0';
+    loadTable(blob);
+    return;
+  }
+  String stored = _prefs.getString(LEGACY_KEY, "");
+  if (stored.length() == 0) {
+    return;
+  }
+  loadTable(stored.c_str());
+  if (_prefs.putBytes(BLOB_KEY, stored.c_str(), stored.length()) > 0) {
+    _prefs.remove(LEGACY_KEY);
+  }
 }
 
 uint8_t count() {
@@ -205,23 +235,23 @@ bool begin() {
     Log.warning(F("mqtt publish store: NVS unavailable, settings will not persist" CR));
     return false;
   }
-  String stored = _prefs.getString("table", "");
-  loadTable(stored.c_str());
+  // load() first, migrateLegacy() second: migrateLegacy only fires when the
+  // table is still empty, so a table already migrated from the string key
+  // (which load() just did) correctly makes it a no-op.
+  load();
   String oldUrl = _prefs.getString("url", "");
   if (migrateLegacy(oldUrl.c_str(), _prefs.getString("token", "").c_str())) {
     _prefs.remove("url");
     _prefs.remove("token");
     Log.notice(F("mqtt publish store: migrated legacy single-broker setting" CR));
   }
-  Log.notice(F("mqtt publish store: %d bridge(s) configured" CR), (int)count());
+  Log.notice(F("mqtt publish store: %d bridge(s) configured (%d free NVS entries)" CR),
+             (int)count(), (int)_prefs.freeEntries());
   return true;
 }
 
 #ifdef FAKE_SIGNALS
-static bool check(const char* what, bool ok) {
-  Log.notice(F("mqtt_publish_store selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
-  return ok;
-}
+#define CHECK(what, ok) selfTestCheck("mqtt_publish_store", what, ok)
 
 bool selfTest() {
   bool ok = true;
@@ -242,83 +272,153 @@ bool selfTest() {
   memcpy(saved_used, _used, sizeof(_used));
   memset(_used, 0, sizeof(_used));
 
-  ok &= check("an empty table has no entries", count() == 0);
-  ok &= check("indexOf on an empty table is -1", indexOf("mqtt://broker.local:1883") < 0);
-  ok &= check("validUrl rejects an empty url", !validUrl(""));
-  ok &= check("validUrl rejects a scheme it does not recognize", !validUrl("http://broker.local"));
-  ok &= check("validUrl accepts mqtt://", validUrl("mqtt://broker.local:1883"));
-  ok &= check("validUrl accepts mqtts://", validUrl("mqtts://weather.rkroll.com:8883"));
-  ok &= check("validToken accepts an empty token", validToken(""));
+  ok &= CHECK("an empty table has no entries", count() == 0);
+  ok &= CHECK("indexOf on an empty table is -1", indexOf("mqtt://broker.local:1883") < 0);
+  ok &= CHECK("validUrl rejects an empty url", !validUrl(""));
+  ok &= CHECK("validUrl rejects a scheme it does not recognize", !validUrl("http://broker.local"));
+  ok &= CHECK("validUrl accepts mqtt://", validUrl("mqtt://broker.local:1883"));
+  ok &= CHECK("validUrl accepts mqtts://", validUrl("mqtts://weather.rkroll.com:8883"));
+  ok &= CHECK("validToken accepts an empty token", validToken(""));
 
   char longUrl[MQTT_PUBLISH_STORE_URL_MAX + 1];
   memset(longUrl, 'a', sizeof(longUrl) - 1);
   longUrl[sizeof(longUrl) - 1] = '\0';
-  ok &= check("validUrl rejects an over-length url", !validUrl(longUrl));
+  ok &= CHECK("validUrl rejects an over-length url", !validUrl(longUrl));
 
   char longToken[MQTT_PUBLISH_STORE_TOKEN_MAX + 1];
   memset(longToken, 'b', sizeof(longToken) - 1);
   longToken[sizeof(longToken) - 1] = '\0';
-  ok &= check("validToken rejects an over-length token", !validToken(longToken));
+  ok &= CHECK("validToken rejects an over-length token", !validToken(longToken));
 
-  ok &= check("add stores a url/token pair", add("mqtt://broker.local:1883", "tok"));
-  ok &= check("count reflects one entry", count() == 1);
+  ok &= CHECK("add stores a url/token pair", add("mqtt://broker.local:1883", "tok"));
+  ok &= CHECK("count reflects one entry", count() == 1);
   int i0 = indexOf("mqtt://broker.local:1883");
-  ok &= check("indexOf finds it", i0 >= 0);
-  ok &= check("urlAt/tokenAt round-trip",
+  ok &= CHECK("indexOf finds it", i0 >= 0);
+  ok &= CHECK("urlAt/tokenAt round-trip",
               i0 >= 0 && strcmp(urlAt((uint8_t)i0), "mqtt://broker.local:1883") == 0 &&
                   strcmp(tokenAt((uint8_t)i0), "tok") == 0);
 
-  ok &= check("re-adding the same url updates the token in place",
+  ok &= CHECK("re-adding the same url updates the token in place",
               add("mqtt://broker.local:1883", "tok2") && count() == 1 &&
                   i0 >= 0 && strcmp(tokenAt((uint8_t)i0), "tok2") == 0);
 
-  ok &= check("add rejects an invalid url", !add("http://broker.local", "tok"));
-  ok &= check("a rejected add leaves the table alone", count() == 1);
+  ok &= CHECK("add rejects an invalid url", !add("http://broker.local", "tok"));
+  ok &= CHECK("a rejected add leaves the table alone", count() == 1);
 
-  ok &= check("add fills the remaining slots",
+  ok &= CHECK("add fills the remaining slots",
               add("mqtt://b2:1883", "") && add("mqtts://b3:8883", "t3") && count() == MQTT_PUBLISH_SLOTS);
-  ok &= check("add past the cap fails, no matching url", !add("mqtt://b4:1883", ""));
-  ok &= check("a failed add leaves the count unchanged", count() == MQTT_PUBLISH_SLOTS);
+  ok &= CHECK("add past the cap fails, no matching url", !add("mqtt://b4:1883", ""));
+  ok &= CHECK("a failed add leaves the count unchanged", count() == MQTT_PUBLISH_SLOTS);
 
-  ok &= check("remove drops the matching entry", remove("mqtt://b2:1883"));
-  ok &= check("count drops with it", count() == MQTT_PUBLISH_SLOTS - 1);
-  ok &= check("removing an absent url reports false", !remove("mqtt://b2:1883"));
-  ok &= check("a freed slot is reusable", add("mqtt://b4:1883", "") && count() == MQTT_PUBLISH_SLOTS);
+  ok &= CHECK("remove drops the matching entry", remove("mqtt://b2:1883"));
+  ok &= CHECK("count drops with it", count() == MQTT_PUBLISH_SLOTS - 1);
+  ok &= CHECK("removing an absent url reports false", !remove("mqtt://b2:1883"));
+  ok &= CHECK("a freed slot is reusable", add("mqtt://b4:1883", "") && count() == MQTT_PUBLISH_SLOTS);
 
   memset(_used, 0, sizeof(_used));
-  ok &= check("migrateLegacy copies a legacy value into slot 0",
+  ok &= CHECK("migrateLegacy copies a legacy value into slot 0",
               migrateLegacy("mqtts://weather.rkroll.com:8883", "legacy") && count() == 1 &&
                   strcmp(urlAt(0), "mqtts://weather.rkroll.com:8883") == 0 &&
                   strcmp(tokenAt(0), "legacy") == 0);
-  ok &= check("migrateLegacy is a no-op once the table is non-empty",
+  ok &= CHECK("migrateLegacy is a no-op once the table is non-empty",
               !migrateLegacy("mqtt://other:1883", "") && count() == 1);
 
   memset(_used, 0, sizeof(_used));
-  ok &= check("migrateLegacy is a no-op with no legacy url", !migrateLegacy("", ""));
-  ok &= check("migrateLegacy is a no-op with a null legacy url", !migrateLegacy(NULL, NULL));
+  ok &= CHECK("migrateLegacy is a no-op with no legacy url", !migrateLegacy("", ""));
+  ok &= CHECK("migrateLegacy is a no-op with a null legacy url", !migrateLegacy(NULL, NULL));
 
   memset(_used, 0, sizeof(_used));
   add("mqtt://b1:1883", "t1");
   add("mqtts://b2:8883", "");
   char blob[MQTT_PUBLISH_STORE_BLOB_MAX];
   size_t n = serializeTable(blob, sizeof(blob));
-  ok &= check("the table serialises", n > 0);
+  ok &= CHECK("the table serialises", n > 0);
   memset(_used, 0, sizeof(_used));
   loadTable(blob);
-  ok &= check("a serialised blob reloads", count() == 2);
+  ok &= CHECK("a serialised blob reloads", count() == 2);
   int ib2 = indexOf("mqtts://b2:8883");
-  ok &= check("an empty stored token round-trips",
+  ok &= CHECK("an empty stored token round-trips",
               ib2 >= 0 && strcmp(tokenAt((uint8_t)ib2), "") == 0);
 
   memset(_used, 0, sizeof(_used));
   loadTable("not json at all");
-  ok &= check("an unparseable blob loads as empty", count() == 0);
+  ok &= CHECK("an unparseable blob loads as empty", count() == 0);
 
 #ifdef MQTT_BROKER_URL
   memset(_used, 0, sizeof(_used));
-  ok &= check("add rejects the build-flag broker url",
+  ok &= CHECK("add rejects the build-flag broker url",
               !add(MQTT_BROKER_URL, "tok") && count() == 0);
 #endif
+
+  // The rest runs against NVS: the two-key migration off the string "table"
+  // used to be written as, its idempotency, the half-migrated case, and that
+  // it chains correctly with migrateLegacy's url/token migration.
+  _open = _prefs.begin("mqtt", false);
+  if (_open) {
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    _prefs.remove("url");
+    _prefs.remove("token");
+
+    // State 1: a legacy single-broker url/token, no table key at all.
+    memset(_used, 0, sizeof(_used));
+    _prefs.putString("url", "mqtt://legacy-single:1883");
+    _prefs.putString("token", "singletok");
+    load();
+    bool migrated = migrateLegacy(_prefs.getString("url", "").c_str(),
+                                   _prefs.getString("token", "").c_str());
+    if (migrated) {
+      _prefs.remove("url");
+      _prefs.remove("token");
+    }
+    ok &= CHECK("a legacy single-broker value with no table migrates into slot 0",
+                migrated && count() == 1 &&
+                    strcmp(urlAt(0), "mqtt://legacy-single:1883") == 0 &&
+                    strcmp(tokenAt(0), "singletok") == 0);
+    ok &= CHECK("migrating a legacy single value writes the table as bytes",
+                _prefs.getBytesLength(BLOB_KEY) > 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    _prefs.remove("url");
+    _prefs.remove("token");
+
+    // State 2: the table already stored as a string (pre-putBytes firmware),
+    // no legacy single-broker value.
+    memset(_used, 0, sizeof(_used));
+    _prefs.putString(LEGACY_KEY, "[{\"url\":\"mqtt://b1:1883\",\"token\":\"t1\"}]");
+    load();
+    ok &= CHECK("a table stored as a string is still read",
+                count() == 1 && strcmp(urlAt(0), "mqtt://b1:1883") == 0);
+    ok &= CHECK("reading one migrates it to a blob", _prefs.getBytesLength(BLOB_KEY) > 0);
+    ok &= CHECK("and drops the string it came from",
+                _prefs.getString(LEGACY_KEY, "").length() == 0);
+    ok &= CHECK("migrateLegacy is a no-op once load() populated the table from the string",
+                !migrateLegacy(_prefs.getString("url", "").c_str(),
+                                _prefs.getString("token", "").c_str()) &&
+                    count() == 1);
+    ok &= CHECK("running load() again after migrating changes nothing",
+                (memset(_used, 0, sizeof(_used)), load(), true) && count() == 1 &&
+                    strcmp(urlAt(0), "mqtt://b1:1883") == 0);
+
+    // State 3: half-migrated. The bytes write landed but a crash before
+    // remove() left the legacy string key behind; load() must prefer the
+    // bytes key rather than re-adopt or duplicate the stale string.
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    const char* bytesTable = "[{\"url\":\"mqtt://b2:1883\",\"token\":\"t2\"}]";
+    _prefs.putBytes(BLOB_KEY, bytesTable, strlen(bytesTable));
+    _prefs.putString(LEGACY_KEY, "[{\"url\":\"mqtt://b1:1883\",\"token\":\"t1\"}]");
+    memset(_used, 0, sizeof(_used));
+    load();
+    ok &= CHECK("a half-migrated store reads the bytes key, not the stale string",
+                count() == 1 && strcmp(urlAt(0), "mqtt://b2:1883") == 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    _prefs.remove("url");
+    _prefs.remove("token");
+  }
 
   memcpy(_url, saved_url, sizeof(_url));
   memcpy(_token, saved_token, sizeof(_token));

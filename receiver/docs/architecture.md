@@ -11,13 +11,23 @@ sharing code.
 
 **`alias_store.h` / `alias_store.cpp`** — a fixed table of 32 topic/name pairs,
 persisted as one JSON blob in a single `Preferences` entry (namespace `alias`,
-key `map`), capped at 2 KB. NVS keys are limited to 15 characters and an alias
+key `tbl`), capped at 2 KB. NVS keys are limited to 15 characters and an alias
 topic runs to 96 bytes, which rules out one NVS key per alias; the blob is
-rewritten whenever an alias changes, a user action and rare enough that
-rewriting the whole table each time costs nothing worth avoiding.
+rewritten whenever an alias's name actually changes (`set()` skips the write
+when the new name matches the one already stored), a user action and rare
+enough that rewriting the whole table each time costs nothing worth avoiding.
+The blob is written with `putBytes()`, not `putString()` — an NVS string has
+to fit one page's free run, which failed near 2.7 KB on a real device (see
+`layout_store` below); a blob is chunked across pages instead. `begin()`
+reads the bytes key first and falls back to the string key (`map`) a table
+saved before this was written to, adopting it and rewriting it as bytes;
+the string key is removed only once that write succeeds, so a crash between
+the two leaves the bytes key as the one `begin()` prefers on the next boot.
 Its `FAKE_SIGNALS` `selfTest()` is host-tested by `test/host/run.sh` against
 `test/host/arduino_shim/`'s fakes of `Arduino.h`, `ArduinoLog.h`, and
-`Preferences.h` (an in-memory map standing in for NVS).
+`Preferences.h` (an in-memory map standing in for NVS, with a separate set of
+blob-typed keys so `getBytesLength()` on a string key reads as absent exactly
+as it does on the device).
 
 **`signal_store.h` / `signal_store.cpp`** — 24 device slots holding metadata
 (key, last-seen time, message count), with payloads in a shared 32-entry
@@ -148,7 +158,8 @@ rain restarts from 0.
 to `Preferences` namespace `"tz"`. Defaults to -240 (EDT) at first boot. The
 dashboard POSTs the offset to `/$tz` when the location is set; `tz_store::set`
 persists it and pushes it into `device_hooks` so the rain hook's midnight
-boundary follows the user's timezone. The offset reads back the same way it is
+boundary follows the user's timezone; the NVS write is skipped when the
+offset hasn't actually changed. The offset reads back the same way it is
 written — `GET /$tz`, a retained `<source>/$tz` MQTT publish, and an SSE frame
 — so a dashboard on another origin can pick it up. Unlike `$layout` and
 `$location`/`$units` it is never unset, so its `GET` never `404`s and it always
@@ -156,18 +167,28 @@ replays.
 
 **`layout_store.h` / `layout_store.cpp`** — persists the dashboard's
 site-default `$layout` (grid size, per-model card settings) as one opaque
-JSON blob in `Preferences` namespace `layout`, key `blob`, capped at
+JSON blob in `Preferences` namespace `layout`, keys `json`/`blob`, capped at
 `LAYOUT_STORE_MAX`, 5 KB. A card costs the template about 165 bytes and the
 dashboard can save 24 radio devices plus four feed cards, so the cap covers a
 full receiver with room over. The 2 KB it used to be ran out at seven devices.
+`set()` skips the write when the incoming blob matches the one already
+stored, so a dashboard that autosaves on every drag doesn't rewrite 5 KB per
+drag.
 
 The blob is written with `putBytes()`, not `putString()`. `nvs_set_str()` needs
 its whole length in one page's free run, which on a device whose `nvs`
 partition already holds the radio calibration refused a 2,955-byte write and
 accepted a 2,689-byte one — nowhere near the 4000 the API documents. An NVS
 blob is chunked across pages, so the store's own cap is the only limit left.
-`begin()` reads the blob key, falls back to the string key a layout saved
-before this was written to, and rewrites it as a blob.
+`begin()` reads the bytes key (`json`), falls back to the string key
+(`blob`) a layout saved before this was written to, and rewrites it as
+bytes, removing the string key only once that write succeeds. `alias_store`
+and `mqtt_publish_store`'s tables use the identical two-key shape for the
+same reason — NVS keys are typed, so a `getBytesLength()` on a key still
+holding the old string value reads as absent, which is what lets `begin()`
+prefer the bytes key unconditionally: a device that already migrated, and
+one caught mid-migration with both keys present, both land on the correct
+value with no duplication.
 
 Unlike `alias_store`'s table of topic/name pairs, there is
 exactly one `$layout` per receiver, so the blob is stored and served
@@ -177,22 +198,39 @@ host-tested by `test/host/run.sh` against the same `arduino_shim/` fakes as
 `alias_store` and `tz_store`. `layout_store::set()` still accepts a write
 when NVS never opened, so a viewer can save a layout for the running
 session even on a receiver whose flash is unavailable — that write is lost
-on reboot.
+on reboot. `begin()` also logs `Preferences::freeEntries()` alongside the
+loaded/empty message, since nothing else gives an operator a number to
+reason with when a write starts failing.
+
+**`blob_store.h`** (`BlobStore<CAP>` template) — the shared shape behind
+`location_store` and `units_store`: `begin`/`get`/`set` over one JSON blob
+in `Preferences` namespace and key `blob`, plus the same same-value write
+skip as `layout_store`. `layout_store` does not use it: it persists before
+adopting (a failed write should never touch the in-RAM blob), which would
+need a second `CAP`-sized buffer on the caller's stack for `location_store`
+and `units_store`, and it needs the two-key blob migration above, which
+neither of the other two has ever needed since they were `putBytes()` from
+the start. `alias_store` and `mqtt_publish_store` don't fit either — they
+serialize a table rather than storing a blob verbatim.
 
 **`location_store.h` / `location_store.cpp`** — persists the dashboard's
-`$location` (`{lat, lon, label, zone, zoom}`) as one opaque JSON blob in
-`Preferences` namespace `location`, key `blob`, capped at
-`LOCATION_STORE_MAX`, 512 bytes. Same shape as `layout_store` in every other
-respect: one entry per receiver, stored and served verbatim, host-tested
+`$location` (`{lat, lon, label, zone, zoom}`) as one opaque JSON blob via
+`BlobStore<LOCATION_STORE_MAX>` (512 bytes) in `Preferences` namespace
+`location`. One entry per receiver, stored and served verbatim, host-tested
 `selfTest()`, and a write accepted even when NVS never opened.
 
 **`units_store.h` / `units_store.cpp`** — persists the owner's unit
-preferences (`{units, decimals, custom}`) as one opaque JSON blob in
-`Preferences` namespace `units`, key `blob`, capped at `UNITS_STORE_MAX`, 256
-bytes. Same shape as `location_store`: one entry per receiver, stored and
-served verbatim, host-tested `selfTest()`, and a write accepted even when NVS
-never opened. Whoever set it sets it for every visitor, since the blob is
-served to all of them.
+preferences (`{units, decimals, custom}`) as one opaque JSON blob via
+`BlobStore<UNITS_STORE_MAX>` (256 bytes) in `Preferences` namespace `units`.
+Same shape as `location_store`: one entry per receiver, stored and served
+verbatim, host-tested `selfTest()`, and a write accepted even when NVS never
+opened. Whoever set it sets it for every visitor, since the blob is served
+to all of them.
+
+**`selftest_check.h`** — the one `selfTestCheck(module, what, ok)` PASS/FAIL
+logger every store's `FAKE_SIGNALS` `selfTest()` used to carry its own copy
+of. Each store defines a local `CHECK(what, ok)` macro binding its own module
+name, so call sites keep their existing shape.
 
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`,
 `/$update`, and `/$mqtt` (plus `/$mqtt/remove`) are the only registered
@@ -250,19 +288,36 @@ token was already set.
 
 **`mqtt_publish_store.h` / `mqtt_publish_store.cpp`** — persists up to
 `MQTT_PUBLISH_SLOTS` (3) dashboard-configured broker url/token pairs to
-`Preferences` namespace `"mqtt"`, as one JSON blob under key `"table"` — the
+`Preferences` namespace `"mqtt"`, as one JSON blob under key `tbl` — the
 same shape `alias_store`'s 32-slot table uses, for the same reason: NVS keys
-are capped at 15 characters, so one key per slot doesn't scale. `add()`
-validates the same `mqtt://`/`mqtts://` scheme and length caps the old
-single-value `set()` did, updates a slot in place when its url is already
-present, and fails with the table full and no matching url, or with the url
-equal to the build-flag `MQTT_BROKER_URL` — that broker already connects
-unconditionally, and a second connection to it under the same client ID
-just gets one session kicked by the other. A pre-existing
-single `url`/`token` NVS value (from before this table existed) is copied
-into slot 0 the first time `begin()` runs against an otherwise-empty table,
-then the old keys are removed — a one-time, silent migration. The
-`MQTT_BROKER_URL`/`MQTT_TOKEN` build flags are read directly by
+are capped at 15 characters, so one key per slot doesn't scale, and the same
+`putBytes()`/two-key migration (legacy string key `table`) `alias_store` and
+`layout_store` use. `add()` validates the same `mqtt://`/`mqtts://` scheme
+and length caps the old single-value `set()` did, updates a slot in place
+when its url is already present, and fails with the table full and no
+matching url, or with the url equal to the build-flag `MQTT_BROKER_URL` —
+that broker already connects unconditionally, and a second connection to it
+under the same client ID just gets one session kicked by the other.
+
+Two migrations chain in `begin()`: `load()` (the bytes/legacy-string blob
+migration) runs first, then `migrateLegacy()` (copying a pre-existing single
+`url`/`token` NVS value, from before this table existed, into slot 0 — a
+different migration, of a value rather than a storage type) runs second and
+only fires when the table `load()` produced is still empty. That ordering
+matters for three device states: a board with only the old single `url`/
+`token` keys and no table at all has `load()` no-op (nothing under `tbl` or
+`table`), so `migrateLegacy()` fires and `add()` writes the table straight to
+the bytes key; a board with a table already stored under the legacy string
+key `table` (and no single-value keys, since an earlier boot already cleared
+them) has `load()` populate and migrate the table, leaving `migrateLegacy()`
+a no-op because the table is non-empty; a board with neither has both stages
+no-op and starts with an empty table. Reversing the order would let
+`migrateLegacy()` write to slot 0 before `load()` has a chance to populate
+the table from a legacy string, which — since `migrateLegacy()`'s own write
+goes through the now-`putBytes()` `persist()` — would race and potentially
+duplicate the legacy string's own entry once `load()` ran on a later boot.
+
+The `MQTT_BROKER_URL`/`MQTT_TOKEN` build flags are read directly by
 `mqtt_publish.cpp`, not through this store; they're a separate, always-on
 connection outside the table.
 

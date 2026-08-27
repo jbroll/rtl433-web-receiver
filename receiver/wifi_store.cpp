@@ -3,6 +3,7 @@
 #include <ArduinoLog.h>
 #include <Preferences.h>
 
+#include "selftest_check.h"
 #include "str_util.h"
 
 namespace wifi_store {
@@ -93,10 +94,7 @@ void clear() {
 }
 
 #ifdef FAKE_SIGNALS
-static bool check(const char* what, bool ok) {
-  Log.notice(F("wifi_store selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
-  return ok;
-}
+#define CHECK(what, ok) selfTestCheck("wifi_store", what, ok)
 
 bool selfTest() {
   bool ok = true;
@@ -114,21 +112,21 @@ bool selfTest() {
 
   _ssid[0] = '\0';
   _pass[0] = '\0';
-  ok &= check("a cleared store reports no credentials", !hasCredentials());
-  ok &= check("set fails while NVS is closed", !set("TestNet", "TestPass1"));
+  ok &= CHECK("a cleared store reports no credentials", !hasCredentials());
+  ok &= CHECK("set fails while NVS is closed", !set("TestNet", "TestPass1"));
 
   // set() can't be exercised end-to-end with NVS closed, so simulate a
   // loaded value by assigning the internal statics directly.
   copyTruncated(_ssid, sizeof(_ssid), "TestNet");
   copyTruncated(_pass, sizeof(_pass), "TestPass1");
-  ok &= check("a loaded value reports credentials present", hasCredentials());
-  ok &= check("ssid round-trips", strcmp(ssid(), "TestNet") == 0);
-  ok &= check("password round-trips", strcmp(password(), "TestPass1") == 0);
+  ok &= CHECK("a loaded value reports credentials present", hasCredentials());
+  ok &= CHECK("ssid round-trips", strcmp(ssid(), "TestNet") == 0);
+  ok &= CHECK("password round-trips", strcmp(password(), "TestPass1") == 0);
 
   _ssid[0] = '\0';
   _pass[0] = '\0';
-  ok &= check("clearing the internal state removes credentials", !hasCredentials());
-  ok &= check("ssid reads empty after clearing", ssid()[0] == '\0');
+  ok &= CHECK("clearing the internal state removes credentials", !hasCredentials());
+  ok &= CHECK("ssid reads empty after clearing", ssid()[0] == '\0');
 
   char longSsid[WIFI_STORE_SSID_MAX + 1];
   memset(longSsid, 'a', sizeof(longSsid) - 1);
@@ -143,12 +141,12 @@ bool selfTest() {
   copyTruncated(_ssid, sizeof(_ssid), "TestNet");
   copyTruncated(_pass, sizeof(_pass), "TestPass1");
 
-  ok &= check("validCredentials rejects an empty ssid", !validCredentials("", "TestPass1"));
-  ok &= check("validCredentials rejects an over-length ssid", !validCredentials(longSsid, "TestPass1"));
-  ok &= check("validCredentials rejects an over-length password", !validCredentials("TestNet", longPass));
-  ok &= check("validCredentials accepts a valid pair", validCredentials("TestNet", "TestPass1"));
+  ok &= CHECK("validCredentials rejects an empty ssid", !validCredentials("", "TestPass1"));
+  ok &= CHECK("validCredentials rejects an over-length ssid", !validCredentials(longSsid, "TestPass1"));
+  ok &= CHECK("validCredentials rejects an over-length password", !validCredentials("TestNet", longPass));
+  ok &= CHECK("validCredentials accepts a valid pair", validCredentials("TestNet", "TestPass1"));
 
-  ok &= check("a rejected set leaves prior credentials in place",
+  ok &= CHECK("a rejected set leaves prior credentials in place",
               strcmp(ssid(), "TestNet") == 0 && strcmp(password(), "TestPass1") == 0);
 
   copyTruncated(_ssid, sizeof(_ssid), saved_ssid);
