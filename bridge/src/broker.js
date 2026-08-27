@@ -15,6 +15,13 @@ const DOLLAR_TOPICS = ['$tz']
 // so a blip answers 204 late rather than a false 503.
 export const ECHO_TIMEOUT_MS = 5000
 
+// MQTT 3.1.1 has no signal for "the retained replay after this SUBACK is
+// done"; a broker is free to send it before or after. This is a quiet-period
+// guess: once no message has arrived for this long, whatever from the old
+// cache is still missing is announced departed. A topic slower than this to
+// replay is briefly reported deleted and then corrected by its own arrival.
+export const CACHE_SETTLE_MS = 200
+
 export function connectBroker({
   url,
   cache,
@@ -26,6 +33,7 @@ export function connectBroker({
   onError,
   echoTimeoutMs = ECHO_TIMEOUT_MS,
   reconnectMs = RECONNECT_MS,
+  cacheSettleMs = CACHE_SETTLE_MS,
   tls,
 }) {
   const label = brokerLabel(url)
@@ -75,10 +83,30 @@ export function connectBroker({
   let up = false
   let ready = false
 
+  // Set from the previous connection's cache on every 'connect', and
+  // consumed once by announceDeparted below; null between the two. Kept as
+  // an object so a settle timer left over from a connection that dropped
+  // again before it fired can tell it is stale rather than announcing for
+  // the wrong cycle.
+  let rebuild = null
+
+  function announceDeparted(forRebuild) {
+    if (rebuild !== forRebuild) return
+    rebuild = null
+    for (const topic of forRebuild.missing) onMessage(topic, Buffer.alloc(0), true)
+  }
+
+  function armSettle(forRebuild) {
+    clearTimeout(forRebuild.timer)
+    forRebuild.timer = setTimeout(() => announceDeparted(forRebuild), cacheSettleMs)
+  }
+
   client.on('connect', () => {
     up = true
     // What the cache holds came from the last connection. This one has its own
-    // retained set, and anything missing from it no longer exists.
+    // retained set, and anything still missing once retained replay goes
+    // quiet no longer exists.
+    rebuild = { missing: new Set(Array.from(cache.entries(), ([topic]) => topic)), timer: null }
     cache.clear()
     onConnect?.()
     client.subscribe(['#', ...DOLLAR_TOPICS], { qos: 0 }, (err) => {
@@ -89,20 +117,31 @@ export function connectBroker({
         reported = null
         ready = true
         subscribed()
+        armSettle(rebuild)
       }
     })
   })
 
   // 'close' fires on every failed retry, the loss itself, and the shutdown
-  // that asked for it; the subscription is gone in every case.
+  // that asked for it; the subscription is gone in every case. A rebuild
+  // still settling is abandoned rather than announced: the next connection
+  // starts its own.
   client.on('close', () => {
     ready = false
+    if (rebuild) {
+      clearTimeout(rebuild.timer)
+      rebuild = null
+    }
     if (!up || ending) return
     up = false
     onDisconnect?.()
   })
 
   client.on('message', (topic, payload, packet) => {
+    if (rebuild) {
+      rebuild.missing.delete(topic)
+      armSettle(rebuild)
+    }
     const result = cacheMessage(cache, topic, payload, packet)
     onMessage(topic, payload, result === 'deleted')
     // Waking on the topic alone answered a publish with someone else's

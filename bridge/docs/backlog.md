@@ -4,18 +4,6 @@
   broker. See [`docs/architecture.md`](architecture.md#caching-everything).
   `MAX_SSE_CLIENTS` and `MAX_SSE_FILTERS` bound what the cache costs to serve,
   which relieves part of the pressure without changing the cache itself.
-- Clearing the cache on reconnect is invisible to an SSE subscriber: it is
-  told nothing about the topics that went away, and the ones that come back
-  arrive as ordinary messages, so a subscriber is re-sent every matching
-  retained topic on every reconnect whether or not its value changed. See
-  [`docs/user-manual.md`](user-manual.md#get-events--subscribe). The cheaper
-  half is now available: the frame carries a `deleted` field, so a reconnect
-  could tell a subscriber which topics went away rather than leaving it to
-  infer them. The full fix is rejected. It means the bridge tracking, per
-  subscriber, which topic-value pairs that subscriber has already seen, which
-  is the per-client server-side state
-  [`docs/architecture.md`](architecture.md#filters-are-fixed-per-connection)
-  rules out so the receiver can implement the same binding.
 - A `POST` is held for the broker's round trip, so a publisher's throughput
   is bounded by the link's latency rather than by the bridge. A publish the
   broker never echoes holds it for the full 5 seconds before the `503`.
@@ -31,10 +19,6 @@
   with the broker and the cache-write ordering the rest of the design rests
   on: the broker is the only cache writer because the echo is what confirms a
   publish.
-- A `500` is still possible for an error the bridge does not foresee. The
-  binding defines no such status; reaching it is a bug, not a contract.
-  `binding.md` should say that an implementation may answer `5xx` for its own
-  faults, so a client is not written against a status list that cannot hold.
 - A retained message deleted while the bridge is connected stays in the cache
   as an empty message until the next reconnect, because the broker clears the
   retain flag on what it forwards and the delete is indistinguishable from an

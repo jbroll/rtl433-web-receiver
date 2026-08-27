@@ -9,6 +9,8 @@ export async function startBridge({
   url,
   delayMs,
   echoTimeoutMs,
+  reconnectMs,
+  cacheSettleMs,
   authToken,
   dashboardHtml,
   bodyLimitBytes,
@@ -28,6 +30,8 @@ export async function startBridge({
     cache,
     onMessage: (topic, payload, deleted) => bridge.broadcast(topic, payload, deleted),
     echoTimeoutMs,
+    reconnectMs,
+    cacheSettleMs,
     username,
     password,
   })

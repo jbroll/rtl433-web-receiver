@@ -123,6 +123,43 @@ test('a retained delete seen live carries deleted: true, an ordinary empty messa
   }
 })
 
+test('a topic gone at reconnect is announced deleted to an already open subscriber', async () => {
+  const bridge = await startBridge({ reconnectMs: 30, cacheSettleMs: 1000 })
+  try {
+    await fetch(`${bridge.base}/src/Acurite/1`, { method: 'POST', body: '{"t":1}' })
+    await fetch(`${bridge.base}/src/Acurite/2`, { method: 'POST', body: '{"t":2}' })
+
+    const stream = await fetch(`${bridge.base}/events?f=src/%23`)
+    try {
+      const reading = readEvents(stream, 4)
+
+      // A fresh broker at the same address has no retained messages of its
+      // own; only src/Acurite/2 is republished, so src/Acurite/1 is gone.
+      // ready() can flip true and then false again mid-restart (the proxy's
+      // old socket tearing down after a new one already connected), so the
+      // republish retries past a stray 503 instead of trusting one ready()
+      // check.
+      await bridge.restartBroker()
+      await waitFor(async () => {
+        const res = await fetch(`${bridge.base}/src/Acurite/2`, { method: 'POST', body: '{"t":2}' })
+        return res.status === 204
+      })
+      const events = await reading
+
+      assert.deepEqual(events, [
+        { topic: 'src/Acurite/1', payload: { t: 1 } },
+        { topic: 'src/Acurite/2', payload: { t: 2 } },
+        { topic: 'src/Acurite/2', payload: { t: 2 } },
+        { topic: 'src/Acurite/1', payload: '', deleted: true },
+      ])
+    } finally {
+      await closeStream(stream)
+    }
+  } finally {
+    await bridge.close()
+  }
+})
+
 test('omitting f subscribes to everything, and a malformed filter is 400', async () => {
   const bridge = await startBridge()
   try {

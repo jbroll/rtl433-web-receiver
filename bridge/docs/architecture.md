@@ -277,6 +277,11 @@ memory to do it in. Reconnecting costs a round trip; a `PATCH` endpoint
 costs a second thing to keep consistent, on both implementations, for the
 life of the project.
 
+The same rule rejects tracking, per subscriber, which topic-value pairs
+that subscriber has already seen, so a reconnect could resend only what
+changed. It is the same per-client server-side state a `PATCH` endpoint
+would have added, for the same reasons.
+
 ## Shutdown order
 
 On `SIGINT` or `SIGTERM`, `bin/mqtt-http-bridge.js` runs one `async`

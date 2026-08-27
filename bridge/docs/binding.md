@@ -193,6 +193,10 @@ Open question: the receiver's `web_ui.cpp` rewrites `/$tz` to
 An implementation that refuses an operation returns `405` rather than silently
 accepting it, so a client can tell what will actually happen.
 
+An implementation may also answer `5xx` for a fault of its own that this list
+does not name; reaching one is a bug, not a status a client is expected to
+handle.
+
 The body cap and any idle timeout on receiving it are implementation-defined;
 the binding names no fixed limit. An implementation may refuse an oversized
 `POST` body outright rather than accept a payload of unbounded size.
