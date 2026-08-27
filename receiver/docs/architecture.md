@@ -50,7 +50,7 @@ non-string non-integer channel) falls back to `.as<String>()`, which is the
 one path in `buildKey()` that still heap-allocates.
 
 `record()` parses into a `JsonDocument` built over a `RecordAllocator`
-(`signal_store.cpp`): a fixed `SIGNAL_JSON_POOL_BYTES` (2 KB) arena that bump-
+(`signal_store.cpp`): a fixed `SIGNAL_JSON_POOL_BYTES` (4 KB) arena that bump-
 allocates and never frees, reset at the top of every `record()` call rather
 than at the end of scope, since the doc never outlives the function. ArduinoJson
 7.4.3's default allocator is `malloc`/`realloc`, and — because `MemoryPool`

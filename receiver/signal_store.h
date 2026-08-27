@@ -68,5 +68,10 @@ int               latestSubIndex(const DeviceSlot& slot);
 const char*       subPayload(int subIdx);
 #ifdef FAKE_SIGNALS
 bool selfTest();
+// Test-only counters distinguishing which record() rejection fired: a parse
+// that exhausted the fixed arena never advances either; a payload that
+// parses but is over SIGNAL_PAYLOAD_MAX advances both.
+uint32_t testParseOkCount();
+uint32_t testSizeRejectCount();
 #endif
 } // namespace signal_store

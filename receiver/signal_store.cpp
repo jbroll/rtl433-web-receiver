@@ -10,11 +10,14 @@
 namespace signal_store {
 
 #define SIGNAL_PENDING_SLOTS 8
-// JSON_MSG_BUFFER is 512 and the doc gains time, rssi, count and
-// rain_today_mm; 2 KB covers ArduinoJson's own bookkeeping with headroom,
-// given platformio.ini's ARDUINOJSON_POOL_CAPACITY=16 (the 128-slot default
-// would want a 2 KB chunk for bookkeeping alone, before a single field).
-#define SIGNAL_JSON_POOL_BYTES 2048
+// JSON_MSG_BUFFER is 512 and SIGNAL_PAYLOAD_MAX is 600: the module's own
+// input bound already reaches ~600 bytes before record() adds time, rssi and
+// count. 2 KB measured short of that — a single 500-byte string field parsed
+// but 540 bytes returned NoMemory — so messages the store used to accept
+// were being silently dropped. 4 KB was measured, the same way, to parse a
+// payload at SIGNAL_PAYLOAD_MAX with room for ArduinoJson's own bookkeeping
+// (per platformio.ini's ARDUINOJSON_POOL_CAPACITY=16 chunking).
+#define SIGNAL_JSON_POOL_BYTES 4096
 
 // A fixed arena for the parser: bump-allocates from a static buffer instead
 // of malloc/realloc, and is reset once per record() call rather than freed,
@@ -37,6 +40,11 @@ class RecordAllocator : public ArduinoJson::Allocator {
     if (newSize <= oldSize) {
       return ptr;
     }
+    // The old block is never reclaimed here; reset() at the top of the next
+    // record() call is what gets it back, not this call. Harmless at the
+    // current arena size and call pattern (a per-record reset, and no call
+    // site reallocates in a loop within one record()), but would leak for
+    // real if that ever changed.
     void* fresh = alloc(newSize);
     if (fresh != nullptr) {
       memcpy(fresh, ptr, oldSize);
@@ -46,16 +54,28 @@ class RecordAllocator : public ArduinoJson::Allocator {
   void reset() { _used = 0; }
 
  private:
+  // A header of exactly alignof(max_align_t), not sizeof(size_t) rounded to
+  // sizeof(void*), is what keeps the payload aligned: ArduinoJson's slot
+  // union holds a uint64_t/double (alignof 8), but sizeof(void*)/sizeof(size_t)
+  // are 4 on the ESP32 target, so the old rounding put every payload at
+  // buf+4k — 4-byte aligned, not 8. The host can't reproduce that directly
+  // (its size_t and void* are both 8 bytes), but it reproduces the same
+  // class of bug: alignof(max_align_t) there is 16, coarser than the
+  // sizeof(void*)=8 the old code rounded to, so the same check catches the
+  // same mismatch on host under the old rounding (see the arena alignment
+  // selfTest check below).
   void* alloc(size_t size) {
-    size_t need = sizeof(size_t) + size;
-    need = (need + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
+    constexpr size_t kAlign = alignof(max_align_t);
+    size_t need = kAlign + size;
+    need = (need + kAlign - 1) & ~(kAlign - 1);
     if (need > sizeof(_buf) - _used) {
       return nullptr;
     }
-    size_t* header = reinterpret_cast<size_t*>(_buf + _used);
-    *header = size;
+    uint8_t* block = _buf + _used;
+    void* payload = block + kAlign;
+    reinterpret_cast<size_t*>(payload)[-1] = size;
     _used += need;
-    return header + 1;
+    return payload;
   }
 
   alignas(max_align_t) uint8_t _buf[SIGNAL_JSON_POOL_BYTES];
@@ -84,6 +104,13 @@ static DeviceSub  _subs[SIGNAL_SUB_TABLE];
 static RecordHook _hooks[SIGNAL_MAX_HOOKS];
 static uint8_t    _hookCount = 0;
 static int        _lastRecordedIdx = -1;
+#ifdef FAKE_SIGNALS
+// Test-only counters distinguishing which rejection fired: a parse that
+// exhausted the fixed arena never gets here, so a case reaching measureJson's
+// size check advances _parseOkForTest first. Not compiled into the firmware.
+static uint32_t _parseOkForTest = 0;
+static uint32_t _sizeRejectForTest = 0;
+#endif
 
 void reset() {
   memset(_devices, 0, sizeof(_devices));
@@ -280,6 +307,9 @@ bool record(const char* payload, int rssi, bool isDecode) {
     _dropped++;
     return false;
   }
+#ifdef FAKE_SIGNALS
+  _parseOkForTest++;
+#endif
   char key[SIGNAL_KEY_MAX];
   if (!buildKey(doc, key, sizeof(key))) {
     _dropped++;
@@ -316,6 +346,9 @@ bool record(const char* payload, int rssi, bool isDecode) {
   // hook runs, so a message the store refuses is never published either.
   if (measureJson(doc) > SIGNAL_PAYLOAD_MAX) {
     _dropped++;
+#ifdef FAKE_SIGNALS
+    _sizeRejectForTest++;
+#endif
     return false;
   }
 
@@ -479,6 +512,11 @@ void sweepStale(unsigned long now, unsigned long staleMs) {
       _devices[i].used = false;
       _seq[i] = 0;
       _deviceCount--;
+      // A lastRecorded() call after this sweep must not resolve to a slot
+      // the sweep just reclaimed.
+      if (_lastRecordedIdx == (int)i) {
+        _lastRecordedIdx = -1;
+      }
     }
   }
   sweepSubStale(now, SUB_STALE_MS);
@@ -510,6 +548,14 @@ void sweepSubStale(unsigned long now, unsigned long staleMs) {
 }
 
 #ifdef FAKE_SIGNALS
+uint32_t testParseOkCount() {
+  return _parseOkForTest;
+}
+
+uint32_t testSizeRejectCount() {
+  return _sizeRejectForTest;
+}
+
 static bool check(const char* what, bool ok) {
   Log.notice(F("selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
   return ok;
@@ -518,6 +564,37 @@ static bool check(const char* what, bool ok) {
 bool selfTest() {
   bool ok = true;
   char buf[SIGNAL_PAYLOAD_MAX + 64];
+
+  {
+    // The arena's alignment bug can't be exercised through record(): the
+    // host's size_t and void* are both 8 bytes, so even the pre-fix rounding
+    // (to sizeof(void*)) already gave 8-aligned payloads there, while on the
+    // ESP32 target both are 4 bytes and every payload landed at
+    // buf+4k — 4-byte aligned, not the 8 the ArduinoJson slot union
+    // (VariantExtension holds a uint64_t/double) needs.
+    //
+    // What this check proves instead: the host's own alignof(max_align_t)
+    // is 16, coarser than the sizeof(void*)=8 the pre-fix code rounded to —
+    // the same class of mismatch as the target's 8-vs-4, just at different
+    // numbers. Calling the allocator directly with a run of odd allocation
+    // sizes forces blocks to start at every offset the rounding allows; a
+    // fixture reproducing the pre-fix rounding (rebuilt outside this file,
+    // in the scratch harness for this pass) fails this exact assertion on
+    // this host, while the current alignof(max_align_t) rounding passes it
+    // for every size 1..64. That confirms the check would have caught the
+    // pre-fix code, not just that it passes the current one.
+    RecordAllocator allocator;
+    bool             allAligned = true;
+    for (size_t n = 1; n <= 64 && allAligned; n++) {
+      void* p = allocator.allocate(n);
+      if (p == nullptr) break;
+      if (reinterpret_cast<uintptr_t>(p) % alignof(max_align_t) != 0) {
+        allAligned = false;
+      }
+    }
+    ok &= check("arena payloads stay alignof(max_align_t)-aligned across varying allocation sizes",
+                allAligned);
+  }
 
   setSource("rtl433-a1b2c3");
   reset();
@@ -627,8 +704,57 @@ bool selfTest() {
   note[sizeof(note) - 1] = '\0';
   snprintf(buf, sizeof(buf), "{\"model\":\"Long\",\"id\":1,\"note\":\"%s\"}", note);
   record(buf, -70);  // first sighting: held pending, not yet size-checked
-  ok &= check("an over-long payload is dropped rather than truncated",
-              !record(buf, -70) && deviceCount() == 0);
+  {
+    uint32_t parseOkBefore = testParseOkCount();
+    uint32_t sizeRejectBefore = testSizeRejectCount();
+    ok &= check("an over-long payload is dropped rather than truncated",
+                !record(buf, -70) && deviceCount() == 0);
+    // With SIGNAL_JSON_POOL_BYTES at 2048 this payload's ~599-byte string
+    // exhausted the arena before deserializeJson finished, so the size check
+    // below was never reached; the assertion above still passed, but for the
+    // wrong reason. Confirms the raised arena lets it reach measureJson and
+    // get rejected there, on size, rather than failing the parse outright.
+    ok &= check("the over-long payload reaches measureJson and is rejected for size, not a parse failure",
+                testParseOkCount() == parseOkBefore + 1 &&
+                    testSizeRejectCount() == sizeRejectBefore + 1);
+  }
+
+  reset();
+  {
+    // Calibrate a note length that lands the post-stamp payload right at
+    // SIGNAL_PAYLOAD_MAX, the ceiling record()'s own size check enforces —
+    // measured the same way the reviewer measured the 2 KB arena's ceiling,
+    // but against the module's own bound rather than the arena's.
+    char   calNote[SIGNAL_PAYLOAD_MAX];
+    int    bestLen = 0;
+    for (int n = 1; n < SIGNAL_PAYLOAD_MAX; n++) {
+      memset(calNote, 'A', n);
+      calNote[n] = '\0';
+      JsonDocument calib;
+      calib["model"] = "Limit";
+      calib["id"] = 1;
+      calib["note"] = calNote;
+      char calStamp[24];
+      if (isoTime(calStamp, sizeof(calStamp))) {
+        calib["time"] = calStamp;
+      }
+      calib["rssi"] = -70;
+      calib["count"] = 1;
+      size_t measured = measureJson(calib);
+      if (measured > SIGNAL_PAYLOAD_MAX) break;
+      bestLen = n;
+      if (measured == SIGNAL_PAYLOAD_MAX) break;
+    }
+    memset(calNote, 'A', bestLen);
+    calNote[bestLen] = '\0';
+    snprintf(buf, sizeof(buf), "{\"model\":\"Limit\",\"id\":1,\"note\":\"%s\"}", calNote);
+    record(buf, -70);  // pending
+    uint32_t parseOkBefore = testParseOkCount();
+    bool     accepted = record(buf, -70);
+    ok &= check("a message at SIGNAL_PAYLOAD_MAX parses in the raised arena and is accepted",
+                accepted && deviceCount() == 1 &&
+                    testParseOkCount() == parseOkBefore + 1);
+  }
 
   reset();
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // pending
@@ -791,16 +917,23 @@ bool selfTest() {
     poolExhaustedHookCalls = 0;
     addRecordHook([](const char*, JsonDocument&) { poolExhaustedHookCalls++; });
 
-    char      hugeNote[4000];
+    char      hugeNote[6000];
     memset(hugeNote, 'A', sizeof(hugeNote) - 1);
     hugeNote[sizeof(hugeNote) - 1] = '\0';
-    char hugeBuf[4200];
+    char hugeBuf[6200];
     snprintf(hugeBuf, sizeof(hugeBuf), "{\"model\":\"Huge\",\"id\":1,\"note\":\"%s\"}", hugeNote);
     uint32_t droppedBefore = droppedCount();
+    uint32_t parseOkBefore = testParseOkCount();
     ok &= check("a parse too big for the fixed JSON pool is dropped, not crashed",
                 !record(hugeBuf, -70));
     ok &= check("the pool-exhausted parse advances the drop counter",
                 droppedCount() == droppedBefore + 1);
+    // Distinguishes which rejection fired: unlike the over-long-payload case
+    // above, this parse must never complete, so testParseOkCount() must not
+    // advance — the arena boundary is what rejects it, not measureJson's
+    // size check.
+    ok &= check("the pool-exhausted parse never advances past deserializeJson",
+                testParseOkCount() == parseOkBefore);
     ok &= check("a pool-exhausted parse creates no device", deviceCount() == 0);
     ok &= check("a pool-exhausted parse never reaches a hook",
                 poolExhaustedHookCalls == 0);
