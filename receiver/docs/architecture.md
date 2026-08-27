@@ -301,7 +301,15 @@ instead of 5 KB. That figure excludes TLS: an `mqtts://` connection also
 holds an mbedTLS context and its buffers, on the order of tens of KB of heap
 once the handshake completes, and that cost — not the packet buffer — is
 the real limit on how many `mqtts://` bridges a device can hold
-concurrently.
+concurrently. `begin()`'s matching/teardown/setup logic, including the
+out-of-memory path when `setBufferSize()` fails, is host-tested by
+`test/host/mqtt_publish_test.cpp` against `arduino_shim/`'s fakes of `Print`,
+`WiFiClient`/`WiFiClientSecure`, and `PubSubClient` — see
+[development.md](development.md#testing-without-a-radio). JSON string
+escaping used to live in `web_ui.cpp`; it moved to its own
+`json_string.h`/`.cpp` so `mqtt_publish.cpp` (and its host test) don't have
+to pull in `web_ui.h`'s `WebServer`/`Update`/lwIP dependencies, none of which
+build on host.
 
 `onRecord()`, registered as a second `signal_store` record hook,
 publishes the hook's `JsonDocument` unmodified to the topic `key` already

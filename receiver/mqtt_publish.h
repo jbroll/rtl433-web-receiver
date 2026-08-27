@@ -3,6 +3,11 @@
 #include <ArduinoJson.h>
 #include <stdint.h>
 
+#ifdef FAKE_SIGNALS
+#include <PubSubClient.h>
+#include <WiFiClientSecure.h>
+#endif
+
 namespace mqtt_publish {
 // Reads mqtt_publish_store and the MQTT_BROKER_URL/MQTT_TOKEN build flags;
 // call once, after WiFi has come up, and again any time the store's table
@@ -43,4 +48,20 @@ bool        connectedAt(uint8_t i);
 // Why urlAt(i) will never connect, or nullptr if it's enabled or does not
 // exist. Set when a slot's url fails mqtt(s)://host:port parsing.
 const char* reasonAt(uint8_t i);
+
+#ifdef FAKE_SIGNALS
+// Host-test-only: the live connection objects behind slot i, ranked the same
+// as urlAt()/connectedAt(). References into a static array that is never
+// reallocated, so they stay valid across the begin() that reassigns i.
+PubSubClient&     mqttAt(uint8_t i);
+WiFiClient&       plainClientAt(uint8_t i);
+WiFiClientSecure& secureClientAt(uint8_t i);
+// Host-test-only: the physical _conn[] slots by raw index (not ranked, and
+// reachable whether or not the slot is currently live), so a test can wipe
+// every fake's bookkeeping between scenarios that reuse the same slots.
+uint8_t           maxConnections();
+PubSubClient&     mqttRawAt(uint8_t physicalIndex);
+WiFiClient&       plainClientRawAt(uint8_t physicalIndex);
+WiFiClientSecure& secureClientRawAt(uint8_t physicalIndex);
+#endif
 } // namespace mqtt_publish

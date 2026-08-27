@@ -11,10 +11,10 @@
 #include "layout_store.h"
 #include "location_store.h"
 #include "units_store.h"
+#include "json_string.h"
 #include "mqtt_publish_store.h"
 #include "signal_store.h"
 #include "tz_store.h"
-#include "web_ui.h"
 
 #ifndef MQTT_RECONNECT_BACKOFF_MS
 #define MQTT_RECONNECT_BACKOFF_MS 30000
@@ -171,9 +171,9 @@ static void setupConnection(Connection& c, const char* url, const char* token) {
 // quotes and the terminator.
 #define ALIAS_PAYLOAD_MAX (ALIAS_NAME_MAX * 6 + 3)
 
-// A Print sink over a fixed buffer for web_ui::writeJsonString, which needs a
-// Print& and would otherwise have to allocate a JsonDocument just to escape
-// one string.
+// A Print sink over a fixed buffer for json_string::writeJsonString, which
+// needs a Print& and would otherwise have to allocate a JsonDocument just to
+// escape one string.
 class BufferPrint : public Print {
  public:
   BufferPrint(char* buf, size_t cap) : _buf(buf), _cap(cap) { _buf[0] = '\0'; }
@@ -195,7 +195,7 @@ class BufferPrint : public Print {
 
 static size_t aliasPayload(char* out, size_t outSize, const char* name) {
   BufferPrint bp(out, outSize);
-  web_ui::writeJsonString(bp, name);
+  json_string::writeJsonString(bp, name);
   return !bp.overflowed() && bp.length() > 0 ? bp.length() : 0;
 }
 
@@ -456,5 +456,15 @@ const char* urlAt(uint8_t i) { return i < _connCount ? _conn[_slotOrder[i]].url 
 bool connectedAt(uint8_t i) { return i < _connCount && _conn[_slotOrder[i]].mqtt.connected(); }
 
 const char* reasonAt(uint8_t i) { return i < _connCount ? _conn[_slotOrder[i]].reason : nullptr; }
+
+#ifdef FAKE_SIGNALS
+PubSubClient&     mqttAt(uint8_t i) { return _conn[_slotOrder[i]].mqtt; }
+WiFiClient&       plainClientAt(uint8_t i) { return _conn[_slotOrder[i]].plainClient; }
+WiFiClientSecure& secureClientAt(uint8_t i) { return _conn[_slotOrder[i]].secureClient; }
+uint8_t           maxConnections() { return MQTT_PUBLISH_MAX_CONNECTIONS; }
+PubSubClient&     mqttRawAt(uint8_t i) { return _conn[i].mqtt; }
+WiFiClient&       plainClientRawAt(uint8_t i) { return _conn[i].plainClient; }
+WiFiClientSecure& secureClientRawAt(uint8_t i) { return _conn[i].secureClient; }
+#endif
 
 } // namespace mqtt_publish

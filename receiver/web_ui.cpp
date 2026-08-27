@@ -242,28 +242,6 @@ static_assert(FRAME_LAYOUT_CAP > 31 + SIGNAL_KEY_MAX + LAYOUT_STORE_MAX,
 
 } // namespace
 
-void writeJsonString(Print& out, const char* s) {
-  out.print('"');
-  for (const char* p = s; *p; p++) {
-    switch (*p) {
-      case '"': out.print("\\\""); break;
-      case '\\': out.print("\\\\"); break;
-      case '\n': out.print("\\n"); break;
-      case '\r': out.print("\\r"); break;
-      case '\t': out.print("\\t"); break;
-      default:
-        if ((unsigned char)*p < 0x20) {
-          char esc[7];
-          snprintf(esc, sizeof(esc), "\\u%04x", *p);
-          out.print(esc);
-        } else {
-          out.print(*p);
-        }
-    }
-  }
-  out.print('"');
-}
-
 namespace {
 
 static bool slotWants(int i, const char* topic) {

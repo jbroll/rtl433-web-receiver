@@ -1,10 +1,10 @@
 #pragma once
 
-// Host stand-in for the pieces of Arduino.h that signal_store.cpp and
-// alias_store.cpp actually use: millis()/delay() for timestamps, F() as a
-// no-op (there is no flash-vs-RAM distinction on host), and just enough of
-// String for ArduinoJson's Arduino-String integration (.as<String>(),
-// serializeJson into a String) to link.
+// Host stand-in for the pieces of Arduino.h the stores and mqtt_publish.cpp
+// actually use: millis()/delay() for timestamps, F() and PROGMEM as no-ops
+// (there is no flash-vs-RAM distinction on host), Print (see Print.h), and
+// just enough of String for ArduinoJson's Arduino-String integration
+// (.as<String>(), serializeJson into a String) to link.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -12,7 +12,10 @@
 
 #include <string>
 
+#include "Print.h"
+
 #define F(x) x
+#define PROGMEM
 
 // Real millis() only advances with wall-clock time, so calls made back to
 // back (no delay() between them) read the same value. Only delay() moves

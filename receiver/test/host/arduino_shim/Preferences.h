@@ -61,6 +61,15 @@ class Preferences {
     return n;
   }
 
+  size_t putShort(const char* key, int16_t value) {
+    return putBytes(key, &value, sizeof(value));
+  }
+
+  int16_t getShort(const char* key, int16_t defaultValue) {
+    int16_t value = defaultValue;
+    return getBytes(key, &value, sizeof(value)) == sizeof(value) ? value : defaultValue;
+  }
+
   bool remove(const char* key) {
     auto ns = _store.find(_ns);
     if (ns == _store.end()) return false;

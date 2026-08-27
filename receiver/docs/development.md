@@ -87,6 +87,13 @@ reach further into Arduino, `ArduinoLog`, and (for `alias_store`)
 against fakes of those headers in `test/host/arduino_shim/` and runs them too,
 so every check above runs on every `bash test/host/run.sh`.
 
+The same shim also fakes `Print`, `WiFiClient`/`WiFiClientSecure`, and
+`PubSubClient`, so `mqtt_publish.cpp`'s connection lifecycle — `begin()`'s
+matching of dashboard-configured brokers against live connections, teardown
+on a removed/changed/TLS-flipped broker, the out-of-memory path in
+`setBufferSize()`, and `aliasPayload()`'s JSON escaping — is host-tested by
+`test/host/mqtt_publish_test.cpp`, without a broker or a device attached.
+
 `test/binding.spec.js` covers the HTTP binding against `test/binding-server.js`, a JS
 model of the same surface, so it runs without a board: `npm install` once, then `npx
 playwright test`. The dashboard has [its own suite](../../dashboard/README.md).

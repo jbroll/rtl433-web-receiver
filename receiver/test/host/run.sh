@@ -59,3 +59,13 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     -I"$shim" -I"$root" -I"$aj" \
     -o "$out/mqtt_publish_store_test" "$root/mqtt_publish_store.cpp" "$root/test/host/mqtt_publish_store_test.cpp"
 "$out/mqtt_publish_store_test"
+# Same build-flag broker as above, so scenario (f) can fill _conn[] exactly.
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \
+    -DMQTT_BROKER_URL='"mqtt://buildflag.example:1883"' -DMQTT_MAX_PACKET_SIZE=5300 \
+    -I"$shim" -I"$root" -I"$aj" \
+    -o "$out/mqtt_publish_test" "$root/mqtt_publish.cpp" "$root/mqtt_publish_store.cpp" \
+    "$root/json_string.cpp" "$root/signal_store.cpp" "$root/device_hooks.cpp" \
+    "$root/alias_store.cpp" "$root/layout_store.cpp" "$root/location_store.cpp" \
+    "$root/units_store.cpp" "$root/tz_store.cpp" \
+    "$root/test/host/mqtt_publish_test.cpp"
+"$out/mqtt_publish_test"
