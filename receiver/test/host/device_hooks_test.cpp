@@ -66,7 +66,8 @@ int main() {
         fabs(rainToday("src/Acurite-5n1/1", "Acurite-5n1", 3.0f) - 0.0f) < 0.01f);
 
   // setNow(0) means "no override" and falls back to the real clock, so a
-  // nonzero pre-epoch value simulates the clock being unset.
+  // nonzero value below localDay()'s 1700000000 sanity threshold simulates
+  // the clock being unset.
   device_hooks::setNow(1);
   check("clock-unset first reading gets no rain_today_mm",
         rainToday("src/Acurite-5n1/3", "Acurite-5n1", 100.0f) < 0.0f);

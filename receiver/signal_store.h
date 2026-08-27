@@ -59,8 +59,6 @@ void              sweepStale(unsigned long now, unsigned long staleMs);
 uint32_t          totalRecorded();
 uint32_t          droppedCount();
 const char*       latestPayload(const DeviceSlot& slot);
-// Reclaims a splitter's stale secondary message types; never frees a device
-// slot. sweepStale() is the only thing that ends a slot's life.
 void              sweepSubStale(unsigned long now, unsigned long staleMs);
 const DeviceSub*  subAt(uint8_t i);
 int               latestSubIndex(const DeviceSlot& slot);

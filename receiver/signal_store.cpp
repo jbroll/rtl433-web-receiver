@@ -248,10 +248,6 @@ bool record(const char* payload, int rssi, bool isDecode) {
     return false;
   }
 
-  for (uint8_t h = 0; h < _hookCount; h++) {
-    _hooks[h](key, doc);
-  }
-
   bool newSlot = idx < 0;
   if (newSlot) {
     idx = claimSlot();
@@ -265,6 +261,8 @@ bool record(const char* payload, int rssi, bool isDecode) {
     copyTruncated(msgType, sizeof(msgType), doc["message_type"].as<String>().c_str());
   }
 
+  // Resolved before any hook runs, so a record that will be dropped for want
+  // of a sub slot never reaches a hook.
   int subIdx = findSub(idx, msgType);
   if (subIdx < 0) {
     subIdx = claimSub(idx, msgType);
@@ -279,6 +277,10 @@ bool record(const char* payload, int rssi, bool isDecode) {
       _dropped++;
       return false;
     }
+  }
+
+  for (uint8_t h = 0; h < _hookCount; h++) {
+    _hooks[h](key, doc);
   }
 
   DeviceSub& sub = _subs[subIdx];
@@ -396,7 +398,8 @@ void sweepStale(unsigned long now, unsigned long staleMs) {
 }
 
 // Reclaims a splitter's stale secondary message types; it never frees a
-// device slot itself; only sweepStale's device window does that.
+// device slot itself. sweepStale()'s device window and claimSlot()'s
+// capacity eviction are what end a slot's life.
 void sweepSubStale(unsigned long now, unsigned long staleMs) {
   if (staleMs == 0) return;
   int newest[SIGNAL_DEVICE_SLOTS];
@@ -690,6 +693,20 @@ bool selfTest() {
       if (s != NULL && latestPayload(*s) == NULL) anyNullPayload = true;
     }
     ok &= check("no live slot has a NULL latestPayload", !anyNullPayload);
+
+    static int fullTableHookCalls = 0;
+    uint8_t    savedHookCount3 = _hookCount;
+    RecordHook savedHooks3[SIGNAL_MAX_HOOKS];
+    memcpy(savedHooks3, _hooks, sizeof(_hooks));
+    _hookCount = 0;
+    fullTableHookCalls = 0;
+    addRecordHook([](const char*, JsonDocument&) { fullTableHookCalls++; });
+    record("{\"model\":\"AnotherNewDev\",\"id\":1}", -70);  // pending
+    record("{\"model\":\"AnotherNewDev\",\"id\":1}", -70);  // sub table still full; promotion is dropped
+    ok &= check("a record dropped for a full sub table never reaches a hook",
+                fullTableHookCalls == 0 && deviceCount() == before);
+    _hookCount = savedHookCount3;
+    memcpy(_hooks, savedHooks3, sizeof(_hooks));
   }
 
   {

@@ -32,34 +32,37 @@ from for longer than `DEVICE_STALE_HOURS`, comparing with unsigned
 subtraction so it stays correct across a `millis()` wraparound too. It also
 calls `sweepSubStale()`, which reclaims a splitter's stale secondary
 `message_type` subs unheard from for longer than `SUB_STALE_MS` (1 hour) but
-always spares each slot's newest sub — it never frees a device slot itself,
-so `DEVICE_STALE_HOURS` is the only thing that ends a slot's life.
+always spares each slot's newest sub — it never frees a device slot itself.
+A slot's life ends either through `sweepStale()`'s `DEVICE_STALE_HOURS` window
+or through `claimSlot()`'s capacity eviction of the lowest-`_seq` slot when
+the table is full; `sweepSubStale()` never ends it.
 
-`buildKey()` rejects rather than truncates every segment that doesn't fit,
-`id` included: a source or model too long to fit its buffer already returned
-false, and the `id` segment now compares `strlen()` against its 16-byte
-buffer the same way rather than truncating and risking two sensors sharing a
-long id prefix colliding on one slot.
+`buildKey()` truncates `model` (`copyTruncated(model, SIGNAL_MODEL_MAX, m)`)
+and, when `channel` stands in for `id`, truncates that too. The `id` field
+itself is rejected rather than truncated when it doesn't fit its 16-byte
+buffer, to avoid two sensors sharing a long id prefix colliding on one slot.
+The assembled `source/model/id` key is rejected as a whole if it doesn't fit
+`SIGNAL_KEY_MAX`, regardless of which segment pushed it over.
 
 `record()` stamps `time`, `rssi`, and `count` into the decoded JSON, then
 checks `measureJson(doc) > SIGNAL_PAYLOAD_MAX` before running any hook, so a
-message the store is about to drop is never handed to one. Up to
+message the store is about to drop is never handed to one. A device slot is
+claimed (or, for an existing device, looked up), then the sub for the
+record's `message_type` is resolved; if the sub table is full and the slot
+has no sub of its own to evict, the claim is undone before any hook runs, so
+a record the store is about to refuse is never handed to one either. Up to
 `SIGNAL_MAX_HOOKS` (2) record hooks can be registered with `addRecordHook()`,
-run in registration order right after the size check — `device_hooks::dispatch`
-and `mqtt_publish::onRecord` are the two the firmware wires up. `SIGNAL_PAYLOAD_MAX`
-is 600 bytes against the library's own 512-byte message buffer, room for the
-roughly 56 bytes the three stamped fields add. A message that still doesn't
-fit is dropped rather than truncated: the SSE frame embeds a device's payload
-as the JSON object it
+run in registration order once the size check and the sub claim have both
+succeeded — `device_hooks::dispatch` and `mqtt_publish::onRecord` are the two
+the firmware wires up. `SIGNAL_PAYLOAD_MAX` is 600 bytes against the
+library's own 512-byte message buffer, room for the roughly 56 bytes the
+three stamped fields add. A message that still doesn't fit is dropped rather
+than truncated: the SSE frame embeds a device's payload as the JSON object it
 already is, not as an escaped string, so a payload cut mid-object would put
 unparseable JSON on the wire. Truncating and then fixing up the JSON is not
 attempted; dropping the message and counting it in `droppedCount()` is
-simpler. A device slot is claimed only once a sub is confirmed available for
-it, and undone if `claimSub()` then fails — the sub table full and the new
-slot with nothing of its own to evict — so a refused sub claim never leaves a
-device slot with no payload behind. Its `FAKE_SIGNALS` `selfTest()` is
-host-tested by `test/host/run.sh` against the same `arduino_shim/` fakes as
-`alias_store`.
+simpler. Its `FAKE_SIGNALS` `selfTest()` is host-tested by
+`test/host/run.sh` against the same `arduino_shim/` fakes as `alias_store`.
 
 **`radio_health.h` / `radio_health.cpp`** — an Arduino-free decision module,
 host-tested by `test/host/run.sh` like `topic`. It watches the radio through
