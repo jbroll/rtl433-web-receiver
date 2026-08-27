@@ -127,6 +127,10 @@ static void load() {
     _prefs.getBytes(BLOB_KEY, blob, n);
     blob[n] = '\0';
     loadTable(blob);
+    // Retry the legacy key's removal in case a prior migration's write
+    // succeeded but a crash before its own remove() left it behind;
+    // harmless no-op once the legacy key is already gone.
+    _prefs.remove(LEGACY_KEY);
     return;
   }
   String stored = _prefs.getString(LEGACY_KEY, "");
@@ -237,7 +241,8 @@ bool begin() {
   }
   // load() first, migrateLegacy() second: migrateLegacy only fires when the
   // table is still empty, so a table already migrated from the string key
-  // (which load() just did) correctly makes it a no-op.
+  // (which load() just did) correctly makes it a no-op. selfTest()'s "State
+  // 4" below is a regression test for this ordering: reversed, it fails.
   load();
   String oldUrl = _prefs.getString("url", "");
   if (migrateLegacy(oldUrl.c_str(), _prefs.getString("token", "").c_str())) {
@@ -350,9 +355,11 @@ bool selfTest() {
               !add(MQTT_BROKER_URL, "tok") && count() == 0);
 #endif
 
-  // The rest runs against NVS: the two-key migration off the string "table"
-  // used to be written as, its idempotency, the half-migrated case, and that
-  // it chains correctly with migrateLegacy's url/token migration.
+  // The rest runs against NVS, and against begin() itself rather than a
+  // hand-rolled load()/migrateLegacy() call pair: begin() is what ships, and
+  // it is the *order* of the two migrations that matters (see begin()'s own
+  // comment), so a test that calls them separately in whatever order it
+  // likes proves nothing about the order the firmware actually runs.
   _open = _prefs.begin("mqtt", false);
   if (_open) {
     _prefs.remove(BLOB_KEY);
@@ -361,22 +368,17 @@ bool selfTest() {
     _prefs.remove("token");
 
     // State 1: a legacy single-broker url/token, no table key at all.
-    memset(_used, 0, sizeof(_used));
     _prefs.putString("url", "mqtt://legacy-single:1883");
     _prefs.putString("token", "singletok");
-    load();
-    bool migrated = migrateLegacy(_prefs.getString("url", "").c_str(),
-                                   _prefs.getString("token", "").c_str());
-    if (migrated) {
-      _prefs.remove("url");
-      _prefs.remove("token");
-    }
-    ok &= CHECK("a legacy single-broker value with no table migrates into slot 0",
-                migrated && count() == 1 &&
-                    strcmp(urlAt(0), "mqtt://legacy-single:1883") == 0 &&
+    _open = false;
+    begin();
+    ok &= CHECK("begin migrates a legacy single-broker value with no table into slot 0",
+                count() == 1 && strcmp(urlAt(0), "mqtt://legacy-single:1883") == 0 &&
                     strcmp(tokenAt(0), "singletok") == 0);
-    ok &= CHECK("migrating a legacy single value writes the table as bytes",
-                _prefs.getBytesLength(BLOB_KEY) > 0);
+    ok &= CHECK("begin writes the migrated table as bytes", _prefs.getBytesLength(BLOB_KEY) > 0);
+    ok &= CHECK("begin removes the migrated legacy url/token keys",
+                _prefs.getString("url", "").length() == 0 &&
+                    _prefs.getString("token", "").length() == 0);
 
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
@@ -385,34 +387,56 @@ bool selfTest() {
 
     // State 2: the table already stored as a string (pre-putBytes firmware),
     // no legacy single-broker value.
-    memset(_used, 0, sizeof(_used));
     _prefs.putString(LEGACY_KEY, "[{\"url\":\"mqtt://b1:1883\",\"token\":\"t1\"}]");
-    load();
-    ok &= CHECK("a table stored as a string is still read",
+    _open = false;
+    begin();
+    ok &= CHECK("begin still reads a table stored as a string",
                 count() == 1 && strcmp(urlAt(0), "mqtt://b1:1883") == 0);
-    ok &= CHECK("reading one migrates it to a blob", _prefs.getBytesLength(BLOB_KEY) > 0);
-    ok &= CHECK("and drops the string it came from",
+    ok &= CHECK("begin migrates it to a blob", _prefs.getBytesLength(BLOB_KEY) > 0);
+    ok &= CHECK("begin drops the string it came from",
                 _prefs.getString(LEGACY_KEY, "").length() == 0);
-    ok &= CHECK("migrateLegacy is a no-op once load() populated the table from the string",
-                !migrateLegacy(_prefs.getString("url", "").c_str(),
-                                _prefs.getString("token", "").c_str()) &&
-                    count() == 1);
-    ok &= CHECK("running load() again after migrating changes nothing",
-                (memset(_used, 0, sizeof(_used)), load(), true) && count() == 1 &&
-                    strcmp(urlAt(0), "mqtt://b1:1883") == 0);
+    _open = false;
+    begin();
+    ok &= CHECK("calling begin again after migrating changes nothing",
+                count() == 1 && strcmp(urlAt(0), "mqtt://b1:1883") == 0);
 
     // State 3: half-migrated. The bytes write landed but a crash before
-    // remove() left the legacy string key behind; load() must prefer the
+    // remove() left the legacy string key behind; begin() must prefer the
     // bytes key rather than re-adopt or duplicate the stale string.
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
     const char* bytesTable = "[{\"url\":\"mqtt://b2:1883\",\"token\":\"t2\"}]";
     _prefs.putBytes(BLOB_KEY, bytesTable, strlen(bytesTable));
     _prefs.putString(LEGACY_KEY, "[{\"url\":\"mqtt://b1:1883\",\"token\":\"t1\"}]");
-    memset(_used, 0, sizeof(_used));
-    load();
+    _open = false;
+    begin();
     ok &= CHECK("a half-migrated store reads the bytes key, not the stale string",
                 count() == 1 && strcmp(urlAt(0), "mqtt://b2:1883") == 0);
+
+    _prefs.remove(BLOB_KEY);
+    _prefs.remove(LEGACY_KEY);
+    _prefs.remove("url");
+    _prefs.remove("token");
+
+    // State 4: the headline risk. A legacy `table` string holding multiple
+    // bridges, plus a stale single url/token left behind from before the
+    // table existed. This is what makes the load()-then-migrateLegacy()
+    // order load-bearing: reversed, migrateLegacy() would persist() the
+    // single reconstructed broker to the bytes key first, then load() would
+    // read that back and loadTable()'s memset(_used) would overwrite the
+    // whole in-RAM table with it -- losing the string table's other
+    // bridge(s) for good, not duplicating anything.
+    _prefs.putString(LEGACY_KEY,
+                      "[{\"url\":\"mqtt://b1:1883\",\"token\":\"t1\"},"
+                      "{\"url\":\"mqtt://b2:1883\",\"token\":\"t2\"}]");
+    _prefs.putString("url", "mqtt://stale-single:1883");
+    _prefs.putString("token", "staletok");
+    _open = false;
+    begin();
+    ok &= CHECK("begin on a multi-bridge legacy table with a stale single value keeps both bridges",
+                count() == 2 && indexOf("mqtt://b1:1883") >= 0 && indexOf("mqtt://b2:1883") >= 0);
+    ok &= CHECK("and does not let the stale single value clobber them",
+                indexOf("mqtt://stale-single:1883") < 0);
 
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);

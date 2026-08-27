@@ -25,12 +25,22 @@ class Preferences {
   size_t putString(const char* key, const char* value) {
     _putStringCalls++;
     _store[_ns][key] = value ? value : "";
+    // NVS keys are typed: a putString() on a key that used to hold bytes
+    // retypes it, same as real NVS. Without this, a stale entry in _blobs
+    // would make a later getBytesLength() on this key report the old
+    // bytes-typed length instead of "absent".
+    _blobs[_ns].erase(key);
     return _store[_ns][key].size();
   }
 
   String getString(const char* key, const char* defaultValue) {
     auto ns = _store.find(_ns);
     if (ns != _store.end()) {
+      // A key written by putBytes() is typed as bytes; reading it back as a
+      // string reads as absent, same as real NVS.
+      if (_blobs[_ns].count(key) != 0) {
+        return String(defaultValue);
+      }
       auto it = ns->second.find(key);
       if (it != ns->second.end()) {
         return String(it->second.c_str());

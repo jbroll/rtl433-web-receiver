@@ -18,8 +18,16 @@ bool selfTest() {
   bool ok = true;
 
   // Suppress NVS traffic across the set() calls below; set() checks the
-  // size cap before its open check, so the cap tests still work.
+  // size cap before its open check, so the cap tests still work. Snapshot
+  // the in-RAM blob too: this runs against the receiver's own
+  // already-loaded $location, and the "first set with NVS open writes
+  // once" block below flips NVS back open to prove the real putString()
+  // path, which would otherwise leave bogus test values in the device's
+  // real "location" NVS entry.
   bool saved_open      = _store.openForTest();
+  char saved_blob[LOCATION_STORE_MAX];
+  strncpy(saved_blob, _store.blobForTest(), sizeof(saved_blob) - 1);
+  saved_blob[sizeof(saved_blob) - 1] = '\0';
   _store.openForTest() = false;
 
   _store.blobForTest()[0] = '\0';
@@ -58,8 +66,10 @@ bool selfTest() {
                   Preferences::putStringCallCount() == 1);
   _store.openForTest() = false;
 
-  _store.blobForTest()[0] = '\0';
-  _store.openForTest()    = saved_open;
+  strncpy(_store.blobForTest(), saved_blob, sizeof(saved_blob) - 1);
+  _store.blobForTest()[sizeof(saved_blob) - 1] = '\0';
+  _store.openForTest()                         = saved_open;
+  _store.rawPersistForTest(saved_blob);
   Log.notice(F("location selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
 }

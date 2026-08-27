@@ -25,6 +25,10 @@ static void load() {
   if (n > 0 && n < sizeof(_blob)) {
     _prefs.getBytes(BLOB_KEY, _blob, n);
     _blob[n] = '\0';
+    // Retry the legacy key's removal in case a prior migration's write
+    // succeeded but a crash before its own remove() left it behind;
+    // harmless no-op once the legacy key is already gone.
+    _prefs.remove(LEGACY_KEY);
     return;
   }
   String stored = _prefs.getString(LEGACY_KEY, "");

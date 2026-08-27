@@ -74,6 +74,16 @@ Uncomment `'-DFAKE_SIGNALS=true'` in `platformio.ini`. The sketch injects a
 synthetic decode every 3 seconds and runs `signal_store::selfTest()` at startup,
 printing a PASS/FAIL line per check over serial.
 
+**Do not enable this on a board that has already been provisioned with real
+settings.** `alias_store::selfTest()`, `mqtt_publish_store::selfTest()`, and
+`layout_store::selfTest()` each end their NVS-backed checks by erasing that
+store's real NVS keys and leaving them empty, not restored — a board's saved
+aliases, MQTT bridges, and dashboard `$layout` are gone after one boot with
+the flag on. `location_store` and `units_store` snapshot and restore the
+real `$location`/`$units` values they briefly overwrite, so those two are
+safe. Test on a fresh or disposable board, or one whose settings you don't
+need back.
+
 Set `'-DFAKE_RADIO_FAIL_MS=900000'` (15 minutes) to exercise the recovery
 path: the synthetic decode stops and the health state moves to `silent` +
 `pinned` (floor pinned below threshold), triggering a soft re-init after the

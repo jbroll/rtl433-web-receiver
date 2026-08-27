@@ -205,12 +205,16 @@ reason with when a write starts failing.
 **`blob_store.h`** (`BlobStore<CAP>` template) — the shared shape behind
 `location_store` and `units_store`: `begin`/`get`/`set` over one JSON blob
 in `Preferences` namespace and key `blob`, plus the same same-value write
-skip as `layout_store`. `layout_store` does not use it: it persists before
-adopting (a failed write should never touch the in-RAM blob), which would
-need a second `CAP`-sized buffer on the caller's stack for `location_store`
-and `units_store`, and it needs the two-key blob migration above, which
-neither of the other two has ever needed since they were `putBytes()` from
-the start. `alias_store` and `mqtt_publish_store` don't fit either — they
+skip as `layout_store`. `set()` adopts the new value into `_blob` first and
+rolls back to a `previous[CAP]` copy taken before the write if `putString()`
+fails, which is why it needs a second `CAP`-sized buffer on the caller's
+stack; `layout_store` was deliberately not standardised onto this shape and
+instead keeps its own persist-before-adopt order (write to NVS first, only
+copy the new value into `_blob` once that succeeds), which needs no second
+buffer at all, since a failed write never touches the in-RAM blob in the
+first place. It also needs the two-key blob migration above, which neither
+of the other two has ever needed since they were `putBytes()` from the
+start. `alias_store` and `mqtt_publish_store` don't fit either — they
 serialize a table rather than storing a blob verbatim.
 
 **`location_store.h` / `location_store.cpp`** — persists the dashboard's
@@ -228,9 +232,11 @@ opened. Whoever set it sets it for every visitor, since the blob is served
 to all of them.
 
 **`selftest_check.h`** — the one `selfTestCheck(module, what, ok)` PASS/FAIL
-logger every store's `FAKE_SIGNALS` `selfTest()` used to carry its own copy
-of. Each store defines a local `CHECK(what, ok)` macro binding its own module
-name, so call sites keep their existing shape.
+logger most stores' `FAKE_SIGNALS` `selfTest()` used to carry its own copy of.
+Each store defines a local `CHECK(what, ok)` macro binding its own module
+name, so call sites keep their existing shape. `ota_token_store.cpp` still
+carries its own copy rather than this shared one; left alone deliberately,
+since it sits on the `/$update` OTA-flash path.
 
 **`web_ui.h` / `web_ui.cpp`** — the HTTP and SSE surface. `/`, `/events`,
 `/$update`, and `/$mqtt` (plus `/$mqtt/remove`) are the only registered
@@ -313,9 +319,16 @@ them) has `load()` populate and migrate the table, leaving `migrateLegacy()`
 a no-op because the table is non-empty; a board with neither has both stages
 no-op and starts with an empty table. Reversing the order would let
 `migrateLegacy()` write to slot 0 before `load()` has a chance to populate
-the table from a legacy string, which — since `migrateLegacy()`'s own write
-goes through the now-`putBytes()` `persist()` — would race and potentially
-duplicate the legacy string's own entry once `load()` ran on a later boot.
+the table from a legacy string: `migrateLegacy()`'s own write goes through
+the now-`putBytes()` `persist()`, so by the time the reversed `load()` ran it
+would find the bytes key already populated with the single reconstructed
+broker and take its first branch — `loadTable()` overwrites the whole in-RAM
+table rather than appending to it, so the legacy string's other bridges are
+never read at all. The failure mode is losing them, not duplicating
+anything; `selfTest()`'s "multi-bridge legacy table with a stale single
+value" check calls `begin()` itself so this ordering is what gets asserted,
+rather than a hand-rolled `load()`/`migrateLegacy()` call pair that could
+pass regardless of which runs first.
 
 The `MQTT_BROKER_URL`/`MQTT_TOKEN` build flags are read directly by
 `mqtt_publish.cpp`, not through this store; they're a separate, always-on

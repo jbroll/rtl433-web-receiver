@@ -108,6 +108,10 @@ static void load() {
     _prefs.getBytes(BLOB_KEY, blob, n);
     blob[n] = '\0';
     loadTable(blob);
+    // Retry the legacy key's removal in case a prior migration's write
+    // succeeded but a crash before its own remove() left it behind;
+    // harmless no-op once the legacy key is already gone.
+    _prefs.remove(LEGACY_KEY);
     return;
   }
   String stored = _prefs.getString(LEGACY_KEY, "");
@@ -222,8 +226,18 @@ bool selfTest() {
 
   // Suppress NVS traffic across the dozens of set() calls below; persist()'s
   // blob-size check runs before its _open check, so the cap tests still work.
+  // Snapshot the in-RAM table too, same as mqtt_publish_store::selfTest():
+  // begin() has already loaded real aliases from NVS by the time this runs,
+  // and leaving the table wiped or full of test data would make the next
+  // alias read/write see it instead of the real ones.
   bool saved_open = _open;
   _open           = false;
+  char saved_topics[ALIAS_SLOTS][ALIAS_TOPIC_MAX];
+  char saved_names[ALIAS_SLOTS][ALIAS_NAME_MAX];
+  bool saved_used[ALIAS_SLOTS];
+  memcpy(saved_topics, _topics, sizeof(_topics));
+  memcpy(saved_names, _names, sizeof(_names));
+  memcpy(saved_used, _used, sizeof(_used));
 
   memset(_used, 0, sizeof(_used));
   ok &= CHECK("an unset topic has no alias", get("s/M/1/$alias") == NULL);
@@ -369,7 +383,9 @@ bool selfTest() {
     _prefs.remove(LEGACY_KEY);
   }
 
-  memset(_used, 0, sizeof(_used));
+  memcpy(_topics, saved_topics, sizeof(_topics));
+  memcpy(_names, saved_names, sizeof(_names));
+  memcpy(_used, saved_used, sizeof(_used));
   _open  = saved_open;
   Log.notice(F("alias selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

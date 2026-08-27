@@ -62,6 +62,21 @@ class BlobStore {
 #ifdef FAKE_SIGNALS
   bool& openForTest() { return _open; }
   char* blobForTest() { return _blob; }
+  // Writes value straight to the "blob" key via putString(), bypassing
+  // set()'s NULL/empty rejection and same-value skip. selfTest() flips
+  // openForTest() to true to prove set()'s real-NVS write path, which
+  // writes bogus test values into the store's real NVS entry on a live
+  // device; this is how it puts back whatever was actually stored there
+  // before, including "nothing stored" (value == "").
+  void rawPersistForTest(const char* value) {
+    if (_open) {
+      if (value[0] == '\0') {
+        _prefs.remove("blob");
+      } else {
+        _prefs.putString("blob", value);
+      }
+    }
+  }
 #endif
 
  private:

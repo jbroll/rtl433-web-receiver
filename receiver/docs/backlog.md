@@ -162,6 +162,18 @@ store) that a client cannot remove at runtime. A caller reading only the status 
 tell them apart, so the dashboard has to re-fetch `GET /$mqtt` after a `204` and check
 whether the url is still listed to know whether anything happened.
 
+## `mqtt_publish_store` leaks a stale `url`/`token` pair when a legacy table string co-exists
+
+`begin()`'s `migrateLegacy()` only removes the pre-existing single-broker `url`/`token` NVS
+keys when it does the migrating itself (`count() == 0` at the time it runs). A device
+holding both a legacy `table` string (which `load()` migrates first, populating the table
+and making `migrateLegacy()` a no-op) and a leftover single `url`/`token` pair from before
+the table existed keeps that stale pair in NVS forever — harmless, since nothing reads it
+once the table is populated, but it never gets cleaned up. Fixing it means restructuring
+`begin()`'s migration logic (tracking "did load() already populate a table" separately from
+"did migrateLegacy() do anything"), more than the one-line retry `load()` got for the
+half-migrated legacy-key case.
+
 ## The deployed device needs this firmware before its dashboard can clear aliases
 
 `handleAliasPost` now accepts a zero-length body as an alias clear, matching
