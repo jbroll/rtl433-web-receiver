@@ -21,7 +21,7 @@ before running the bridge if `bridge/public/` doesn't exist yet.
 npm test
 ```
 
-This runs `node --test test/*.test.js`, then `playwright test`: 297 node
+This runs `node --test test/*.test.js`, then `playwright test`: 299 node
 tests against the pure modules, then 228 browser tests in
 `test/*.spec.js` that drive a built page with Playwright. Either suite can
 be run alone with `node --test test/*.test.js` or `npx playwright test`.
@@ -30,7 +30,8 @@ be run alone with `node --test test/*.test.js` or `npx playwright test`.
 local days at 44 sites against an independent bisection of solar altitude,
 and moon rise/set against `moonAltitude` over the same independently
 computed local-day windows, printing wrong-day, spurious, missed and
-timing-error counts for both; this takes several minutes:
+timing-error counts for both; the sun pass takes roughly 5 minutes, the moon
+pass roughly 13 more:
 
 ```
 node test/astro-sweep.js [--module ../src/astro.js] [--years 2026,2027]

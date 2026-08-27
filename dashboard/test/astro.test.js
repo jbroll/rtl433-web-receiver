@@ -409,6 +409,29 @@ test('moonset stays legitimately absent on the ordinary day before the transitio
   assert.equal(m.set, null, `set was ${m.set}`)
 })
 
+// Regression for the scan window's length: it kept a hardcoded 24-hour span
+// after the start was corrected to true local midnight, so a 25-hour
+// fall-back day lost its last hour and a real crossing in that hour --
+// New York's 2026-11-01 moonrise, independently at 2026-11-02T04:13:47Z --
+// was reported as missing.
+test('moonrise in the last hour of a 25-hour fall-back day is not dropped', () => {
+  const lat = 40.7128, lon = -74.0060, zone = 'America/New_York'
+  const nov1 = localMidnight(2026, 11, 1, zone) + 12 * 3600000
+  const m = moonTimes(new Date(nov1), lat, lon, zone)
+  near(m.rise, utc(2026, 11, 2, 4, 14), 2 * MIN, 'moonrise')
+})
+
+// Regression for the same fixed-span bug on the other side of a transition:
+// a 23-hour spring-forward day was over-scanned an hour past its own end, so
+// New York's 2026-03-08 turned up a "rise" at 2026-03-09T04:42Z -- a crossing
+// that belongs to the next local day, not this one.
+test('moonrise on a 23-hour spring-forward day does not report next day\'s crossing', () => {
+  const lat = 40.7128, lon = -74.0060, zone = 'America/New_York'
+  const mar8 = localMidnight(2026, 3, 8, zone) + 12 * 3600000
+  const m = moonTimes(new Date(mar8), lat, lon, zone)
+  assert.equal(m.rise, null, `rise was ${m.rise}`)
+})
+
 const SITES = [
   [0, 0], [51.5, -0.1], [-33.87, 151.21], [40, -105], [35.7, 139.7],
   [-23.5, -46.6], [59.3, 18.1], [-41.3, 174.8], [19.4, -99.1], [55.8, 37.6]
