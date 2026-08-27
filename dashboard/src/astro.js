@@ -8,6 +8,7 @@ const DAY = 86400000
 const AU = 149597870.7
 const SYNODIC = 29.530588853
 const MOON_HORIZON = 0.125
+const SAMPLE = 60000
 
 const sin = d => Math.sin(d * RAD)
 const cos = d => Math.cos(d * RAD)
@@ -29,11 +30,28 @@ function zoneDateKey (date, zone) {
 }
 
 // UTC midnight of the zone-local calendar day `date` falls on -- not the
-// zone's own midnight. eventMinutes anchors to this and shifts back.
+// zone's own midnight. moonTimes anchors to this and shifts back.
 function zoneDayStart (date, zone) {
   const key = zoneDateKey(date, zone)
   const [y, mo, d] = key.split('-').map(Number)
   return Date.UTC(y, mo - 1, d)
+}
+
+// The instant the zone-local day y-mo-d begins. The offset read at UTC
+// midnight is the wrong one within an hour of a transition, so it is read
+// again at the instant that first guess names; on a day whose local midnight
+// does not exist this settles on the instant the day does start.
+function localMidnight (y, mo, d, zone) {
+  const utcMidnight = Date.UTC(y, mo - 1, d)
+  const guess = utcMidnight - offsetMinutes(new Date(utcMidnight), zone) * 60000
+  return utcMidnight - offsetMinutes(new Date(guess), zone) * 60000
+}
+
+// [start, end) of the zone-local day `date` falls on. 23 to 25 hours long
+// across a DST transition.
+function dayWindow (date, zone) {
+  const [y, mo, d] = zoneDateKey(date, zone).split('-').map(Number)
+  return [localMidnight(y, mo, d, zone), localMidnight(y, mo, d + 1, zone)]
 }
 
 function obliquity (t) {
@@ -62,100 +80,82 @@ export function solarPosition (date) {
   return { declination: Math.asin(sin(eps) * sin(lambda)) / RAD, eqOfTime }
 }
 
-function hourAngle (lat, decl, zenith) {
-  const c = (cos(zenith) - sin(lat) * sin(decl)) / (cos(lat) * cos(decl))
-  return c > 1 || c < -1 ? null : Math.acos(c) / RAD
+// Altitude of the sun's centre above the horizon, in degrees.
+function solarAltitude (t, lat, lon) {
+  const { declination, eqOfTime } = solarPosition(new Date(t))
+  const minutes = ((t / 60000) % 1440 + 1440) % 1440
+  const h = (minutes + 4 * lon + eqOfTime) / 4 - 180
+  return Math.asin(sin(lat) * sin(declination) + cos(lat) * cos(declination) * cos(h)) / RAD
 }
 
-// `m` is minutes since UTC midnight (zoneDayStart), so it can land on the
-// wrong side of local midnight. When it does, the event that actually falls
-// on the local day is a different instant, roughly a day away but not
-// exactly one -- declination and the equation of time both drift over a day.
-// So this re-solves `solve` at an anchor shifted a day earlier or later,
-// rather than adding/subtracting 86400000 from the answer, and returns the
-// result re-based to the original `start` so callers keep using one origin.
-//
-// The shifted solve is not trusted blindly: `solveEventMinutes` normalizes
-// its result relative to whatever anchor it is given, so a shift can land
-// close enough to the anchor's own start to wrap onto a third day's crossing,
-// or find no crossing at all. Either way this falls back to the naive
-// 86400000ms translation of the first solve, which is always on the right
-// day (if imprecise), rather than risk returning a wrong day or a spurious
-// null.
-//
-// `m0`, when passed, is the caller's own already-computed `solve(start)` --
-// callers that need that value anyway (e.g. solar noon) pass it to avoid
-// solving twice.
-function inLocalDay (start, zone, dayKey, solve, m0 = solve(start)) {
-  const m = m0
-  if (m === null) return null
-  const key = zoneDateKey(new Date(start + m * 60000), zone)
-  if (key === dayKey) return m
-  const shiftMs = key < dayKey ? DAY : -DAY
-  const fallback = m + shiftMs / 60000
-  const m2 = solve(start + shiftMs)
-  if (m2 === null) return fallback
-  const m2abs = m2 + shiftMs / 60000
-  const key2 = zoneDateKey(new Date(start + m2abs * 60000), zone)
-  return key2 === dayKey ? m2abs : fallback
-}
-
-function solveEventMinutes (start, lat, lon, zenith, dir) {
-  const noon = solarPosition(new Date(start + 43200000))
-  let ha = hourAngle(lat, noon.declination, zenith)
-  if (ha === null) return null
-  let m = 720 - 4 * (lon + dir * ha) - noon.eqOfTime
-  m -= 1440 * Math.floor(m / 1440)
-  for (let i = 0; i < 2; i++) {
-    const sp = solarPosition(new Date(start + m * 60000))
-    ha = hourAngle(lat, sp.declination, zenith)
-    if (ha === null) return null
-    const next = 720 - 4 * (lon + dir * ha) - sp.eqOfTime
-    m = next + 1440 * Math.round((m - next) / 1440)
+// The first crossing of `target` altitude inside the sampled window, rising
+// (dir 1) or falling (dir -1), bisected within the minute that brackets it.
+// A crossing outside the window has no representation, so no event can be
+// reported on a day that does not contain one.
+function crossing (alt, times, lat, lon, target, dir) {
+  for (let i = 1; i < alt.length; i++) {
+    const a = alt[i - 1] - target
+    const b = alt[i] - target
+    if (dir === 1 ? !(a <= 0 && b > 0) : !(a > 0 && b <= 0)) continue
+    let lo = times[i - 1], hi = times[i]
+    for (let k = 0; k < 32; k++) {
+      const mid = (lo + hi) / 2
+      if ((solarAltitude(mid, lat, lon) - target <= 0) === (a <= 0)) lo = mid
+      else hi = mid
+    }
+    return (lo + hi) / 2
   }
-  return m
+  return null
 }
 
-function eventMinutes (start, lat, lon, zenith, dir, zone, dayKey) {
-  return inLocalDay(start, zone, dayKey, anchor => solveEventMinutes(anchor, lat, lon, zenith, dir))
+// Solar transit is where the hour angle is zero, so it is solved rather than
+// searched; the candidate UTC days on either side cover a longitude far from
+// its zone and a window stretched by a DST transition.
+function solarTransit (from, to, lon) {
+  const first = Math.floor(from / DAY) - 1
+  for (let d = first; d <= Math.floor(to / DAY) + 1; d++) {
+    const base = d * DAY
+    let mid = 720 - 4 * lon - solarPosition(new Date(base + 43200000)).eqOfTime
+    mid = 720 - 4 * lon - solarPosition(new Date(base + mid * 60000)).eqOfTime
+    const t = base + mid * 60000
+    if (t >= from && t < to) return t
+  }
+  return null
 }
 
 export function sunEvents (date, lat, lon, zone = 'UTC') {
-  const start = zoneDayStart(date, zone)
-  const dayKey = zoneDateKey(date, zone)
-  const at = m => m === null ? null : new Date(start + m * 60000)
-  const solveNoon = anchor => {
-    const noon = solarPosition(new Date(anchor + 43200000))
-    let mid = 720 - 4 * lon - noon.eqOfTime
-    mid -= 1440 * Math.floor(mid / 1440)
-    const midday = solarPosition(new Date(anchor + mid * 60000))
-    mid = 720 - 4 * lon - midday.eqOfTime
-    mid -= 1440 * Math.floor(mid / 1440)
-    return mid
+  const [from, to] = dayWindow(date, zone)
+  const steps = Math.ceil((to - from) / SAMPLE)
+  const times = new Float64Array(steps + 1)
+  const alt = new Float64Array(steps + 1)
+  let peak = -Infinity
+  for (let i = 0; i <= steps; i++) {
+    times[i] = Math.min(from + i * SAMPLE, to)
+    alt[i] = solarAltitude(times[i], lat, lon)
+    peak = Math.max(peak, alt[i])
   }
-  const mid0 = solveNoon(start)
-  const midday = solarPosition(new Date(start + mid0 * 60000))
-  const mid = inLocalDay(start, zone, dayKey, solveNoon, mid0)
+  const at = t => t === null ? null : new Date(Math.round(t))
+  const event = (target, dir) => crossing(alt, times, lat, lon, target, dir)
 
-  const rise = eventMinutes(start, lat, lon, 90.833, 1, zone, dayKey)
-  const set = eventMinutes(start, lat, lon, 90.833, -1, zone, dayKey)
-  const up = rise === null && sin(lat) * sin(midday.declination) + cos(lat) * cos(midday.declination) > cos(90.833)
+  const rise = event(-0.833, 1)
+  const set = event(-0.833, -1)
+  const up = rise === null && set === null && peak > -0.833
   const events = {
     sunrise: at(rise),
     sunset: at(set),
-    solarNoon: at(mid),
-    civilDawn: at(eventMinutes(start, lat, lon, 96, 1, zone, dayKey)),
-    civilDusk: at(eventMinutes(start, lat, lon, 96, -1, zone, dayKey)),
-    nauticalDawn: at(eventMinutes(start, lat, lon, 102, 1, zone, dayKey)),
-    nauticalDusk: at(eventMinutes(start, lat, lon, 102, -1, zone, dayKey)),
-    astroDawn: at(eventMinutes(start, lat, lon, 108, 1, zone, dayKey)),
-    astroDusk: at(eventMinutes(start, lat, lon, 108, -1, zone, dayKey)),
+    solarNoon: at(solarTransit(from, to, lon)),
+    civilDawn: at(event(-6, 1)),
+    civilDusk: at(event(-6, -1)),
+    nauticalDawn: at(event(-12, 1)),
+    nauticalDusk: at(event(-12, -1)),
+    astroDawn: at(event(-18, 1)),
+    astroDusk: at(event(-18, -1)),
     dayLength: null,
     alwaysUp: up,
-    alwaysDown: rise === null && !up
+    alwaysDown: rise === null && set === null && !up
   }
   if (rise !== null && set !== null) {
-    let len = (set - rise) * 60000
+    let len = set - rise
     if (len < 0) len += DAY
     events.dayLength = len
   } else events.dayLength = up ? DAY : 0

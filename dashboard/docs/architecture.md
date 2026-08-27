@@ -370,9 +370,18 @@ system clock and are never stale; weather stamps the time its data came from, so
 its age corner reads as genuine staleness.
 
 Sun and moon events are solved against the local day of the card's zone, not the UTC
-day: `astro.js` takes `zoneDayStart(date, zone)` and a `zoneDateKey`, and keeps only the
-events that fall inside that local day. A card in a zone hours from UTC otherwise shows
-yesterday's or tomorrow's sunrise.
+day. A card in a zone hours from UTC otherwise shows yesterday's or tomorrow's sunrise.
+
+`sunEvents` takes the two instants that bound that local day, samples solar altitude
+across them every minute, and bisects each event's altitude crossing inside the window.
+The window is 23 to 25 hours long across a DST transition, and its start is read from
+the offset at local midnight rather than at UTC midnight, so a transition day is bounded
+as it actually runs. An event has no representation outside the window, so none can be
+dated on the wrong day and none can be reported on a day whose crossing does not exist.
+Solar noon is the one instant of zero hour angle inside the window, solved rather than
+searched. An earlier version solved each event at a fixed anchor and corrected the
+answer afterwards, which mistimed the events it had to correct by up to 1,951 s and
+emitted spurious ones on short days.
 
 The sun dial's `riseText` and `setText` are `''` when there is no event that day, not an
 em dash. The renderer tests the field for emptiness to decide whether to draw the label

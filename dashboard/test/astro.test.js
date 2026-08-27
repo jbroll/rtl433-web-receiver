@@ -161,16 +161,13 @@ test('moon illumination through January 2026', () => {
   assert.equal(full.name, 'Full Moon')
 })
 
-// Independent check for the day-drift bug fixed in astro.js: `toLocalDay` used
-// to translate a wrong-day event by exactly 86400000ms, which is wrong
-// whenever declination or the equation of time changed noticeably over that
-// day -- true at an equinox, hidden at a solstice where both are nearly flat.
-// This bisects true solar altitude across the true local calendar day
-// directly from `date.getUTCHours()` and `solarPosition`'s declination/
-// eqOfTime, entirely independent of `zoneDayStart`/`toLocalDay`/`eventMinutes`
-// -- the functions that held the bug -- so a reintroduced 86400000ms
-// translation shows up as tens to hundreds of seconds of disagreement here,
-// not as a pass.
+// Independent check on where astro.js places an event. This bisects true
+// solar altitude across the true local calendar day straight from
+// `date.getUTCHours()` and `solarPosition`'s declination and equation of
+// time, without `zoneDateKey` or any of the day-window machinery sunEvents
+// uses, so an event solved on the wrong day, or translated by a flat
+// 86400000ms rather than solved, shows up here as tens to hundreds of
+// seconds of disagreement.
 const BI_RAD = Math.PI / 180
 const biSin = d => Math.sin(d * BI_RAD)
 const biCos = d => Math.cos(d * BI_RAD)
@@ -193,22 +190,20 @@ function trueLocalMidnight (y, mo, d, zone) {
   return guess - offsetMinutes(new Date(near), zone) * 60000
 }
 
-// Bisects the altitude crossing of -0.833 degrees (the sunrise/sunset
-// zenith) across the true local day, scanning forward (dir 1) for the rising
-// crossing or (dir -1) for the falling one.
-function bisectHorizon (lat, lon, dayStart, dir) {
-  const TARGET = -0.833
+// Bisects the crossing of `target` altitude in [from, to), scanning forward
+// for the rising crossing (dir 1) or the falling one (dir -1).
+function bisectCrossing (lat, lon, from, to, target, dir) {
   const step = 60000
-  let prevT = dayStart
-  let prevAlt = trueAltitude(new Date(prevT), lat, lon) - TARGET
-  for (let t = dayStart + step; t <= dayStart + DAY; t += step) {
-    const alt = trueAltitude(new Date(t), lat, lon) - TARGET
+  let prevT = from
+  let prevAlt = trueAltitude(new Date(prevT), lat, lon) - target
+  for (let t = from + step; t <= to; t += step) {
+    const alt = trueAltitude(new Date(t), lat, lon) - target
     const crossed = dir === 1 ? (prevAlt <= 0 && alt > 0) : (prevAlt > 0 && alt <= 0)
     if (crossed) {
       let lo = prevT, hi = t, loAlt = prevAlt
       for (let i = 0; i < 40; i++) {
         const mid = (lo + hi) / 2
-        const midAlt = trueAltitude(new Date(mid), lat, lon) - TARGET
+        const midAlt = trueAltitude(new Date(mid), lat, lon) - target
         if ((loAlt <= 0) === (midAlt <= 0)) { lo = mid; loAlt = midAlt } else hi = mid
       }
       return (lo + hi) / 2
@@ -218,33 +213,37 @@ function bisectHorizon (lat, lon, dayStart, dir) {
   return null
 }
 
+const localDay = (y, mo, d, zone) =>
+  [trueLocalMidnight(y, mo, d, zone), trueLocalMidnight(y, mo, d + 1, zone)]
+
 // Equinox dates, not solstices: declination and the equation of time both
 // change fastest near an equinox, so a wrong-day event translated by exactly
-// 24h (rather than re-solved) drifts tens to hundreds of seconds from the
-// true crossing. At a solstice both are nearly stationary and the same bug
-// drifts by only ~13s, inside the suite's usual 60s tolerance -- which is
-// why these dates, not June 21, are the ones that catch it.
+// 24h (rather than solved in the day it belongs to) drifts tens to hundreds
+// of seconds from the true crossing. At a solstice both are nearly
+// stationary and the same bug drifts by only ~13s, inside the suite's usual
+// 60s tolerance -- which is why these dates, not June 21, are the ones that
+// catch it.
 test('sunrise lands within a few seconds of true solar altitude at the Sydney equinox', () => {
   const lat = -33.87, lon = 151.21, zone = 'Australia/Sydney'
-  const dayStart = trueLocalMidnight(2026, 9, 23, zone)
-  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
-  const trueMs = bisectHorizon(lat, lon, dayStart, 1)
+  const [from, to] = localDay(2026, 9, 23, zone)
+  const e = sunEvents(new Date(from + 12 * 3600000), lat, lon, zone)
+  const trueMs = bisectCrossing(lat, lon, from, to, -0.833, 1)
   near(e.sunrise, new Date(trueMs), 5000, 'sunrise (Sydney equinox, vs independent bisection)')
 })
 
 test('sunrise lands within a few seconds of true solar altitude at a high-latitude equinox (Murmansk)', () => {
   const lat = 68.97, lon = 33.0827, zone = 'Europe/Moscow'
-  const dayStart = trueLocalMidnight(2026, 5, 19, zone)
-  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
-  const trueMs = bisectHorizon(lat, lon, dayStart, 1)
+  const [from, to] = localDay(2026, 5, 19, zone)
+  const e = sunEvents(new Date(from + 12 * 3600000), lat, lon, zone)
+  const trueMs = bisectCrossing(lat, lon, from, to, -0.833, 1)
   near(e.sunrise, new Date(trueMs), 5000, 'sunrise (Murmansk equinox, vs independent bisection)')
 })
 
 test('sunset lands within a few seconds of true solar altitude at the Denver equinox', () => {
   const lat = 39.7392, lon = -104.9903, zone = 'America/Denver'
-  const dayStart = trueLocalMidnight(2026, 3, 21, zone)
-  const e = sunEvents(new Date(dayStart + 12 * 3600000), lat, lon, zone)
-  const trueMs = bisectHorizon(lat, lon, dayStart, -1)
+  const [from, to] = localDay(2026, 3, 21, zone)
+  const e = sunEvents(new Date(from + 12 * 3600000), lat, lon, zone)
+  const trueMs = bisectCrossing(lat, lon, from, to, -0.833, -1)
   near(e.sunset, new Date(trueMs), 5000, 'sunset (Denver equinox, vs independent bisection)')
 })
 
@@ -280,6 +279,47 @@ test('sunrise on 2026-07-23 in Murmansk is not dropped', () => {
   assert.ok(e.sunrise instanceof Date, `sunrise was ${e.sunrise}`)
   assert.equal(e.alwaysUp, false)
   assert.equal(localDateKey(e.sunrise, zone), '2026-07-23')
+})
+
+// The worst mistimings the anchor-and-correct solve left behind. Each was
+// answered by translating a solve from another day by a flat 86400000ms,
+// which is off by however far declination and the equation of time moved
+// over that day.
+const MISTIMED = [
+  ['nauticalDawn', 78.22, 15.65, 'Arctic/Longyearbyen', [2026, 9, 24], -12, 1],
+  ['sunset', 39.7392, -104.9903, 'America/Denver', [2026, 10, 30], -0.833, -1],
+  ['civilDawn', 27.7172, 85.3240, 'Asia/Kathmandu', [2026, 3, 20], -6, 1],
+  ['civilDusk', -53.1638, -70.9171, 'America/Punta_Arenas', [2026, 3, 8], -6, -1]
+]
+
+test('the events the anchor-and-correct solve mistimed land on the true crossing', () => {
+  for (const [event, lat, lon, zone, [y, mo, d], target, dir] of MISTIMED) {
+    const [from, to] = localDay(y, mo, d, zone)
+    const e = sunEvents(new Date(from + (to - from) / 2), lat, lon, zone)
+    const trueMs = bisectCrossing(lat, lon, from, to, target, dir)
+    assert.ok(trueMs !== null, `${zone} ${event} ${y}-${mo}-${d}: no true crossing to compare against`)
+    near(e[event], new Date(trueMs), 1000, `${event} at ${zone} ${y}-${mo}-${d}`)
+  }
+})
+
+// A spring-forward local day is 23 hours long, and the old fallback's flat
+// 86400000ms shift ran past its end, dating an astroDusk a day late. No
+// -18 degree falling crossing exists on any of these local days.
+const NO_ASTRO_DUSK = [
+  [64.1835, -51.7216, 'America/Nuuk', [2026, 3, 28]],
+  [64.1835, -51.7216, 'America/Nuuk', [2027, 3, 27]],
+  [71.2906, -156.7886, 'America/Anchorage', [2027, 3, 14]]
+]
+
+test('no astroDusk is reported on a spring-forward day that holds no crossing', () => {
+  for (const [lat, lon, zone, [y, mo, d]] of NO_ASTRO_DUSK) {
+    const [from, to] = localDay(y, mo, d, zone)
+    assert.equal(to - from, 23 * 3600000, `${zone} ${y}-${mo}-${d} is not a 23-hour day`)
+    assert.equal(bisectCrossing(lat, lon, from, to, -18, -1), null,
+      `${zone} ${y}-${mo}-${d}: the day does hold a crossing`)
+    const e = sunEvents(new Date(from + (to - from) / 2), lat, lon, zone)
+    assert.equal(e.astroDusk, null, `${zone} ${y}-${mo}-${d}: astroDusk was ${e.astroDusk}`)
+  }
 })
 
 const SITES = [
