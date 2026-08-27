@@ -12,9 +12,12 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
   binding's source-only subset, SSE, and an embedded build of the dashboard.
   The host suite (`receiver/test/host/run.sh`, twelve firmware modules
   including `signal_store` and `alias_store` into thirteen test binaries)
-  runs on a developer's machine only — no CI job runs it (see
-  `docs/backlog.md`); the on-device path is still unread — the self-test's
-  own PASS/FAIL lines have never been read from a live device's serial log.
+  runs on a developer's machine only. No CI job runs it (see
+  `docs/backlog.md`). The deployed board runs the current build and reports
+  it as `build` in its `Receiver/0` telemetry, which is what makes live
+  checks against it meaningful. The self-test's own PASS/FAIL lines are
+  still unread on hardware: they print only under `FAKE_SIGNALS`, and the
+  deployed board runs a production build.
 - **`bridge/`** — full MQTT to HTTP binding. Has a bearer-token auth path, a
   `GET /-/status` endpoint, a capped and idle-timed `readBody`, and an SSE
   reader drop; not published to a registry. The dashboard stores a per-origin
@@ -46,9 +49,10 @@ done.
    `alias_store` are host-tested (false-decode filtering, runtime WiFi
    provisioning, the pinned `rtl_433_ESP` commit, and OTA updates were
    already shipped; last-hour replay is done, see Goal 1). USB CDC logging
-   stays dropped: OTA removed the recurring reason to tether a debug cable,
-   and `Serial0` carries the boot-mode strap, so retargeting `Log` to
-   `Serial` buys little for the risk.
+   is a `FAKE_SIGNALS`-only path: `WebReceiver.ino` points `Log.begin()` at
+   `Serial` on that build so the self-test can be read over USB, and keeps
+   `Serial0` on a production build, where `Serial0` carries the boot-mode
+   strap and OTA has removed the recurring reason to tether a cable.
 3. ~~**Bridge auth and release.**~~ Done: the dashboard stores a per-source
    token in `localStorage` and sends it against the bridge's bearer-token
    auth path. Moved ahead of mobile because the mobile app reads bridges over

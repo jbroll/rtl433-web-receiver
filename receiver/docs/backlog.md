@@ -72,28 +72,31 @@ avoids.
 
 ## The firmware self-test has never been read on a live device
 
-`signal_store::selfTest()` and `alias_store::selfTest()` also run at startup
-under `FAKE_SIGNALS` on real hardware and print a PASS/FAIL line per check,
-but nobody has seen those lines there. The board flashes and runs, and
-`ArduinoLog` writes to `Serial0`, a hardware UART at 921600 baud, while the
-port exposed over USB is the S3's CDC device. Reading the self-test needs a
-UART adapter on the TX pin, or the sketch pointing `Log.begin()` at `Serial`
-so it comes out over USB. `signal_store`'s 87 checks and `alias_store`'s 30
-now run and are checked on every commit via `test/host/run.sh` (see
-`architecture.md`); only the on-device serial output is still unread.
+Eight `selfTest()` calls run at startup on real hardware, but only under
+`FAKE_SIGNALS`, and nobody has read their PASS/FAIL lines from a board.
+`WebReceiver.ino` already points `Log.begin()` at `Serial`, the S3's USB CDC
+device, on a `FAKE_SIGNALS` build, so no UART adapter on the TX pin is needed
+any more; a production build keeps `Serial0` at 921600, which is what
+`monitor.py` expects. What is left is running a `FAKE_SIGNALS` build on a
+board and reading it, which takes that board off the air for the duration.
 
-## An alias surviving a reboot is unverified
+The checks themselves run on every commit through `test/host/run.sh` (see
+`architecture.md`): `signal_store` 87, `mqtt_publish_store` 43, `alias_store`
+31, `layout_store` 18, `location_store` 12, `units_store` 12.
 
-`alias_store::selfTest()` covers the in-RAM table, the round trip through a
-serialised blob, and (host-only, against `arduino_shim`'s `Preferences` fake)
-the migration off the `putString`-based storage this store used before. None
-of that proves `Preferences::putBytes()` actually lands in NVS and survives a
-power cycle on real hardware, or that a board already holding aliases under
-the old string key comes back with them intact after this firmware lands —
-that needs hardware, like the self-test gap above. Set three aliases through
-the dashboard, power-cycle the board (not a reboot), and confirm all three
-come back; then repeat starting from a board still running the pre-`putBytes`
-firmware, which is what actually proves the migration.
+## An alias surviving a power cycle is unverified
+
+`Preferences::putBytes()` is now known to land in NVS and read back on real
+hardware: the deployed board reports `boot_count` 52 and
+`last_reset_reason` 3 (`ESP_RST_SW`), and five aliases set through the
+dashboard are still served by `GET .../$alias` after that reset cleared RAM.
+
+Two gaps remain, both needing a board in hand. A software reset is not a
+power cycle, so nothing yet proves the write survives power actually being
+removed. And the migration off the `putString`-based storage this store used
+before is covered only host-side, against `arduino_shim`'s `Preferences`
+fake; proving it means starting from a board still running the pre-`putBytes`
+firmware with aliases already set, then flashing this one.
 
 ## `MDNS_PREFIX` has no runtime equivalent
 
@@ -173,14 +176,6 @@ once the table is populated, but it never gets cleaned up. Fixing it means restr
 `begin()`'s migration logic (tracking "did load() already populate a table" separately from
 "did migrateLegacy() do anything"), more than the one-line retry `load()` got for the
 half-migrated legacy-key case.
-
-## The deployed device needs this firmware before its dashboard can clear aliases
-
-`handleAliasPost` now accepts a zero-length body as an alias clear, matching
-`dashboard/src/alias.js`, which sends one. The device updates over OTA
-(`POST /$update`), not by reflashing, so a board still running older firmware
-answers `400 "body must be a JSON string"` to that clear and the alias comes
-back on the next `$alias` frame until it receives this build.
 
 ## The 4 KB record() arena is not sufficient for every shape under SIGNAL_PAYLOAD_MAX
 
