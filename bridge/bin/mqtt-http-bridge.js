@@ -87,7 +87,7 @@ const started = connectStartupBroker({
   onDisconnect: () => console.error(`broker ${brokerName} disconnected, retrying`),
   onError: (err) => console.error(`broker ${brokerName}: ${err.message}`),
 })
-const { broker, cache } = started
+const { broker } = started
 
 const dashboardHtml = config.dashboardHtmlPath ? readFileSync(config.dashboardHtmlPath, 'utf8') : undefined
 const bridge = finishStartupBridge(started, {
