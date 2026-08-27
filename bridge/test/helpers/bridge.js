@@ -3,14 +3,47 @@ import { createCache } from '../../src/cache.js'
 import { createBridge } from '../../src/server.js'
 import { startBroker } from './broker.js'
 
-// Given a url, the bridge is pointed at that address and started without
-// waiting for anything there: that is the unreachable-broker case.
-export async function startBridge({
+// Split from startBridge below so a test can hold the gap between this and
+// finishBridge open: the window bin/mqtt-http-bridge.js's `bridge?.broadcast`
+// guard exists for, where a message can arrive before the `bridge` variable
+// wiring it to broadcast is assigned.
+export async function connectBridgeBroker({
   url,
   delayMs,
   echoTimeoutMs,
   reconnectMs,
   cacheSettleMs,
+  username,
+  password,
+} = {}) {
+  const mqttBroker = url ? null : await startBroker(0, { delayMs })
+  const cache = createCache()
+  let bridge
+  const broker = connectBroker({
+    url: url ?? mqttBroker.url,
+    cache,
+    onMessage: (topic, payload, deleted) => bridge?.broadcast(topic, payload, deleted),
+    echoTimeoutMs,
+    reconnectMs,
+    cacheSettleMs,
+    username,
+    password,
+  })
+  // Unbounded, a subscription that never lands hangs `node --test` instead of
+  // failing it.
+  if (mqttBroker) await withTimeout(broker.subscribed, 5000, 'the # subscription')
+
+  return {
+    broker,
+    cache,
+    mqttBroker,
+    mqttUrl: url ?? mqttBroker.url,
+    setBridge: (value) => { bridge = value },
+  }
+}
+
+export async function finishBridge({ broker, cache, mqttBroker, mqttUrl, setBridge }, {
+  delayMs,
   authToken,
   dashboardHtml,
   bodyLimitBytes,
@@ -19,23 +52,9 @@ export async function startBridge({
   maxSseFilters,
   maxBufferedBytes,
   keepaliveMs,
-  username,
-  password,
 } = {}) {
-  let mqttBroker = url ? null : await startBroker(0, { delayMs })
-  const cache = createCache()
-  let bridge
-  const broker = connectBroker({
-    url: url ?? mqttBroker.url,
-    cache,
-    onMessage: (topic, payload, deleted) => bridge.broadcast(topic, payload, deleted),
-    echoTimeoutMs,
-    reconnectMs,
-    cacheSettleMs,
-    username,
-    password,
-  })
-  bridge = createBridge({
+  let currentMqttBroker = mqttBroker
+  const bridge = createBridge({
     broker,
     cache,
     authToken,
@@ -47,33 +66,31 @@ export async function startBridge({
     maxBufferedBytes,
     keepaliveMs,
   })
-  // Unbounded, a subscription that never lands hangs `node --test` instead of
-  // failing it.
-  if (mqttBroker) await withTimeout(broker.subscribed, 5000, 'the # subscription')
+  setBridge(bridge)
 
   await new Promise((resolve) => bridge.httpServer.listen(0, '127.0.0.1', resolve))
   const { port } = bridge.httpServer.address()
 
   let brokerStopped = false
   const stopBroker = async () => {
-    if (brokerStopped || !mqttBroker) return
+    if (brokerStopped || !currentMqttBroker) return
     brokerStopped = true
-    await mqttBroker.close()
+    await currentMqttBroker.close()
   }
 
   return {
     base: `http://127.0.0.1:${port}`,
-    mqttUrl: url ?? mqttBroker.url,
+    mqttUrl,
     broker,
     cache,
     clients: bridge.clients,
     stopBroker,
-    blackhole: (direction) => mqttBroker?.blackhole(direction),
-    directUrl: () => mqttBroker?.directUrl,
+    blackhole: (direction) => currentMqttBroker?.blackhole(direction),
+    directUrl: () => currentMqttBroker?.directUrl,
     restartBroker: async () => {
-      const brokerPort = mqttBroker.port
+      const brokerPort = currentMqttBroker.port
       await stopBroker()
-      mqttBroker = await startBroker(brokerPort, { delayMs })
+      currentMqttBroker = await startBroker(brokerPort, { delayMs })
       brokerStopped = false
     },
     close: async () => {
@@ -84,6 +101,13 @@ export async function startBridge({
       await stopBroker()
     },
   }
+}
+
+// Given a url, the bridge is pointed at that address and started without
+// waiting for anything there: that is the unreachable-broker case.
+export async function startBridge(options = {}) {
+  const built = await connectBridgeBroker(options)
+  return finishBridge(built, options)
 }
 
 // With a timeoutMs, this returns whatever has arrived when it expires, which

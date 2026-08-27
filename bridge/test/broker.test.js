@@ -12,7 +12,7 @@ import Aedes from 'aedes'
 
 import { cacheMessage, connectBroker, redact } from '../src/broker.js'
 import { createCache } from '../src/cache.js'
-import { waitFor } from './helpers/bridge.js'
+import { connectBridgeBroker, finishBridge, waitFor } from './helpers/bridge.js'
 import { startBroker } from './helpers/broker.js'
 
 test('a published message reaches the cache and the callback', async () => {
@@ -38,6 +38,25 @@ test('a published message reaches the cache and the callback', async () => {
     }
   } finally {
     await broker.close()
+  }
+})
+
+test('a message that arrives before the bridge variable is assigned does not throw', async () => {
+  const built = await connectBridgeBroker()
+  const foreign = await mqtt.connectAsync(built.mqttBroker.directUrl)
+  let bridge
+  try {
+    // built.setBridge (the bridge?.broadcast guard's target) has not run
+    // yet: this is the window bin/mqtt-http-bridge.js's guard exists for.
+    await foreign.publishAsync('src/Acurite/1', '{"temperature_C":21.4}', { qos: 0, retain: true })
+    await waitFor(() => built.cache.get('src/Acurite/1') !== undefined)
+
+    bridge = await finishBridge(built)
+    assert.deepEqual(built.cache.get('src/Acurite/1'), Buffer.from('{"temperature_C":21.4}'))
+  } finally {
+    await foreign.endAsync()
+    if (bridge) await bridge.close()
+    else await built.mqttBroker.close()
   }
 })
 

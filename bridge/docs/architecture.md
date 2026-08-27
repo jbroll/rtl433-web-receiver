@@ -235,6 +235,11 @@ shutdown causes is not reported at all. A broker that is simply not there is
 retried every two seconds, and printing each failure was 43,000 lines a day
 saying the same thing.
 
+The `ending` flag `report` checks is untestable: removing it fails no test,
+because the race it guards against — an error arriving after `end()` but
+before the client has actually torn down — is a timing window in the
+underlying socket and TLS teardown that a test cannot force from outside.
+
 The broker is named in those lines by protocol, host, and port only.
 `mqtt.connect` accepts credentials in the URL, so printing `MQTT_URL`
 verbatim put a password in the log of every service that ran the bridge;

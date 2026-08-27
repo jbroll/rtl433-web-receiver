@@ -32,12 +32,6 @@
   deletion on the wire; MQTT 5's retain-as-published subscription option
   would tell them apart, at the cost of requiring an MQTT 5 broker (`aedes`
   is MQTT 3.1.1 only).
-- `test/helpers/bridge.js` builds the bridge in one synchronous step, so it
-  cannot reproduce the startup ordering the `bridge?.broadcast` guard in
-  `bin/mqtt-http-bridge.js` exists for. That guard is untested. The `ending`
-  guard on the broker's `error` handler in `src/broker.js` is untested for
-  the same kind of reason: removing it fails no test, and the out-of-process
-  timing it guards against could not be reproduced to write one.
 - A foreign publisher's non-retained empty message caches like any other
   message, so `GET` answers `404` for a topic whose retained message the
   broker still holds. It stays masked until the next reconnect rebuilds the
