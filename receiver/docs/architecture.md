@@ -66,6 +66,30 @@ so it can grow by copying into a fresh block, or, for the common case of
 ArduinoJson shrinking a string to its final length, hand back the same block
 unmoved.
 
+### RecordAllocator arena alignment
+
+Each block's header is sized to `alignof(max_align_t)`, not `sizeof(size_t)`
+rounded to `sizeof(void*)`. ArduinoJson's slot union holds a `uint64_t`/`double`
+(`alignof` 8), but on the ESP32 target `sizeof(void*)`/`sizeof(size_t)` are
+both 4, so the old rounding put every payload at `buf+4k` — 4-byte aligned,
+not the 8 the slot union needs. Compiling against the project's own
+`xtensa-esp32s3-elf-g++` confirms the target's numbers: `alignof(max_align_t)`
+is 8, `sizeof(void*)` and `sizeof(size_t)` are 4.
+
+The host can't reproduce the bug directly — its `size_t` and `void*` are both
+8 bytes, so even the old rounding already gave 8-aligned payloads there — but
+it stands in for the same class of mismatch: the host's own
+`alignof(max_align_t)` is 16, coarser than the `sizeof(void*)`=8 the old code
+rounded to. `signal_store.cpp`'s `selfTest()` calls the allocator directly
+with a run of odd allocation sizes, forcing blocks to start at every offset
+the rounding allows; a fixture reproducing the old rounding fails that
+assertion on the host, while the current `alignof(max_align_t)` rounding
+passes it for every size 1..64, which is what confirms the check would have
+caught the old code and not just that it passes the current one. A file-scope
+`static_assert(alignof(max_align_t) >= alignof(uint64_t))` in `signal_store.cpp`
+covers the target at compile time, since the host selfTest only runs under
+`FAKE_SIGNALS`, which firmware builds don't define.
+
 `record()` stamps `time`, `rssi`, and `count` into the decoded JSON, then
 checks `measureJson(doc) > SIGNAL_PAYLOAD_MAX` before running any hook, so a
 message the store is about to drop is never handed to one. A device slot is

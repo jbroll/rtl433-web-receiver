@@ -15,9 +15,18 @@ namespace signal_store {
 // count. 2 KB measured short of that — a single 500-byte string field parsed
 // but 540 bytes returned NoMemory — so messages the store used to accept
 // were being silently dropped. 4 KB was measured, the same way, to parse a
-// payload at SIGNAL_PAYLOAD_MAX with room for ArduinoJson's own bookkeeping
-// (per platformio.ini's ARDUINOJSON_POOL_CAPACITY=16 chunking).
+// SIGNAL_PAYLOAD_MAX payload shaped as one string field filling the payload,
+// with room for ArduinoJson's own bookkeeping (per platformio.ini's
+// ARDUINOJSON_POOL_CAPACITY=16 chunking). Other shapes under the same cap
+// cost more per byte; see docs/backlog.md.
 #define SIGNAL_JSON_POOL_BYTES 4096
+
+// The arena's alignment constant must cover ArduinoJson's slot union
+// (a uint64_t/double, alignof 8) on every build target, not just the host
+// selfTest() below exercises. See "RecordAllocator arena alignment" in
+// docs/architecture.md.
+static_assert(alignof(max_align_t) >= alignof(uint64_t),
+              "arena block alignment must be at least alignof(uint64_t)");
 
 // A fixed arena for the parser: bump-allocates from a static buffer instead
 // of malloc/realloc, and is reset once per record() call rather than freed,
@@ -40,11 +49,8 @@ class RecordAllocator : public ArduinoJson::Allocator {
     if (newSize <= oldSize) {
       return ptr;
     }
-    // The old block is never reclaimed here; reset() at the top of the next
-    // record() call is what gets it back, not this call. Harmless at the
-    // current arena size and call pattern (a per-record reset, and no call
-    // site reallocates in a loop within one record()), but would leak for
-    // real if that ever changed.
+    // The old block isn't reclaimed here; only the next record()'s reset()
+    // gets it back. Harmless given the current per-record reset pattern.
     void* fresh = alloc(newSize);
     if (fresh != nullptr) {
       memcpy(fresh, ptr, oldSize);
@@ -54,16 +60,9 @@ class RecordAllocator : public ArduinoJson::Allocator {
   void reset() { _used = 0; }
 
  private:
-  // A header of exactly alignof(max_align_t), not sizeof(size_t) rounded to
-  // sizeof(void*), is what keeps the payload aligned: ArduinoJson's slot
-  // union holds a uint64_t/double (alignof 8), but sizeof(void*)/sizeof(size_t)
-  // are 4 on the ESP32 target, so the old rounding put every payload at
-  // buf+4k — 4-byte aligned, not 8. The host can't reproduce that directly
-  // (its size_t and void* are both 8 bytes), but it reproduces the same
-  // class of bug: alignof(max_align_t) there is 16, coarser than the
-  // sizeof(void*)=8 the old code rounded to, so the same check catches the
-  // same mismatch on host under the old rounding (see the arena alignment
-  // selfTest check below).
+  // Header size is alignof(max_align_t), not sizeof(size_t) rounded to
+  // sizeof(void*); see "RecordAllocator arena alignment" in
+  // docs/architecture.md for why.
   void* alloc(size_t size) {
     constexpr size_t kAlign = alignof(max_align_t);
     size_t need = kAlign + size;
@@ -566,23 +565,8 @@ bool selfTest() {
   char buf[SIGNAL_PAYLOAD_MAX + 64];
 
   {
-    // The arena's alignment bug can't be exercised through record(): the
-    // host's size_t and void* are both 8 bytes, so even the pre-fix rounding
-    // (to sizeof(void*)) already gave 8-aligned payloads there, while on the
-    // ESP32 target both are 4 bytes and every payload landed at
-    // buf+4k — 4-byte aligned, not the 8 the ArduinoJson slot union
-    // (VariantExtension holds a uint64_t/double) needs.
-    //
-    // What this check proves instead: the host's own alignof(max_align_t)
-    // is 16, coarser than the sizeof(void*)=8 the pre-fix code rounded to —
-    // the same class of mismatch as the target's 8-vs-4, just at different
-    // numbers. Calling the allocator directly with a run of odd allocation
-    // sizes forces blocks to start at every offset the rounding allows; a
-    // fixture reproducing the pre-fix rounding (rebuilt outside this file,
-    // in the scratch harness for this pass) fails this exact assertion on
-    // this host, while the current alignof(max_align_t) rounding passes it
-    // for every size 1..64. That confirms the check would have caught the
-    // pre-fix code, not just that it passes the current one.
+    // Host regression standing in for the target's alignment bug; see
+    // "RecordAllocator arena alignment" in docs/architecture.md.
     RecordAllocator allocator;
     bool             allAligned = true;
     for (size_t n = 1; n <= 64 && allAligned; n++) {

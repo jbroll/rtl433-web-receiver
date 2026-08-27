@@ -234,6 +234,19 @@ whether the url is still listed to know whether anything happened.
 answers `400 "body must be a JSON string"` to that clear and the alias comes
 back on the next `$alias` frame until it receives this build.
 
+## The 4 KB record() arena is not sufficient for every shape under SIGNAL_PAYLOAD_MAX
+
+`SIGNAL_JSON_POOL_BYTES` (`signal_store.cpp`) was sized against a payload shaped
+as one string field filling `SIGNAL_PAYLOAD_MAX`. Arena cost is per-slot plus
+per-string, and ArduinoJson inlines keys of about three characters or less, so
+the worst density is short-but-not-inline keys: a 595-byte object of 54
+four-character keys with float values needs a 5632-byte arena and returns
+`NoMemory` at 4096. Realistic rtl_433 field names parse to 758 bytes, well
+under that. Every `record()` call site is internal — the decoder queue, the
+two BMP280 paths, and fake signals — so this worst-case shape does not come
+off the radio. Not raising the arena again on this basis; noted here in case a
+future call site changes that assumption.
+
 ## Smaller items
 
 - `REPLAY_PER_LOOP` bounds the frames a replay sends per `web_ui::loop()`, not
