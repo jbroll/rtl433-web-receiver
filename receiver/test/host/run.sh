@@ -18,6 +18,9 @@ if [ ! -d "$aj" ]; then
   exit 1
 fi
 shim="$root/test/host/arduino_shim"
+g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" \
+    -o "$out/preferences_fake_test" "$root/test/host/preferences_fake_test.cpp"
+"$out/preferences_fake_test"
 # The firmware's ARDUINOJSON_POOL_CAPACITY override (platformio.ini) and
 # ARDUINOJSON_SIZEOF_POINTER=4 (the host is 64-bit; the target is 32-bit, and
 # ArduinoJson's slot size depends on it) keep every ArduinoJson-using host

@@ -269,9 +269,9 @@ bool selfTest() {
   // table wiped would make the next POST /$mqtt persist() over them.
   bool saved_open = _open;
   _open           = false;
-  char saved_url[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_URL_MAX];
-  char saved_token[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_TOKEN_MAX];
-  bool saved_used[MQTT_PUBLISH_SLOTS];
+  static char saved_url[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_URL_MAX];
+  static char saved_token[MQTT_PUBLISH_SLOTS][MQTT_PUBLISH_STORE_TOKEN_MAX];
+  static bool saved_used[MQTT_PUBLISH_SLOTS];
   memcpy(saved_url, _url, sizeof(_url));
   memcpy(saved_token, _token, sizeof(_token));
   memcpy(saved_used, _used, sizeof(_used));

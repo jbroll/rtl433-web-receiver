@@ -88,8 +88,15 @@ bool selfTest() {
 
   // Suppress NVS traffic across the set() calls below; set() checks the
   // size cap before its _open check, so the cap tests still work.
+  // Snapshot the in-RAM blob too, same as location_store/units_store::selfTest():
+  // begin() has already loaded the real layout from NVS by the time this
+  // runs, and leaving _blob wiped or full of test data would make the next
+  // GET /$layout see it instead of the real one.
   bool saved_open = _open;
   _open           = false;
+  static char saved_blob[LAYOUT_STORE_MAX];
+  strncpy(saved_blob, _blob, sizeof(saved_blob) - 1);
+  saved_blob[sizeof(saved_blob) - 1] = '\0';
 
   _blob[0] = '\0';
   ok &= CHECK("nothing stored reads as empty", strcmp(get(), "") == 0);
@@ -166,8 +173,9 @@ bool selfTest() {
     _prefs.remove(LEGACY_KEY);
   }
 
-  _blob[0] = '\0';
-  _open    = saved_open;
+  strncpy(_blob, saved_blob, sizeof(saved_blob) - 1);
+  _blob[sizeof(saved_blob) - 1] = '\0';
+  _open                         = saved_open;
   Log.notice(F("layout selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
 }

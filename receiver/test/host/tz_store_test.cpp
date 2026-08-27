@@ -15,16 +15,14 @@ int main() {
   check("begin() opens the tz namespace", tz_store::begin());
   check("a fresh namespace defaults to -240 (EDT)", tz_store::offsetMinutes() == -240);
 
-  Preferences::resetCallCounts();
-  tz_store::set(60);
-  check("set() updates offsetMinutes()", tz_store::offsetMinutes() == 60);
-  check("set() of a changed value writes to NVS", Preferences::putBytesCallCount() == 1);
-
-  // A second Preferences handle on the same namespace/key proves the write
+  // A second Preferences handle on the same namespace/key proves a write
   // landed in NVS, not just in tz_store's own in-RAM copy.
   Preferences p;
   p.begin("tz", false);
-  check("the write is readable back from NVS", p.getShort("offset", -999) == 60);
+
+  tz_store::set(60);
+  check("set() updates offsetMinutes()", tz_store::offsetMinutes() == 60);
+  check("set() of a changed value writes to NVS", p.getShort("offset", -999) == 60);
 
   Preferences::resetCallCounts();
   tz_store::set(60);

@@ -232,9 +232,9 @@ bool selfTest() {
   // alias read/write see it instead of the real ones.
   bool saved_open = _open;
   _open           = false;
-  char saved_topics[ALIAS_SLOTS][ALIAS_TOPIC_MAX];
-  char saved_names[ALIAS_SLOTS][ALIAS_NAME_MAX];
-  bool saved_used[ALIAS_SLOTS];
+  static char saved_topics[ALIAS_SLOTS][ALIAS_TOPIC_MAX];
+  static char saved_names[ALIAS_SLOTS][ALIAS_NAME_MAX];
+  static bool saved_used[ALIAS_SLOTS];
   memcpy(saved_topics, _topics, sizeof(_topics));
   memcpy(saved_names, _names, sizeof(_names));
   memcpy(saved_used, _used, sizeof(_used));

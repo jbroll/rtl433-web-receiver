@@ -207,14 +207,14 @@ reason with when a write starts failing.
 in `Preferences` namespace and key `blob`, plus the same same-value write
 skip as `layout_store`. `set()` adopts the new value into `_blob` first and
 rolls back to a `previous[CAP]` copy taken before the write if `putString()`
-fails, which is why it needs a second `CAP`-sized buffer on the caller's
-stack; `layout_store` was deliberately not standardised onto this shape and
+fails, which is why `set()`'s own frame needs a second `CAP`-sized buffer;
+`layout_store` was deliberately not standardised onto this shape and
 instead keeps its own persist-before-adopt order (write to NVS first, only
 copy the new value into `_blob` once that succeeds), which needs no second
 buffer at all, since a failed write never touches the in-RAM blob in the
-first place. It also needs the two-key blob migration above, which neither
-of the other two has ever needed since they were `putBytes()` from the
-start. `alias_store` and `mqtt_publish_store` don't fit either — they
+first place. `layout_store` also needs the two-key blob migration above,
+which neither of the other two has ever needed since they were
+`putBytes()` from the start. `alias_store` and `mqtt_publish_store` don't fit either — they
 serialize a table rather than storing a blob verbatim.
 
 **`location_store.h` / `location_store.cpp`** — persists the dashboard's
