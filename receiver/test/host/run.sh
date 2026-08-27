@@ -90,4 +90,8 @@ g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \
 # reviews' 'pio run', because none of that code was ever compiled for the
 # target. Build the real firmware with FAKE_SIGNALS on (without touching
 # platformio.ini) so that gap can't reopen.
-(cd "$root" && PLATFORMIO_BUILD_FLAGS="-DFAKE_SIGNALS=true" pio run >/dev/null)
+pio_log="$out/pio_run.log"
+if ! (cd "$root" && PLATFORMIO_BUILD_FLAGS="-DFAKE_SIGNALS=true" pio run) >"$pio_log" 2>&1; then
+  cat "$pio_log" >&2
+  exit 1
+fi

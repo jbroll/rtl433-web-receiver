@@ -381,8 +381,6 @@ bool selfTest() {
     Preferences::resetCallCounts();
     ok &= CHECK("re-setting the same name does not write to NVS",
                 set("s/M/1/$alias", "Steady") && Preferences::putBytesCallCount() == 0);
-#else
-    ok &= CHECK("re-setting the same name does not write to NVS", set("s/M/1/$alias", "Steady"));
 #endif
 
     _prefs.remove(BLOB_KEY);

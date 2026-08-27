@@ -171,10 +171,6 @@ bool selfTest() {
                 set("{\"grid\":{\"cols\":7,\"rows\":7}}") && Preferences::putBytesCallCount() == 1);
     ok &= CHECK("setting the same value again does not write",
                 set("{\"grid\":{\"cols\":7,\"rows\":7}}") && Preferences::putBytesCallCount() == 1);
-#else
-    ok &= CHECK("first set with NVS open writes once", set("{\"grid\":{\"cols\":7,\"rows\":7}}"));
-    ok &= CHECK("setting the same value again does not write",
-                set("{\"grid\":{\"cols\":7,\"rows\":7}}"));
 #endif
 
     _prefs.remove(BLOB_KEY);

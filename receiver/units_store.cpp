@@ -67,11 +67,6 @@ bool selfTest() {
   ok &= CHECK("setting the same value again does not write",
               set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}") &&
                   Preferences::putStringCallCount() == 1);
-#else
-  ok &= CHECK("first set with NVS open writes once",
-              set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}"));
-  ok &= CHECK("setting the same value again does not write",
-              set("{\"units\":\"metric\",\"decimals\":1,\"custom\":{}}"));
 #endif
   _store.openForTest() = false;
 

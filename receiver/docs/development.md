@@ -107,6 +107,13 @@ on a removed/changed/TLS-flipped broker, the out-of-memory path in
 `setBufferSize()`, and `aliasPayload()`'s JSON escaping — is host-tested by
 `test/host/mqtt_publish_test.cpp`, without a broker or a device attached.
 
+`test/host/run.sh` also builds the real firmware with `FAKE_SIGNALS` forced on
+(`pio run`, ArduinoJson headers pulled from `.pio/libdeps/`), so a `selfTest()`
+that only compiles against the host shim's `Preferences` can't pass the suite
+undetected. This means the script needs `pio` on `PATH`, not just a `g++`
+toolchain; run `pio run` once in `receiver/` first if `.pio/libdeps/` doesn't
+exist yet.
+
 `test/binding.spec.js` covers the HTTP binding against `test/binding-server.js`, a JS
 model of the same surface, so it runs without a board: `npm install` once, then `npx
 playwright test`. The dashboard has [its own suite](../../dashboard/README.md).

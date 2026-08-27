@@ -68,11 +68,6 @@ bool selfTest() {
   ok &= CHECK("setting the same value again does not write",
               set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}") &&
                   Preferences::putStringCallCount() == 1);
-#else
-  ok &= CHECK("first set with NVS open writes once",
-              set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}"));
-  ok &= CHECK("setting the same value again does not write",
-              set("{\"lat\":1,\"lon\":1,\"label\":\"x\",\"zone\":\"\",\"zoom\":1}"));
 #endif
   _store.openForTest() = false;
 

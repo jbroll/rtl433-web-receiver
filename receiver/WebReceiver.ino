@@ -334,28 +334,35 @@ static void reinitRadio() {
   // reinit tells a chip that refuses the mode change apart from one that
   // comes back locked; SPIgetRegValue is bounded, unlike a status poll loop.
   uint8_t irq1Before = mod->SPIgetRegValue(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
-  rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
-  rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
-  radioIrq1 = mod->SPIgetRegValue(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
-  radioIrq1Valid = true;
-  Log.notice(F("radio health: irq1 before=%#04x after=%#04x "
-               "(ModeReady=%d PllLock=%d)" CR),
-             irq1Before, radioIrq1,
-             (radioIrq1 & RADIOLIB_RF69_IRQ_MODE_READY) != 0,
-             (radioIrq1 & RADIOLIB_RF69_IRQ_PLL_LOCK) != 0);
 
   // A scratch write/readback on RegOokFix only round-trips if the SPI bus
   // still works; RegVersion pins the chip identity. Together they tell an
   // SPI fault (bus stopped) apart from a radio that refuses the mode change.
+  // Run before initReceiver() so the restore below, if it writes back a
+  // garbage readback from a faulted bus, is immediately superseded by
+  // initReceiver()'s own OOK threshold write rather than lingering in the
+  // live config for up to RECOVERY_BACKOFF_MS.
   uint8_t ookFixOrig = mod->SPIgetRegValue(RADIOLIB_RF69_REG_OOK_FIX);
   uint8_t scratch = ookFixOrig ^ 0xFF;
   mod->SPIsetRegValue(RADIOLIB_RF69_REG_OOK_FIX, scratch);
   uint8_t ookFixReadback = mod->SPIgetRegValue(RADIOLIB_RF69_REG_OOK_FIX);
   mod->SPIsetRegValue(RADIOLIB_RF69_REG_OOK_FIX, ookFixOrig);
   uint8_t version = mod->SPIgetRegValue(RADIOLIB_RF69_REG_VERSION);
-  if (ookFixReadback != scratch || version != RADIOLIB_RF69_CHIP_VERSION) {
-    Log.error(F("radio health: SPI bus fault, RegOokFix wrote %#04x read "
-                "%#04x, RegVersion=%#04x" CR),
+  bool spiFault = ookFixReadback != scratch || version != RADIOLIB_RF69_CHIP_VERSION;
+
+  rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
+  rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
+  radioIrq1 = mod->SPIgetRegValue(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
+  radioIrq1Valid = true;
+  Log.notice(F("radio health: irq1 before=%X after=%X "
+               "(ModeReady=%T PllLock=%T)" CR),
+             irq1Before, radioIrq1,
+             (radioIrq1 & RADIOLIB_RF69_IRQ_MODE_READY) != 0,
+             (radioIrq1 & RADIOLIB_RF69_IRQ_PLL_LOCK) != 0);
+
+  if (spiFault) {
+    Log.error(F("radio health: SPI bus fault, RegOokFix wrote %X read "
+                "%X, RegVersion=%X" CR),
                scratch, ookFixReadback, version);
   }
   rf.enableReceiver();
@@ -375,7 +382,7 @@ static void recordRecoveryEvent() {
   radio_health::noteRecovery(healthState, millis());
   time_t utc = time(nullptr);
   health_store::noteRecovery(utc >= 1700000000 ? utc : 0);
-  Log.warning(F("radio health: recovery_count=%lu" CR),
+  Log.warning(F("radio health: recovery_count=%u" CR),
               (unsigned long)health_store::recoveryCount());
 }
 
@@ -566,7 +573,7 @@ void setup() {
     bmp280_addr = 0x77;
   }
   if (bmp280_ok) {
-    Log.notice(F("BMP280 initialized at 0x%02x" CR), bmp280_addr);
+    Log.notice(F("BMP280 initialized at %X" CR), bmp280_addr);
   } else {
     Log.warning(F("BMP280 not found on I2C" CR));
   }
