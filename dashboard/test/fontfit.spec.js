@@ -189,3 +189,36 @@ test("textWidthEm ignores a detached head entry instead of measuring garbage", a
   });
   expect(detachedEm).toBeGreaterThan(1);
 });
+
+// upsert() on an existing device mutates its signals in place and leaves
+// devices.value's own identity untouched, so CardsView's fitValues() effect
+// (keyed on devices.value) does not rerun for a reading that only got wider.
+// I3: a widening value must still end up fitted. A single wide outlier on a
+// small card can legitimately still overflow a little under the page-wide
+// floor ("one narrow box floors..." above), so the proof here is not an
+// absolute ratio bound -- it's that the automatic refit already reached the
+// same steady state a full manual fitValues() pass would, i.e. nothing was
+// left stale.
+test("a live reading that grows wider gets refit", async ({ page }) => {
+  await open(page);
+  const val = page.locator(`${CARD} .val[data-f="temperature_F"]`);
+  const fv = val.locator(".fv");
+  const before = await fv.textContent();
+  const callsBefore = await page.evaluate(() => fitValuesCalls);
+
+  await server.emit({ ...ACURITE, temperature_F: 123456.789 });
+  await expect.poll(() => fv.textContent()).not.toBe(before);
+
+  const ratioOf = () => val.evaluate(v => v.querySelector(".fv").scrollWidth / v.clientWidth);
+  const autoRatio = await ratioOf();
+  // A single widening message must not force more than the one page-wide
+  // fitValues() pass its own overflow check triggers.
+  const callsAfter = await page.evaluate(() => fitValuesCalls);
+  expect(callsAfter - callsBefore).toBeLessThanOrEqual(1);
+
+  await page.evaluate(() => fitValues());
+  const manualRatio = await ratioOf();
+  // Stale would show up as autoRatio still reflecting the old, narrower fit --
+  // a mismatch against what a fresh manual pass computes for the same content.
+  expect(autoRatio).toBeCloseTo(manualRatio, 5);
+});

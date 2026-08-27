@@ -3,6 +3,7 @@ import { cardState, gridNum, saveCardState, cardHidden, setEditHook } from './st
 import { devices } from './devices.js'
 import { isFeed, topicOf } from './alias.js'
 import { showToast } from './toast.js'
+import { authHeader } from './auth.js'
 
 export const LAYOUT_SUFFIX = '/$layout'
 export const layouts = signal(new Map())
@@ -205,9 +206,10 @@ export function postLayout() {
   const url = `${location.origin}/$layout`
   fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
     body: JSON.stringify(template),
   }).then(res => {
+    if (res.status === 401) { showToast('Layout save rejected: the bridge needs an access token. Set it in Settings.'); return }
     if (!res.ok) { console.error(`POST ${url} failed: ${res.status}`); return }
     // Don't wait on the $layout frame echoing back over MQTT to know what we
     // just saved -- that round trip races a user hitting Load right after

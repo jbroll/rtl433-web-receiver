@@ -642,3 +642,64 @@ test('setLocation is not blocked by a pending failure throttle from an earlier t
     globalThis.fetch = async () => ({})
   }
 })
+
+// I7: the non-latching of lastPostedTzOffset on a 401 is correct -- a real
+// unlanded change must keep retrying -- but refreshTz runs every tick, and
+// against a token-protected bridge with no stored token every one of those
+// retries used to toast, forever.
+test('a 401 on the timer-driven $tz path toasts once, not on every retry', async () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    const base = Date.UTC(2026, 2, 8, 9, 30, 0)
+    mock.timers.setTime(base)
+    sources.value = ['http://receiver.test']
+    onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
+    globalThis.fetch = async () => ({ ok: false, status: 401 })
+
+    toast.value = null
+    refreshTz()
+    await flush()
+    assert.ok(toast.value)
+    const firstToast = toast.value
+
+    for (let i = 1; i <= 5; i++) {
+      mock.timers.setTime(base + i * TZ_RETRY_THROTTLE_MS)
+      refreshTz()
+      await flush()
+    }
+
+    // Still the same toast object: no later retry replaced it with a new one.
+    assert.equal(toast.value, firstToast)
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
+})
+
+test('a user-initiated $tz save toasts on 401 even right after a timer-driven one already toasted', async () => {
+  mock.timers.enable({ apis: ['Date'] })
+  try {
+    const base = Date.UTC(2026, 2, 8, 9, 30, 0)
+    mock.timers.setTime(base)
+    sources.value = ['http://receiver.test']
+    onLocationFrame('http://receiver.test', { lat: 5, lon: 6, label: '', zone: 'America/Denver', zoom: 11 })
+    globalThis.fetch = async () => ({ ok: false, status: 401 })
+
+    refreshTz()
+    await flush()
+    const timerToast = toast.value
+    assert.ok(timerToast)
+
+    mock.timers.setTime(base + TZ_RETRY_THROTTLE_MS)
+    setLocation({ lat: 39.7, lon: -104.9, zone: 'America/Los_Angeles' })
+    await flush()
+
+    // A distinct toast: the action the user just took is not swallowed by
+    // the timer path's latch.
+    assert.ok(toast.value)
+    assert.notEqual(toast.value, timerToast)
+  } finally {
+    mock.timers.reset()
+    globalThis.fetch = async () => ({})
+  }
+})

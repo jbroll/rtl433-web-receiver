@@ -166,8 +166,13 @@ export async function startServer(opts = {}) {
         res.writeHead(400).end("body must be a JSON object");
         return;
       }
-      await fixture.publish(source + LAYOUT_SUFFIX, JSON.stringify(value));
-      res.writeHead(204).end();
+      // Unlike $tz/$location/$units above, $layout's write carries a bearer
+      // token (auth.spec.js drives it against a token-protected bridge), so
+      // it goes through the bridge's own auth-gated POST instead of writing
+      // straight to the mock broker -- a missing/wrong token must 401 here
+      // the same way it does for every other topic write.
+      req.url = "/" + [source, "$layout"].map(encodeURIComponent).join("/");
+      proxyToFixture(req, res, fixture.httpPort, raw);
       return;
     }
     if (last === "$location" || last === "$units") {

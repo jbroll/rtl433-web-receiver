@@ -109,10 +109,14 @@ function pruneCardState(s) {
 }
 
 export function saveCardState() {
-  if (storageBroken) return
   const pruned = pruneCardState(cardState.value)
-  try { localStorage.setItem(CARDS_KEY, JSON.stringify(pruned)) }
-  catch (e) { storageBroken = true }
+  // A broken store still needs to notify: every setter here mutates
+  // cardState.value in place, and bump() is what gives that mutation a new
+  // identity for subscribers to see.
+  if (!storageBroken) {
+    try { localStorage.setItem(CARDS_KEY, JSON.stringify(pruned)) }
+    catch (e) { storageBroken = true }
+  }
   bump(pruned)
 }
 

@@ -97,6 +97,41 @@ test("the token field never plays the stored secret back into the page", async (
   expect(await page.content()).not.toContain("secret");
 });
 
+test("saving the default layout against a token-protected bridge is rejected and surfaced as a toast", async ({ page }) => {
+  const server = await startServer({ authToken: "secret", devices: [ACURITE] });
+  servers.push(server);
+
+  await page.goto(server.url);
+  await page.click("#edit-cards");
+  const posted = page.waitForResponse((r) => r.url().includes("$layout"));
+  await page.click("#save-layout");
+  await posted;
+
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect(page.locator("#toast")).toContainText(/token/i);
+  expect((await server.get(server.source + "/$layout")).status).toBe(404);
+});
+
+test("setting the access token in Settings lets a default-layout save go through", async ({ page }) => {
+  const server = await startServer({ authToken: "secret", devices: [ACURITE] });
+  servers.push(server);
+
+  await page.goto(server.url);
+  await openSettings(page);
+  await page.fill("#settings-token", "secret");
+  await page.click("#settings-token-save");
+  await page.click("#subtab-devices");
+  await page.click("#tab-cards");
+  await page.click("#edit-cards");
+  const posted = page.waitForResponse((r) => r.url().includes("$layout"));
+  await page.click("#save-layout");
+  await posted;
+
+  const res = await server.get(server.source + "/$layout");
+  expect(res.status).toBe(200);
+  expect(JSON.parse(res.body).order).toContain(`${ACURITE.model}/${ACURITE.id}`);
+});
+
 test("a token stored for a different bridge's origin is not sent to this one", async ({ page }) => {
   const a = await startServer({ authToken: "secret-a", devices: [ACURITE], source: "srcA" });
   servers.push(a);

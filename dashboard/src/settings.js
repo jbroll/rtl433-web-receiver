@@ -157,18 +157,28 @@ export const TZ_RETRY_THROTTLE_MS = 10_000
 let tzPostInFlight = false
 let tzThrottledUntil = 0
 
+// One-way-until-resolved latch: the timer-driven path (refreshTz, every
+// tick) tells the user once per unauthorized streak rather than every 10s.
+// A user-initiated post (setLocation) always toasts -- they just took an
+// action and want to know it failed -- and re-arms the latch so the next
+// timer-driven 401 gets its own single toast.
+let tzUnauthorizedToasted = false
+
 // Latches lastPostedTzOffset only on a confirmed 2xx (204 today): 401 and
 // 503 must NOT latch, or a real unlanded change goes unretried for months.
 // Resolves to whether the POST landed, so callers can drive the in-flight
 // guard and retry throttle without duplicating the fetch.
-function postTz(offset) {
+function postTz(offset, userInitiated) {
   return fetch(`${location.origin}/$tz`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeader(location.origin) },
     body: JSON.stringify(offset),
   }).then(res => {
-    if (res.ok) { lastPostedTzOffset = offset; return true }
-    if (res.status === 401) showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
+    if (res.ok) { lastPostedTzOffset = offset; tzUnauthorizedToasted = false; return true }
+    if (res.status === 401 && (userInitiated || !tzUnauthorizedToasted)) {
+      showToast('Time zone update rejected: the bridge needs an access token. Set it in Settings.')
+      tzUnauthorizedToasted = true
+    }
     return false
   }).catch(err => { console.error(`POST $tz failed: ${err.message || err}`); return false })
 }
@@ -183,9 +193,12 @@ function requestTz(offset, { userInitiated = false } = {}) {
   if (tzPostInFlight) return
   if (!userInitiated && Date.now() < tzThrottledUntil) return
   tzPostInFlight = true
-  postTz(offset).then(ok => {
+  postTz(offset, userInitiated).then(ok => {
     tzPostInFlight = false
     tzThrottledUntil = ok ? 0 : Date.now() + TZ_RETRY_THROTTLE_MS
+  }).catch(err => {
+    tzPostInFlight = false
+    console.error(`$tz request failed: ${err.message || err}`)
   })
 }
 
@@ -198,6 +211,7 @@ export function loadSettings() {
   lastPostedTzOffset = null
   tzPostInFlight = false
   tzThrottledUntil = 0
+  tzUnauthorizedToasted = false
   let raw
   try { raw = localStorage.getItem(SETTINGS_KEY) } catch (e) { storageBroken = true; return }
   if (!raw) return

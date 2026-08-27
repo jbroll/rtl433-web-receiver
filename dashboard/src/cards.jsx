@@ -7,7 +7,7 @@ import { ageText, displayValue } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, cellSignal, viewCols, viewColsSignal,
-         trackFit, beginDrag, beginResize, setRenaming, currentDrag, currentResize,
+         trackFit, textWidthEm, beginDrag, beginResize, setRenaming, currentDrag, currentResize,
          dragOrResizeInFlight } from './grid.js'
 import { tick } from './tick.js'
 import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
@@ -222,8 +222,21 @@ function Value({ rec, field, cardKey }) {
   const valRef = useRef(null)
 
   // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
+  // upsert() mutates an existing device's signals in place, leaving
+  // devices.value's identity untouched -- CardsView's fitValues() effect
+  // never reruns for a reading that only got wider. .fv is a shrink-to-fit
+  // flex item (its own scrollWidth/clientWidth is always 1), so overflow is
+  // checked against the .val parent fitValues() sized: the current font size
+  // times this value's own em width. A full fitValues() pass only runs when
+  // that check trips -- the common case costs one canvas.measureText() call
+  // and a clientWidth read, not a page-wide refit.
   useLayoutEffect(() => {
-    if (valRef.current) trackFit(valRef.current, d.num)
+    const node = valRef.current
+    if (!node) return
+    trackFit(node, d.num)
+    const parent = node.parentNode
+    const fontPx = parseFloat(node.style.fontSize) || parseFloat(getComputedStyle(node).fontSize)
+    if (parent && fontPx && textWidthEm(d.num) * fontPx > parent.clientWidth) fitValues()
   }, [d.num, d.unit])
 
   return (

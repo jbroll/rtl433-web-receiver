@@ -270,3 +270,24 @@ test('an order entry naming a key absent from cards is dropped on load', () => {
   assert.deepEqual(store.getCardState().order, [K])
   assert.deepEqual(store.getCardState().hidden, [])
 })
+
+// I6: once storage is broken, saveCardState's early return used to skip
+// bump() along with the write, and every setter here mutates cardState.value
+// in place -- so with nothing left to give the mutation a new identity, a
+// subscriber never heard about it even though the toggle actually happened.
+test('a setter still notifies subscribers once storage is broken', () => {
+  store.ensureCard(K, READ)
+  store.setCardHidden(K, false) // hideNewCards' default start-hidden, undone before storage breaks
+  localStorage.setItem = () => { throw new Error('quota') }
+  store.setCardHidden(K, true)
+  assert.equal(store.isStorageBroken(), true)
+
+  let fired = 0
+  const stop = effect(() => { store.cardState.value; fired++ })
+  fired = 0
+  store.setCardHidden(K, false)
+  stop()
+
+  assert.equal(fired, 1)
+  assert.equal(store.cardHidden(K), false)
+})
