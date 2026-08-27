@@ -107,6 +107,13 @@ on a removed/changed/TLS-flipped broker, the out-of-memory path in
 `setBufferSize()`, and `aliasPayload()`'s JSON escaping — is host-tested by
 `test/host/mqtt_publish_test.cpp`, without a broker or a device attached.
 
+`web_ui.cpp` itself is not host-compiled — it needs `WebServer`, `Update`, and
+the gzipped dashboard blob — but its `/$mqtt` routes are, through
+`mqtt_routes.cpp`: `test/host/mqtt_routes_test.cpp` drives
+`mqtt_routes::dispatch()` with a method, path, body and origin verdict and
+checks the status and body it returns against the live
+`mqtt_publish`/`mqtt_publish_store` state.
+
 `test/host/run.sh` also builds the real firmware with `FAKE_SIGNALS` forced on
 (`pio run`, ArduinoJson headers pulled from `.pio/libdeps/`), so a `selfTest()`
 that only compiles against the host shim's `Preferences` can't pass the suite

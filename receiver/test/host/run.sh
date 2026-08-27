@@ -82,6 +82,18 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     "$root/units_store.cpp" "$root/tz_store.cpp" \
     "$root/test/host/mqtt_publish_test.cpp"
 "$out/mqtt_publish_test"
+# mqtt_routes.cpp is web_ui.cpp's /$mqtt request handling, split out so it can
+# run without a WebServer. It reads mqtt_publish's connection list, so this
+# links the same set mqtt_publish_test does, with the same build-flag broker.
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \
+    -DMQTT_BROKER_URL='"mqtt://buildflag.example:1883"' -DMQTT_MAX_PACKET_SIZE=5300 \
+    -I"$shim" -I"$root" -I"$aj" \
+    -o "$out/mqtt_routes_test" "$root/mqtt_routes.cpp" "$root/mqtt_publish.cpp" \
+    "$root/mqtt_publish_store.cpp" "$root/json_string.cpp" "$root/signal_store.cpp" \
+    "$root/device_hooks.cpp" "$root/alias_store.cpp" "$root/layout_store.cpp" \
+    "$root/location_store.cpp" "$root/units_store.cpp" "$root/tz_store.cpp" \
+    "$root/test/host/mqtt_routes_test.cpp"
+"$out/mqtt_routes_test"
 # frame.h is header-only: no Arduino headers beyond Print, so no shim -I needed
 # for anything but Print.h itself.
 g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \

@@ -149,5 +149,3 @@ future call site changes that assumption.
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
   from there means changing the hook contract from "gets the doc" to "gets the
   serialised payload", so it is worth doing only if the decode path measures hot.
-- No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly, and there
-  is no host-testable seam for `web_ui.cpp` routes at all.
