@@ -246,7 +246,7 @@ export function moonPhase (date) {
   return { age: phase * SYNODIC, phase, illumination: k, name, waxing }
 }
 
-// This scans a fixed window rather than solving a formula, so the window
+// This scans the window rather than solving a formula, so the window
 // itself has to start at local midnight, not be shifted after the fact.
 export function moonTimes (date, lat, lon, zone = 'UTC') {
   const [start, end] = dayWindow(date, zone)
@@ -256,9 +256,8 @@ export function moonTimes (date, lat, lon, zone = 'UTC') {
   let prevT = start
   let prev = moonAltitude(new Date(start), lat, lon) - MOON_HORIZON
   for (let i = 1; i <= steps; i++) {
-    // The last step is clamped to `end` when the window isn't a whole
-    // number of 10-minute steps, so no sample (and no interpolated
-    // crossing) ever falls outside [start, end).
+    // Clamp the last step to `end` so a non-whole number of 10-minute
+    // steps still samples the window's true endpoint.
     const t = Math.min(start + i * step, end)
     const alt = moonAltitude(new Date(t), lat, lon) - MOON_HORIZON
     lo = Math.min(lo, prev, alt)
