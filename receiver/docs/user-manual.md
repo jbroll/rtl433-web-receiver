@@ -352,8 +352,8 @@ stream reconnects, and every open browser picks up the new page.
   evicts the longest-attached one, whose browser reconnects on its own
 - the radio monitors its own health once a minute; a stuck or parked radio is
   recovered by re-running the radio init.
-  `radio_ok`, `recovery_count`, and `last_recovery_s` on the receiver's card
-  carry the state
+  `radio_ok`, `recovery_count`, `last_recovery_s`, and `irq1` on the
+  receiver's card carry the state
 
 ## Cross-origin
 

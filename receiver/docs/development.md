@@ -72,7 +72,10 @@ failed.
 
 Uncomment `'-DFAKE_SIGNALS=true'` in `platformio.ini`. The sketch injects a
 synthetic decode every 3 seconds and runs `signal_store::selfTest()` at startup,
-printing a PASS/FAIL line per check over serial.
+printing a PASS/FAIL line per check. Under this flag `Log.begin()` points at
+`Serial`, the S3's USB CDC device, instead of the `Serial0` hardware UART a
+production build uses, so `monitor.py` reads the PASS/FAIL lines without a
+UART adapter on the TX pin.
 
 **Do not enable this on a board that has already been provisioned with real
 settings.** `alias_store::selfTest()`, `mqtt_publish_store::selfTest()`, and

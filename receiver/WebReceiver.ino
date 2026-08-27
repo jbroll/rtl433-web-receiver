@@ -316,6 +316,11 @@ static int radioTemperature() {
 #endif
 }
 
+// Set once reinitRadio() has run, so recordReceiver() knows radioIrq1 holds a
+// real reading rather than its zero initializer.
+static uint8_t radioIrq1 = 0;
+static bool    radioIrq1Valid = false;
+
 // Re-runs the radio config path. The library has no SPI mutex, so the receiver
 // task and the DIO2 interrupt are stopped first: otherwise radio.reset() and the
 // SPI re-config interleave with the task's RSSI reads and the chip can come back
@@ -324,8 +329,35 @@ static int radioTemperature() {
 static void reinitRadio() {
   rf.disableReceiver();
   delay(5); // let an RSSI read already on the SPI bus finish
+  Module* mod = radio.getMod();
+  // RegIrqFlags1: ModeReady (bit 7) and PllLock (bit 4). Bracketing the
+  // reinit tells a chip that refuses the mode change apart from one that
+  // comes back locked; SPIgetRegValue is bounded, unlike a status poll loop.
+  uint8_t irq1Before = mod->SPIgetRegValue(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
   rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
   rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
+  radioIrq1 = mod->SPIgetRegValue(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
+  radioIrq1Valid = true;
+  Log.notice(F("radio health: irq1 before=%#04x after=%#04x "
+               "(ModeReady=%d PllLock=%d)" CR),
+             irq1Before, radioIrq1,
+             (radioIrq1 & RADIOLIB_RF69_IRQ_MODE_READY) != 0,
+             (radioIrq1 & RADIOLIB_RF69_IRQ_PLL_LOCK) != 0);
+
+  // A scratch write/readback on RegOokFix only round-trips if the SPI bus
+  // still works; RegVersion pins the chip identity. Together they tell an
+  // SPI fault (bus stopped) apart from a radio that refuses the mode change.
+  uint8_t ookFixOrig = mod->SPIgetRegValue(RADIOLIB_RF69_REG_OOK_FIX);
+  uint8_t scratch = ookFixOrig ^ 0xFF;
+  mod->SPIsetRegValue(RADIOLIB_RF69_REG_OOK_FIX, scratch);
+  uint8_t ookFixReadback = mod->SPIgetRegValue(RADIOLIB_RF69_REG_OOK_FIX);
+  mod->SPIsetRegValue(RADIOLIB_RF69_REG_OOK_FIX, ookFixOrig);
+  uint8_t version = mod->SPIgetRegValue(RADIOLIB_RF69_REG_VERSION);
+  if (ookFixReadback != scratch || version != RADIOLIB_RF69_CHIP_VERSION) {
+    Log.error(F("radio health: SPI bus fault, RegOokFix wrote %#04x read "
+                "%#04x, RegVersion=%#04x" CR),
+               scratch, ookFixReadback, version);
+  }
   rf.enableReceiver();
 }
 
@@ -409,7 +441,8 @@ static void recordReceiver() {
               "\"uptime_s\":%lu,\"boot_count\":%lu,\"last_reset_reason\":%d,"
               "\"recovery_count\":%lu,\"last_recovery_s\":%lu,"
               "\"radio_ok\":%d,\"coredump_pending\":%d,"
-              "\"temperature_C\":%.1f,\"heap_kB\":%lu",
+              "\"temperature_C\":%.1f,\"heap_kB\":%lu,"
+              "\"decodes\":%lu,\"drops\":%lu",
               (unsigned long)(millis() / 1000),
               (unsigned long)health_store::bootCount(),
               (int)health_store::resetReason(),
@@ -417,9 +450,14 @@ static void recordReceiver() {
               (unsigned long)(healthState.lastRecoveryAt / 1000),
               radioOk ? 1 : 0,
               bootCoredumpPending ? 1 : 0,
-              temperatureRead(), (unsigned long)(ESP.getFreeHeap() / 1024));
+              temperatureRead(), (unsigned long)(ESP.getFreeHeap() / 1024),
+              (unsigned long)signal_store::totalRecorded(),
+              (unsigned long)signal_store::droppedCount());
   if (radioC != INT16_MIN) {
     n = appendf(buf, sizeof(buf), n, ",\"radio_C\":%d", radioC);
+  }
+  if (radioIrq1Valid) {
+    n = appendf(buf, sizeof(buf), n, ",\"irq1\":%u", radioIrq1);
   }
   // Zero until the receiver task has averaged its first batch of samples. The
   // page merges fields across messages, so leaving it out beats reporting 0.
@@ -499,7 +537,15 @@ void setup() {
 #ifndef LOG_LEVEL
   #define LOG_LEVEL LOG_LEVEL_SILENT
 #endif
+#ifdef FAKE_SIGNALS
+  // Serial0 is the hardware UART; the port exposed over USB on the S3 is the
+  // CDC device (Serial). A production build keeps Serial0, which is what
+  // monitor.py's default baud expects.
+  Serial.begin(921600);
+  Log.begin(LOG_LEVEL, &Serial);
+#else
   Log.begin(LOG_LEVEL, &Serial0);
+#endif
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
 

@@ -53,18 +53,6 @@ floor at or below the SX1231's measurement floor (about -120 dBm, e.g. the
 value with no error marking, so a broken radio reads as merely quiet. Add a
 page indicator keyed on `radio_ok`.
 
-## The health path never reads `RegIrqFlags1`
-
-Everything the firmware knows about a sick radio comes from `setMode` returning
--16 and from the noise floor, and -16 means only "readback did not match". It
-cannot tell a chip that is refusing a mode change from an SPI bus that has
-stopped working, which is the wrong turn the last hardware fault sent the
-diagnosis down. `RegIrqFlags1` (0x27) answers it directly: ModeReady in bit 7
-and PllLock in bit 4. Reading it in `reinitRadio()` and carrying the byte in
-telemetry would name the fault in the log instead of leaving it to a probe
-sketch. A scratch write to `RegOokFix` and a `RegVersion` check would settle
-the bus question in the same pass.
-
 ## A slow HTTP client can still stall the receive path
 
 `ChunkedResponse::flush()` waits up to `CHUNK_WAIT_US` 150 ms per chunk with a
@@ -222,10 +210,6 @@ future call site changes that assumption.
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
   from there means changing the hook contract from "gets the doc" to "gets the
   serialised payload", so it is worth doing only if the decode path measures hot.
-- `signal_store::totalRecorded()` and `droppedCount()` have no caller outside
-  `selfTest()`, though `_total` and `_dropped` are maintained on every record. The
-  Receiver telemetry card reports heap, uptime and recovery count but not decode or drop
-  counts, which are the obvious two fields to add if that was the intent.
 - `test/binding-server.js`, the model of the firmware's wire format, checks alias name
   length with JavaScript's `value.length` (UTF-16 code units), while `web_ui.cpp`'s
   `handleAliasPost` checks `strlen(name)` (bytes). The two agree for ASCII but disagree for

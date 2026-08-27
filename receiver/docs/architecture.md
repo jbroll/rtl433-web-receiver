@@ -580,6 +580,9 @@ device that starts with its card shown, since it cannot be a false decode.
 | `radio_ok` | 1 when healthy; 0 while a soft re-init has yet to produce a confirmed decode |
 | `coredump_pending` | `esp_core_dump_image_check()` at boot; 1 if a dump is present in flash |
 | `rssi_thresh` | `rtl_433_ESP::rssiThreshold` |
+| `decodes` | `signal_store::totalRecorded()`, promoted decodes since boot |
+| `drops` | `signal_store::droppedCount()`, records dropped since boot |
+| `irq1` | Post-reinit `RegIrqFlags1`, see "A refused OP_MODE write is not an SPI fault" below. Absent until the first `reinitRadio()` |
 
 The card's corner reading is the WiFi RSSI rather than a decode's. The
 receiver takes one of the 24 device slots, and it is the only device keyed on
@@ -667,18 +670,29 @@ returns `RegVersion` 0x24, and a scratch write to `RegOokFix` reads back
 exactly; if those pass and only writes to the `RegOpMode` mode field are
 refused, the bus is fine and the radio is not.
 
-`RegIrqFlags1` (0x27) is what separates the two, and the firmware does not read
-it. ModeReady (bit 7) asserts when a mode transition completes and PllLock
-(bit 4) when the synthesizer is locked. A healthy chip in FS reads 0x90 and
-holds it. A chip that cannot hold lock shows PllLock asserting a few hundred
-microseconds after a mode change and dropping again within a millisecond, and
-once RX is entered `RegIrqFlags1` reads 0x00 and stays there, ModeReady never
-asserts, and every later mode write is refused. Nothing in firmware works
-around that state: minimum LNA gain with a 25 kHz bandwidth behaves identically,
-manual transitions with `SequencerOff` never reach PllLock at all, and it does
-not recover with time. A soft re-init clears it, because `RF69::begin()` pulses
-RST, but `initReceiver()` re-enters RX milliseconds later and loses lock again,
-which is why the state looks like it survives `esp_restart()`.
+`RegIrqFlags1` (0x27) is what separates the two. ModeReady (bit 7) asserts
+when a mode transition completes and PllLock (bit 4) when the synthesizer is
+locked. A healthy chip in FS reads 0x90 and holds it. A chip that cannot hold
+lock shows PllLock asserting a few hundred microseconds after a mode change
+and dropping again within a millisecond, and once RX is entered
+`RegIrqFlags1` reads 0x00 and stays there, ModeReady never asserts, and every
+later mode write is refused. Nothing in firmware works around that state:
+minimum LNA gain with a 25 kHz bandwidth behaves identically, manual
+transitions with `SequencerOff` never reach PllLock at all, and it does not
+recover with time. A soft re-init clears it, because `RF69::begin()` pulses
+RST, but `initReceiver()` re-enters RX milliseconds later and loses lock
+again, which is why the state looks like it survives `esp_restart()`.
+
+`reinitRadio()` reads `RegIrqFlags1` before and after the `initReceiver()`
+call, logs both, and carries the post-reinit byte in the Receiver telemetry
+as `irq1`; the field is left out of the JSON until the first reinit has run.
+The same pass writes a flipped scratch value to `RegOokFix` and reads it
+back, and reads `RegVersion`: a mismatch on either names an SPI bus fault in
+the log rather than a refused mode change. The register reads use
+`SPIgetRegValue`, bounded by the SPI transaction itself, not a polling loop —
+`reinitRadio()` already runs with the receiver task and its interrupt
+stopped, so nothing else is on the bus to race, but a hung transaction there
+would still hang `loop()` if the read waited on anything but the transaction.
 
 Seen once on this board, over roughly 1500 recovery attempts. The cause was a
 high-resistance solder joint on the RFM69CW power and ground leads: the digital
