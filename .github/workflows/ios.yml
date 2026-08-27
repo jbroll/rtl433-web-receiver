@@ -30,6 +30,24 @@ jobs:
         working-directory: dashboard
         run: npm run build
 
+      - name: Test bridge
+        working-directory: bridge
+        run: |
+          npm ci
+          node --test test/*.test.js
+
+      - name: Test receiver binding suite
+        working-directory: receiver
+        run: |
+          npm ci
+          npx playwright test
+
+      - name: Test dashboard
+        working-directory: dashboard
+        run: |
+          npx playwright install chromium
+          npm test
+
       - name: Sync iOS
         run: npx cap sync ios
 

@@ -12,6 +12,9 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 echo "== receiver: test/host/run.sh =="
 (cd "$root/receiver" && bash test/host/run.sh)
 
+echo "== receiver: npm test =="
+(cd "$root/receiver" && npm test)
+
 echo "== bridge: npm test =="
 (cd "$root/bridge" && npm test)
 

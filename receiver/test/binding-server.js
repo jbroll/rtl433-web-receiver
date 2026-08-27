@@ -293,7 +293,7 @@ function startServer(opts = {}) {
   server.on("connection", s => { sockets.add(s); s.on("close", () => sockets.delete(s)); });
 
   function request(method, topic, body) {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       const req = http.request({
         host: "127.0.0.1", port: server.address().port,
         path: "/" + topic.split("/").map(encodeURIComponent).join("/"), method: method,
@@ -304,6 +304,7 @@ function startServer(opts = {}) {
         res.on("data", c => { out += c; });
         res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body: out }));
       });
+      req.on("error", reject);
       if (body !== undefined) req.write(body);
       req.end();
     });

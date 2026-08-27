@@ -21,6 +21,17 @@ npm test
 npm run build
 ```
 
+`bin/test.sh` runs every sub-project's suite in one command: the receiver's host tests and
+its Playwright binding suite, then bridge and dashboard `npm test`. It expects
+`node_modules` to already exist in each sub-project; on a fresh clone, install first:
+
+```bash
+npm ci --prefix receiver
+npm ci --prefix bridge
+npm ci --prefix dashboard
+bin/test.sh
+```
+
 ## Worktrees and merges
 
 Feature work happens in isolated worktrees. Each worktree is a named branch that splits from `main`.

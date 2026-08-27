@@ -16,6 +16,18 @@ npm ci --prefix dashboard
 echo "[ci/android] app: npm ci"
 npm ci --prefix app
 
+echo "[ci/android] receiver: npm ci"
+npm ci --prefix receiver
+
+echo "[ci/android] bridge: npm ci"
+npm ci --prefix bridge
+
+echo "[ci/android] dashboard: playwright install chromium"
+npx --prefix dashboard playwright install chromium
+
+echo "[ci/android] bin/test.sh"
+bin/test.sh
+
 echo "[ci/android] dashboard: npm run build"
 npm run build --prefix dashboard
 
@@ -29,12 +41,18 @@ APK="app/android/app/build/outputs/apk/debug/app-debug.apk"
 echo "[ci/android] APK: $APK"
 ls -lh "$APK"
 
+command -v adb >/dev/null || { echo "[ci/android] adb not found" >&2; exit 1; }
+
 if adb devices | grep -q '[[:space:]]device$'; then
     echo "[ci/android] adb device found, running CDP smoke test"
     adb install -r "$APK"
     adb shell am start -n com.rkroll.rtl433/.MainActivity
     adb forward tcp:9222 localabstract:webview_devtools_remote
     node dashboard/test/android-smoke.js
+    echo "[ci/android] smoke: passed"
+elif [ "${CI_REQUIRE_DEVICE:-}" = "1" ]; then
+    echo "[ci/android] smoke: failed (CI_REQUIRE_DEVICE=1, no adb device)" >&2
+    exit 1
 else
-    echo "device smoke skipped: no adb device"
+    echo "[ci/android] smoke: skipped (no adb device)"
 fi
