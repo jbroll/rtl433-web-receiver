@@ -131,14 +131,10 @@ test('a topic gone at reconnect is announced deleted to an already open subscrib
 
     const stream = await fetch(`${bridge.base}/events?f=src/%23`)
     try {
-      const reading = readEvents(stream, 4)
+      const reading = readEvents(stream, 4, { timeoutMs: 5000 })
 
-      // A fresh broker at the same address has no retained messages of its
-      // own; only src/Acurite/2 is republished, so src/Acurite/1 is gone.
-      // ready() can flip true and then false again mid-restart (the proxy's
-      // old socket tearing down after a new one already connected), so the
-      // republish retries past a stray 503 instead of trusting one ready()
-      // check.
+      // ready() can flip true then false again mid-restart, so the republish
+      // retries past a stray 503 instead of trusting one ready() check.
       await bridge.restartBroker()
       await waitFor(async () => {
         const res = await fetch(`${bridge.base}/src/Acurite/2`, { method: 'POST', body: '{"t":2}' })
@@ -146,12 +142,18 @@ test('a topic gone at reconnect is announced deleted to an already open subscrib
       })
       const events = await reading
 
-      assert.deepEqual(events, [
+      // The initial replay (from the cache at connect time) arrives in
+      // insertion order and always precedes the reconnect; the republish
+      // echo and the deleted announcement race each other, so compare those
+      // two as a set rather than depending on which lands first.
+      assert.deepEqual(events.slice(0, 2), [
         { topic: 'src/Acurite/1', payload: { t: 1 } },
         { topic: 'src/Acurite/2', payload: { t: 2 } },
-        { topic: 'src/Acurite/2', payload: { t: 2 } },
-        { topic: 'src/Acurite/1', payload: '', deleted: true },
       ])
+      assert.deepEqual(new Set(events.slice(2).map((event) => JSON.stringify(event))), new Set([
+        JSON.stringify({ topic: 'src/Acurite/2', payload: { t: 2 } }),
+        JSON.stringify({ topic: 'src/Acurite/1', payload: '', deleted: true }),
+      ]))
     } finally {
       await closeStream(stream)
     }

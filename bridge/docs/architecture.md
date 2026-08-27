@@ -99,6 +99,37 @@ Skipping empty payloads in replay keeps a deleted topic's `GET` answer and its
 before a deletion seen live would still be replayed to a later subscriber as
 an empty message.
 
+## Announcing departed topics on reconnect
+
+MQTT 3.1.1 gives no signal for when retained replay after a `SUBACK` is
+done; a broker is free to send it before or after. `connectBroker`
+(`src/broker.js`) works around this with a quiet-period guess: on every
+`connect`, it remembers the previous cache's topics as `rebuild.missing`,
+removes each as its message arrives, and arms a `CACHE_SETTLE_MS` timer that
+re-arms on every message. Once the timer fires without a re-arm, whatever is
+still in `rebuild.missing` no longer exists and is broadcast as a `deleted`
+frame to every open SSE stream.
+
+The timer has to survive a gap *inside* the replay, not just a slow replay
+overall, because it re-arms on each message. `CACHE_SETTLE_MS` used to be
+200 ms, which is exactly `TCP_RTO_MIN` on Linux — a single lost segment
+could open a gap that size — and is also short enough for ordinary
+broker-side stalls: mosquitto reading a large on-disk retained store, or a
+clustered or bridged broker fetching retained state from a peer before it
+starts replaying. The two outcomes are not symmetric: a late announcement
+costs nothing, since the frame is advisory and no subscriber blocks on it;
+an early one is the only defect the design has, briefly asserting a topic
+gone that is about to be corrected by its own arrival. `CACHE_SETTLE_MS` is
+set to 3000 ms accordingly, favoring the failure mode with a real cost.
+
+A stream that opens during the settle window is `ready()` from `SUBACK`
+onward, so it receives `deleted` frames alongside everyone else — including
+for topics it never saw a message for, since it wasn't connected before the
+drop. A topic already marked deleted while still connected also stays in
+the cache as an empty entry (a separate, tracked backlog item), so it is
+counted as missing at the next reconnect and announced deleted a second
+time; harmless, since the frame is advisory.
+
 ## Payloads stay bytes
 
 A payload is a `Buffer` from the moment it is read, whether from a `POST`

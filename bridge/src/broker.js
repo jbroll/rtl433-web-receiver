@@ -15,12 +15,9 @@ const DOLLAR_TOPICS = ['$tz']
 // so a blip answers 204 late rather than a false 503.
 export const ECHO_TIMEOUT_MS = 5000
 
-// MQTT 3.1.1 has no signal for "the retained replay after this SUBACK is
-// done"; a broker is free to send it before or after. This is a quiet-period
-// guess: once no message has arrived for this long, whatever from the old
-// cache is still missing is announced departed. A topic slower than this to
-// replay is briefly reported deleted and then corrected by its own arrival.
-export const CACHE_SETTLE_MS = 200
+// A quiet-period guess for when retained replay has finished; see
+// docs/architecture.md, "Announcing departed topics on reconnect".
+export const CACHE_SETTLE_MS = 3000
 
 export function connectBroker({
   url,
@@ -83,11 +80,9 @@ export function connectBroker({
   let up = false
   let ready = false
 
-  // Set from the previous connection's cache on every 'connect', and
-  // consumed once by announceDeparted below; null between the two. Kept as
-  // an object so a settle timer left over from a connection that dropped
-  // again before it fired can tell it is stale rather than announcing for
-  // the wrong cycle.
+  // Set from the previous connection's cache on every 'connect', consumed
+  // once by announceDeparted; null between the two. Kept as an object so a
+  // stale settle timer can tell it is from an earlier cycle.
   let rebuild = null
 
   function announceDeparted(forRebuild) {

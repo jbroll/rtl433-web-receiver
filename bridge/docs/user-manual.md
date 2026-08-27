@@ -118,12 +118,14 @@ request is sent, so it must be percent-encoded as `%23`.
   `{"topic": "...", "payload": {...}}`. A topic the bridge is deleting
   carries `deleted: true` alongside `topic` and `payload`; a deleted topic is
   not replayed to a subscriber connecting afterward.
-- If the bridge's connection to the broker drops and comes back, an already
-  open stream is sent a `deleted` frame for each topic that matched its
-  filter before the drop and has no retained message on the broker after
-  it. This is a best-effort signal, not a guarantee: it can arrive a little
-  after other messages from the same reconnect, and a topic slow to replay
-  can be reported deleted and then immediately corrected by its own message.
+- If the bridge's connection to the broker drops and comes back, every
+  stream connected before the drop or opened during reconnect is sent a
+  `deleted` frame for each topic that matched its filter before the drop and
+  has no retained message on the broker after it — including one opened
+  during the reconnect itself, for topics it never saw. This is a
+  best-effort signal, not a guarantee: it can arrive a little after other
+  messages from the same reconnect, and a topic slow to replay can be
+  reported deleted and then immediately corrected by its own message.
 - `400` if any filter is malformed, or if more than `MAX_SSE_FILTERS` `f`
   parameters are given.
 - `503` if the bridge is not `ready` (not connected to the broker, or
