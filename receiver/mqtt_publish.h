@@ -50,6 +50,11 @@ bool        connectedAt(uint8_t i);
 const char* reasonAt(uint8_t i);
 
 #ifdef FAKE_SIGNALS
+// Host-test-only: whether setupConnection() enabled slot i (it got a server
+// and a grown buffer), independent of whether it is currently connected.
+// connectedAt() alone can't distinguish "never enabled" from "enabled but
+// not yet connected" since neither drives loop()/connectOnce().
+bool enabledAt(uint8_t i);
 // Host-test-only: the live connection objects behind slot i, ranked the same
 // as urlAt()/connectedAt(). References into a static array that is never
 // reallocated, so they stay valid across the begin() that reassigns i.

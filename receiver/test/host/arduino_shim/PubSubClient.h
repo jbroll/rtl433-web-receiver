@@ -11,6 +11,19 @@
 #define MQTT_MAX_PACKET_SIZE 256
 #endif
 
+// Matches PubSubClient.h's own #define; mqtt_publish.cpp's identical
+// #define (mqtt_publish.cpp:108) is a no-op redefinition since the values
+// agree.
+#ifndef MQTT_PUBLISH_IDLE_BUFFER_SIZE
+#define MQTT_PUBLISH_IDLE_BUFFER_SIZE 128
+#endif
+
+// From PubSubClient.h: room reserved at the front of the buffer for the
+// fixed header, ahead of the topic/payload publish() writes.
+#ifndef MQTT_MAX_HEADER_SIZE
+#define MQTT_MAX_HEADER_SIZE 5
+#endif
+
 // Host stand-in for PubSubClient: records every call mqtt_publish.cpp makes
 // instead of touching a socket. connect()'s outcome and setBufferSize()'s
 // failure are test-settable, since those are the two paths a host test can't
@@ -23,15 +36,17 @@ class PubSubClient {
   static bool failNextSetBufferSize;
 
   bool setBufferSize(uint16_t size) {
-    lastBufferSize = size;
     // teardown() also calls setBufferSize, shrinking back to the idle size;
     // only a growth call is what a real allocator could fail, so only that
     // consumes the flag, else an unrelated slot's teardown could eat it
     // before setupConnection() ever gets to the call under test.
-    if (failNextSetBufferSize && size > 128) {
+    if (failNextSetBufferSize && size > MQTT_PUBLISH_IDLE_BUFFER_SIZE) {
       failNextSetBufferSize = false;
       return false;
     }
+    // Only recorded on success, matching the real library's bufferSize field:
+    // a failed resize leaves the previous allocation (and its size) in place.
+    lastBufferSize = size;
     return true;
   }
   PubSubClient& setClient(WiFiClient& c) {
@@ -57,6 +72,11 @@ class PubSubClient {
   }
   void disconnect() {
     disconnectCalls++;
+    // Real disconnect() dereferences _client to write the DISCONNECT packet
+    // and stop() it; connected() (and so mqtt_publish.cpp's only caller of
+    // disconnect()) already requires a client, but guard here too rather
+    // than assume that invariant holds for every future caller.
+    if (client != nullptr) client->stop();
     _connected = false;
   }
   bool loop() {
@@ -66,16 +86,22 @@ class PubSubClient {
   bool publish(const char* topic, const char* payload, bool retained = true) {
     (void)retained;
     publishCalls++;
+    if (!connected()) return false;
+    // Same length test as PubSubClient::publish: too little buffer for the
+    // header, topic length prefix, topic, and payload sends nothing.
+    size_t topicLen = topic ? strlen(topic) : 0;
+    size_t plength  = payload ? strlen(payload) : 0;
+    if (lastBufferSize < MQTT_MAX_HEADER_SIZE + 2 + topicLen + plength) return false;
     // The caller's topic/payload buffers are typically stack locals, gone by
     // the time a test reads these back, so copy rather than keep a pointer.
     _lastPublishTopic   = topic ? topic : "";
     _lastPublishPayload = payload ? payload : "";
     lastPublishTopic    = _lastPublishTopic.c_str();
     lastPublishPayload  = _lastPublishPayload.c_str();
-    return _connected;
+    return true;
   }
-  bool connected() { return _connected; }
-  int  state() { return _connected ? 0 : -2; }
+  bool connected() { return client != nullptr && _connected; }
+  int  state() { return connected() ? 0 : -2; }
 
   // Test-only: simulate a live connection without a real handshake, or set
   // whether the next connect() call succeeds.
@@ -112,6 +138,11 @@ class PubSubClient {
  private:
   bool connectImpl(const char* id) {
     (void)id;
+    // Real connect() dereferences _client unconditionally; a slot that
+    // bailed out of setupConnection() before setClient() never reaches a
+    // real connect() call in production, so treat it as a call that can't
+    // succeed rather than crash.
+    if (client == nullptr) return false;
     connectCalls++;
     _connected = willConnectForTest;
     return _connected;

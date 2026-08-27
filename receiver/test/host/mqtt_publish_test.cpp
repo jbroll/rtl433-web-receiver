@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <ArduinoJson.h>
+#include <WiFi.h>
 
 #include "mqtt_publish.h"
 #include "mqtt_publish_store.h"
@@ -107,9 +108,19 @@ static void scenario_removeMiddle() {
   mqtt_publish_store::add("mqtt://b3.example:1883", "t3");
   mqtt_publish::begin("test-client");
   int i1 = findByUrl("mqtt://b1.example:1883");
+  int i2 = findByUrl("mqtt://b2.example:1883");
   int i3 = findByUrl("mqtt://b3.example:1883");
+  check("(b) all three initial brokers are found", i1 >= 0 && i2 >= 0 && i3 >= 0);
+  // A regression that lost track of a broker would return -1 here; cast to
+  // uint8_t that becomes 255 and indexes _slotOrder out of bounds instead of
+  // failing this check cleanly, so bail rather than let capture()/mqttAt()
+  // run on a bogus index.
+  if (i1 < 0 || i2 < 0 || i3 < 0) return;
   ConnHandle h1 = capture((uint8_t)i1);
   ConnHandle h3 = capture((uint8_t)i3);
+  // The slot about to be removed: captured now so its teardown can be
+  // checked below, since findByUrl() won't find it once removed.
+  PubSubClient& removedMqtt = mqtt_publish::mqttAt((uint8_t)i2);
 
   mqtt_publish_store::remove("mqtt://b2.example:1883");
   mqtt_publish::begin("test-client");
@@ -120,6 +131,8 @@ static void scenario_removeMiddle() {
         !wasTornDown(h3));
   check("(b) the removed broker no longer appears in the active list",
         findByUrl("mqtt://b2.example:1883") < 0);
+  check("(b) teardown shrinks the removed broker's buffer back to idle size",
+        removedMqtt.lastBufferSize == 128);
 }
 
 static void scenario_tokenChanged() {
@@ -171,7 +184,7 @@ static void scenario_invalidUrl() {
   int bad = findByUrl("mqtt://host");
   check("(e) an unparseable url is still counted", bad >= 0);
   check("(e) it is reported disabled with a reason",
-        bad >= 0 && !mqtt_publish::connectedAt((uint8_t)bad) &&
+        bad >= 0 && !mqtt_publish::enabledAt((uint8_t)bad) &&
             mqtt_publish::reasonAt((uint8_t)bad) != nullptr);
   check("(e) it was never handed a server (setupConnection bailed before setServer)",
         bad >= 0 && mqtt_publish::mqttAt((uint8_t)bad).setServerCalls == 0);
@@ -205,7 +218,7 @@ static void scenario_bufferAllocFailure() {
   int i = findByUrl("mqtt://oom.example:1883");
   check("(oom) a slot whose buffer alloc fails is still counted", i >= 0);
   check("(oom) it is disabled, not enabled",
-        i >= 0 && !mqtt_publish::connectedAt((uint8_t)i));
+        i >= 0 && !mqtt_publish::enabledAt((uint8_t)i));
   check("(oom) its reason is the out-of-memory one",
         i >= 0 && mqtt_publish::reasonAt((uint8_t)i) != nullptr &&
             strcmp(mqtt_publish::reasonAt((uint8_t)i), "out of memory growing publish buffer") == 0);
@@ -243,6 +256,39 @@ static void scenario_aliasPayloadEscaping() {
         err == DeserializationError::Ok && doc.is<const char*>());
 }
 
+// loop()'s only paths a host test can otherwise never reach: gated on
+// WiFi.status(), and connectOnce()'s connect-then-backoff cycle. Also the
+// only scenario that exercises WiFiClass and PubSubClient's
+// willConnectForTest.
+static void scenario_loopDrivesConnect() {
+  resetBaseline();
+  mqtt_publish_store::add("mqtt://live.example:1883", "t1");
+  mqtt_publish::begin("test-client");
+  int i = findByUrl("mqtt://live.example:1883");
+  check("(g) the broker is found", i >= 0);
+  if (i < 0) return;
+  PubSubClient& mqtt = mqtt_publish::mqttAt((uint8_t)i);
+  mqtt.willConnectForTest = true;
+
+  WiFi.setStatusForTest(WL_DISCONNECTED);
+  mqtt_publish::loop();
+  check("(g) loop() takes no action while WiFi is down",
+        mqtt.connectCalls == 0 && !mqtt_publish::connectedAt((uint8_t)i));
+
+  WiFi.setStatusForTest(WL_CONNECTED);
+  mqtt_publish::loop();
+  check("(g) loop() connects once WiFi comes up", mqtt.connectCalls == 1);
+  check("(g) a successful connect is reflected in connectedAt",
+        mqtt_publish::connectedAt((uint8_t)i));
+
+  mqtt.setConnectedForTest(false);
+  mqtt_publish::loop();
+  check("(g) a dropped connection is not retried before the backoff window elapses",
+        mqtt.connectCalls == 1);
+
+  WiFi.setStatusForTest(WL_CONNECTED);
+}
+
 int main() {
   scenario_addThird();
   scenario_removeMiddle();
@@ -252,6 +298,7 @@ int main() {
   scenario_exactFit();
   scenario_bufferAllocFailure();
   scenario_aliasPayloadEscaping();
+  scenario_loopDrivesConnect();
 
   printf("%s\n", failures == 0 ? "mqtt_publish: PASS" : "mqtt_publish: FAIL");
   return failures == 0 ? 0 : 1;

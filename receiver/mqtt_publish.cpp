@@ -268,6 +268,10 @@ static void teardown(Connection& c) {
   }
   c.plainClient.stop();
   c.secureClient.stop();
+  // Return ignored: a failed shrink (realloc returning NULL) leaves the
+  // prior, larger buffer in place rather than freeing it, so this slot just
+  // costs more idle heap than architecture.md's "a few hundred bytes"
+  // until the next successful setBufferSize() call, not a leak or a crash.
   c.mqtt.setBufferSize(MQTT_PUBLISH_IDLE_BUFFER_SIZE);
   c.enabled  = false;
   c.reason   = nullptr;
@@ -458,6 +462,7 @@ bool connectedAt(uint8_t i) { return i < _connCount && _conn[_slotOrder[i]].mqtt
 const char* reasonAt(uint8_t i) { return i < _connCount ? _conn[_slotOrder[i]].reason : nullptr; }
 
 #ifdef FAKE_SIGNALS
+bool enabledAt(uint8_t i) { return i < _connCount && _conn[_slotOrder[i]].enabled; }
 PubSubClient&     mqttAt(uint8_t i) { return _conn[_slotOrder[i]].mqtt; }
 WiFiClient&       plainClientAt(uint8_t i) { return _conn[_slotOrder[i]].plainClient; }
 WiFiClientSecure& secureClientAt(uint8_t i) { return _conn[_slotOrder[i]].secureClient; }
