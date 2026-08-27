@@ -11,69 +11,20 @@
 const fs = require("fs");
 const path = require("path");
 
-// Port of Python's shlex.split(value, comments=False) in posix mode, matched
-// token-for-token against load_env.py so the two parsers must agree — change
-// them together.
-function shlexSplit(s) {
-  const tokens = [];
-  let token = null;
-  let state = " "; // " " = between tokens, "a" = in word, '"'/"'" = in quote, "\\" = escaping
-  let quoteState = null; // the quote char we're escaping inside of, if any
-  const escape = "\\";
-  const quotes = "'\"";
-
-  for (let i = 0; i <= s.length; i++) {
-    const c = i < s.length ? s[i] : null;
-    if (state === " ") {
-      if (c === null) break;
-      if (/\s/.test(c)) continue;
-      if (c === escape) {
-        state = escape;
-        quoteState = "a";
-      } else if (quotes.includes(c)) {
-        state = c;
-        token = token ?? "";
-      } else {
-        token = c;
-        state = "a";
-      }
-    } else if (state === "'" || state === '"') {
-      if (c === null) break; // unterminated quote: take what we have (diverges from Python's error)
-      if (c === state) {
-        state = "a";
-      } else if (c === escape && state === '"') {
-        state = escape;
-        quoteState = '"';
-      } else {
-        token += c;
-      }
-    } else if (state === escape) {
-      if (c === null) break;
-      if (quoteState === '"' && c !== "\\" && c !== '"') token += "\\";
-      token += c;
-      state = quoteState;
-    } else if (state === "a") {
-      if (c === null) {
-        tokens.push(token);
-        token = null;
-        break;
-      }
-      if (/\s/.test(c)) {
-        tokens.push(token);
-        token = null;
-        state = " ";
-      } else if (c === escape) {
-        state = escape;
-        quoteState = "a";
-      } else if (quotes.includes(c)) {
-        state = c;
-      } else {
-        token += c;
-      }
-    }
-  }
-  if (token !== null) tokens.push(token);
-  return tokens;
+// Matched against load_env.py on the value shapes that matter for a credential:
+// trimmed, unquoted, or wrapped in one matching pair of quotes.
+//
+// This is NOT a shlex port: it does not handle multiple quoted segments,
+// escapes outside quotes, or trailing content after a quoted value (e.g.
+// `"abc def" # trailing`). OTA_TOKEN is a single credential token, not a
+// shell command line, so those shapes are out of scope.
+function parseEnvValue(s) {
+  const trimmed = s.trim();
+  const match = /^(["'])([\s\S]*)\1$/.exec(trimmed);
+  if (!match) return trimmed;
+  const [, quote, inner] = match;
+  if (quote === '"') return inner.replace(/\\(["\\])/g, "$1");
+  return inner;
 }
 
 function readEnvToken() {
@@ -86,7 +37,7 @@ function readEnvToken() {
     if (line.startsWith("export ")) line = line.slice(7);
     const [key, ...rest] = line.split("=");
     if (key.trim() !== "OTA_TOKEN") continue;
-    const value = shlexSplit(rest.join("=")).join(" ");
+    const value = parseEnvValue(rest.join("="));
     return value || null;
   }
   return null;
