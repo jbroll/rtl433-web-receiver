@@ -36,6 +36,29 @@ npm ci --prefix dashboard
 bin/test.sh
 ```
 
+## CI
+
+`ci/android` (run by simple-ci on the `gpu` host from a worktree of this repo) runs
+`receiver/test/host/run.sh` alongside the rest of the suite. It needs PlatformIO on
+`PATH` from a dedicated virtualenv at `~/.venv/platformio` on that host — not the
+system Python. Set it up once:
+
+```bash
+python3 -m venv ~/.venv/platformio
+~/.venv/platformio/bin/pip install platformio
+```
+
+The job fails loudly if `~/.venv/platformio/bin/pio` is missing. The first `pio run`
+on a host downloads the ESP32 toolchain and every `lib_deps` entry (ArduinoJson,
+ArduinoLog, PubSubClient, rtl_433_ESP, Adafruit BMP280 Library); warm that cache by
+hand after setting up the venv so the first CI run doesn't time out:
+
+```bash
+export PATH="$HOME/.venv/platformio/bin:$PATH"
+npm ci --prefix dashboard   # build_dashboard.py embeds a built dashboard into the firmware
+(cd receiver && pio run -e esp32s3-generic && pio run -e esp32s3-generic-fakesignals)
+```
+
 ## Worktrees and merges
 
 Feature work happens in isolated worktrees. Each worktree is a named branch that splits from `main`.

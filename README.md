@@ -28,4 +28,3 @@ shortcut that skips it.
 - [`docs/quickstart.md`](docs/quickstart.md) — shortest path to a signal on the page
 - [`docs/architecture.md`](docs/architecture.md) — how the four fit together
 - [`ROADMAP.md`](ROADMAP.md) — goals and sequencing for the whole system
-- [`docs/backlog.md`](docs/backlog.md) — issues spanning sub-projects

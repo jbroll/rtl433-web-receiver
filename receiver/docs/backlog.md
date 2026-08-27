@@ -1,8 +1,7 @@
 # Backlog
 
 Known gaps in the receiver, in rough priority order. None break it as it stands; each was
-found during review or hardware testing and deliberately left. Anything spanning
-sub-projects is in [`../../docs/backlog.md`](../../docs/backlog.md).
+found during review or hardware testing and deliberately left.
 
 ## The provisioning portal is an open AP that hands out an OTA token
 

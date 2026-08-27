@@ -5,12 +5,14 @@ set -euo pipefail
 
 export JAVA_HOME=/usr/lib/jvm/openjdk21
 export ANDROID_HOME="$HOME/android-sdk"
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+PIO_VENV="$HOME/.venv/platformio"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PIO_VENV/bin:$PATH"
 
 WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$WORKTREE"
 
 command -v adb >/dev/null || { echo "[ci/android] adb not found" >&2; exit 1; }
+[ -x "$PIO_VENV/bin/pio" ] || { echo "[ci/android] $PIO_VENV/bin/pio not found; see docs/development.md" >&2; exit 1; }
 
 echo "[ci/android] dashboard: npm ci"
 npm ci --prefix dashboard
@@ -27,9 +29,12 @@ npm ci --prefix bridge
 echo "[ci/android] dashboard: playwright install chromium"
 npx --prefix dashboard playwright install chromium
 
-# bin/test.sh also runs receiver/test/host/run.sh, which needs PlatformIO's
-# ArduinoJson headers (fetched by `pio run`) and `pio` on PATH; neither is on
-# this host, so run each suite bin/test.sh would run except that one.
+echo "[ci/android] receiver: pio run (fetches ArduinoJson into .pio/libdeps)"
+(cd receiver && pio run -e esp32s3-generic)
+
+echo "[ci/android] receiver: host suite (test/host/run.sh)"
+(cd receiver && sh test/host/run.sh)
+
 echo "[ci/android] receiver: npm test (binding suite)"
 (cd receiver && npm test)
 

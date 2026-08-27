@@ -12,8 +12,8 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
   binding's source-only subset, SSE, and an embedded build of the dashboard.
   The host suite (`receiver/test/host/run.sh`, twelve firmware modules
   including `signal_store` and `alias_store` into thirteen test binaries)
-  runs on a developer's machine only. No CI job runs it (see
-  `docs/backlog.md`). The deployed board runs the current build and reports
+  runs in `ci/android` on the `gpu` host, and on a developer's machine. The
+  deployed board runs the current build and reports
   it as `build` in its `Receiver/0` telemetry, which is what makes live
   checks against it meaningful. The self-test's own PASS/FAIL lines are
   still unread on hardware: they print only under `FAKE_SIGNALS`, and the
