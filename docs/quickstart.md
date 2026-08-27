@@ -27,3 +27,8 @@ Run every sub-project's test suite in one command:
 ```
 bin/test.sh
 ```
+
+`receiver/test/host/run.sh`, the first suite it runs, needs `pio` on `PATH`
+and a prior `pio run` in `receiver/` to have fetched the ArduinoJson headers;
+it ends by building the firmware itself. See
+[`receiver/docs/development.md`](../receiver/docs/development.md).
