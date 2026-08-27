@@ -56,6 +56,9 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     -I"$shim" -I"$root" \
     -o "$out/units_store_test" "$root/units_store.cpp" "$root/test/host/units_store_test.cpp"
 "$out/units_store_test"
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -I"$shim" -I"$root" \
+    -o "$out/ota_token_store_test" "$root/ota_token_store.cpp" "$root/test/host/ota_token_store_test.cpp"
+"$out/ota_token_store_test"
 # tz_store.cpp has no FAKE_SIGNALS selfTest; this drives its public API
 # (begin/offsetMinutes/set) directly, same shape as topic_test/radio_health_test.
 g++ -std=c++17 -Wall -Wextra -Werror -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \

@@ -222,7 +222,10 @@ POST body.
 
 The bearer token is set from the SoftAP captive portal's "Update token"
 field (see `docs/install.md`) or from the `.env` `OTA_TOKEN` build flag if
-none has been set through the portal yet. A missing or wrong
+none has been set through the portal yet. The portal's "Clear stored update
+token" checkbox removes a stored token, falling back to the `OTA_TOKEN`
+build flag if the firmware carries one, or to OTA disabled if it doesn't;
+there is no route to clear it from the network. A missing or wrong
 `Authorization` header is `401`; no token configured at all — neither
 stored nor `.env` — is `404`, same as any other unrecognized route. A write
 failure is `500`; a truncated transfer (connection dropped mid-upload) is

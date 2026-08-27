@@ -534,6 +534,25 @@ static void handleMqttRemovePost() {
 static bool _otaAuthorized = false;
 static bool _otaStarted    = false;
 
+// Constant-time: avoids String::operator=='s early-exit on the first
+// differing byte, and the "Bearer " + token() concatenation's two allocations.
+static bool bearerTokenMatches(const String& header, const char* expectedToken) {
+  static const char prefix[]   = "Bearer ";
+  size_t            prefixLen  = sizeof(prefix) - 1;
+  size_t            tokenLen   = strlen(expectedToken);
+  if (header.length() != prefixLen + tokenLen) {
+    return false;
+  }
+  uint8_t diff = 0;
+  for (size_t i = 0; i < prefixLen; i++) {
+    diff |= (uint8_t)header[i] ^ (uint8_t)prefix[i];
+  }
+  for (size_t i = 0; i < tokenLen; i++) {
+    diff |= (uint8_t)header[prefixLen + i] ^ (uint8_t)expectedToken[i];
+  }
+  return diff == 0;
+}
+
 static void handleUpdateUpload() {
   HTTPUpload& upload = _server.upload();
   if (upload.status == UPLOAD_FILE_START) {
@@ -542,8 +561,7 @@ static void handleUpdateUpload() {
       _otaAuthorized = false;
       return;
     }
-    String expected = String("Bearer ") + ota_token_store::token();
-    _otaAuthorized  = _server.header("Authorization") == expected;
+    _otaAuthorized = bearerTokenMatches(_server.header("Authorization"), ota_token_store::token());
     if (!_otaAuthorized) {
       Log.warning(F("OTA update: rejected, bad or missing token" CR));
       return;

@@ -120,40 +120,6 @@ the duration. Worse than the `CHUNK_BUDGET_MS` 1.5 s stall above, which is
 about a slow *reader*; this is about a slow or large *upload*, likely
 several seconds for a ~1.2 MB image over WiFi.
 
-## The stored OTA token is capped shorter than `.env`'s
-
-`OTA_TOKEN_STORE_MAX` (`ota_token_store.h:6`) is 33, which is 32 usable characters plus
-the NUL — not 32, and a fix that sets the constant to 32 would allow only 31. The `.env`
-on this machine holds a 48-character `OTA_TOKEN`, so `provisioning.cpp:178` rejects it
-with a 400 and nothing is stored: the board falls back to the compiled-in token and has no
-portal-settable token at all.
-
-`.env.example` and `install.md`'s `openssl rand -hex 16` both land on 32, so the local
-`.env` is the outlier. What makes this hard to diagnose is the portal's own
-`maxlength="32"` on the token field (`provisioning.cpp:137`): a 48-character paste is
-truncated by the browser before it is submitted, so the visible symptom is a silently
-shortened token rather than the 400 at all.
-
-The chosen fix is to raise `OTA_TOKEN_STORE_MAX` to 65, which fits any hex token up to 64
-characters, at 32 bytes of static RAM. It removes a class of confusing 400 and asks nobody
-to notice a length rule. `begin()` reads NVS into that buffer through `copyTruncated`, so
-an already-stored 32-character token still loads after the cap is raised — verify that on
-a board that had one set before flashing one that does not.
-
-## No way to clear or disable a set OTA token
-
-`ota_token_store` has no `clear()`, and `set()` rejects an empty string, so once a token
-is stored there is no path back to the "OTA disabled" (`404`) state short of erasing NVS.
-The portal stores a submitted token only when it is non-empty (`provisioning.cpp:188`), so
-clearing the field leaves the old token in place rather than removing it.
-
-`clear()` itself is a few lines: `_prefs.remove("token")` and empty `_stored`. What needs
-care is where it is reachable from. Not an HTTP route on the live device — anything that
-can reach `/$update`'s neighbour could then turn OTA off — so it belongs behind the
-provisioning portal, where physical access is already implied. Note also that clearing the
-NVS token falls back to the `OTA_TOKEN` build macro rather than to disabled, so on a build
-carrying that macro `clear()` disables nothing.
-
 ## `POST /$mqtt/remove` returns 204 for a url it never removed
 
 `handleMqttRemovePost()` in `web_ui.cpp` calls `mqtt_publish_store::remove(url)` and
@@ -191,14 +157,6 @@ future call site changes that assumption.
 
 ## Smaller items
 
-- The OTA token is compared with Arduino `String::operator==`
-  (`web_ui.cpp:545-546`), which returns on the first differing byte. Over a LAN
-  with a TCP handshake per request, jitter swamps a one-byte delta, so this is
-  not practically exploitable; it is worth a constant-time compare only because
-  it guards the firmware-flash path. The replacement checks the lengths
-  separately and then ORs the byte differences over a fixed length, which also
-  drops the two `String` allocations the current
-  `String("Bearer ") + token()` makes on every request.
 - Every `mqtts://` bridge is pinned to the ISRG Root X1 CA with no way to
   configure another; a broker not chained to Let's Encrypt (a commercial cloud
   broker, a self-signed LAN broker) will fail its handshake silently, showing

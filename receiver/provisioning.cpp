@@ -134,10 +134,18 @@ static void handleRoot() {
       "<label>Password<br>"
       "<input type=\"password\" name=\"pass\" maxlength=\"64\"></label><br><br>"
       "<label>Update token<br>"
-      "<input type=\"text\" id=\"ota_token\" name=\"token\" maxlength=\"32\" value=\"";
+      "<input type=\"text\" id=\"ota_token\" name=\"token\" maxlength=\"64\" value=\"";
   page += token;
   page +=
       "\"><button type=\"button\" onclick=\"copyToken()\">Copy</button></label><br><br>"
+      "<label><input type=\"checkbox\" name=\"clear_token\" value=\"1\"> Clear stored "
+      "update token"
+#ifdef OTA_TOKEN
+      " (falls back to the build's compiled-in token, not disabled)"
+#else
+      " (disables OTA until a new one is set)"
+#endif
+      "</label><br><br>"
       "<button type=\"submit\">Save and connect</button>"
       "</form>"
       "<script>"
@@ -162,6 +170,7 @@ static void handleSave() {
   String pass = _server.arg("pass");
   String token = _server.arg("token");
   token.trim();
+  bool clearToken = _server.arg("clear_token") == "1";
 
   if (ssid.length() == 0 || ssid.length() >= WIFI_STORE_SSID_MAX) {
     _server.send(400, "text/plain", "Choose a network and a password that fits.");
@@ -185,7 +194,9 @@ static void handleSave() {
     return;
   }
 
-  if (token.length() > 0 && !ota_token_store::set(token.c_str())) {
+  if (clearToken) {
+    ota_token_store::clear();
+  } else if (token.length() > 0 && !ota_token_store::set(token.c_str())) {
     // Non-fatal: WiFi is the essential part of this form. A failed token
     // save just leaves OTA on its prior token (stored, or .env), same as
     // leaving the field blank.

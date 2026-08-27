@@ -63,6 +63,14 @@ bool set(const char* t) {
   return false;
 }
 
+bool clear() {
+  _stored[0] = '\0';
+  if (!_open) {
+    return false;
+  }
+  return _prefs.remove("token");
+}
+
 #ifdef FAKE_SIGNALS
 static bool check(const char* what, bool ok) {
   Log.notice(F("ota_token_store selfTest %s: %s" CR), what, ok ? "PASS" : "FAIL");
@@ -106,6 +114,11 @@ bool selfTest() {
               validToken("0123456789abcdef0123456789abcdef"));
   ok &= check("a rejected set leaves the prior token in place",
               strcmp(token(), "0123456789abcdef0123456789abcdef") == 0);
+  ok &= check("submitting an empty token leaves the prior token in place",
+              !set("") && strcmp(token(), "0123456789abcdef0123456789abcdef") == 0);
+
+  clear();
+  ok &= check("clear empties a stored token", _stored[0] == '\0');
 
   copyTruncated(_stored, sizeof(_stored), saved);
   _open = saved_open;
