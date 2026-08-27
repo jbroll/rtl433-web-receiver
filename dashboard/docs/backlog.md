@@ -61,14 +61,6 @@
   point. Nothing shows which station, or how far.
 - Moonrise and moonset are found by sampling altitude every ten minutes and
   interpolating, so they are good to a couple of minutes, not seconds.
-- `moonTimes` in `astro.js` starts its scan window at `zoneDayStart(date, zone) -
-  offsetMinutes(date, zone) * 60000`, using the offset at the instant passed in rather
-  than the offset at true local midnight. Across a DST transition the two differ by an
-  hour, so the window can start up to about 24 hours from true local midnight instead of
-  the 14 the comment discloses. Confirmed wrong: New York (`America/New_York`) reports a
-  real moonset as `null` on both 2027-11-06 and 2027-11-07, the DST transition day and the
-  one before it. Self-corrects the day after; happens twice a year per zone, at its DST
-  transitions.
 - "Use my location" cannot work on the page the receiver serves, because plain
   http on a LAN address is not a secure context. The automated suite cannot
   cover that branch, since the harness serves on 127.0.0.1, which counts as

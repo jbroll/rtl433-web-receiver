@@ -3,7 +3,7 @@
 // one direction, the dawn is the first and the dusk the last, so each belongs
 // to the same night as the day's own sunrise and sunset.
 
-import { offsetMinutes, zoneFormatter } from './zone.js'
+import { zoneFormatter } from './zone.js'
 
 const RAD = Math.PI / 180
 const DAY = 86400000
@@ -29,14 +29,6 @@ function zoneDateKey (date, zone) {
   const p = Object.create(null)
   for (const { type, value } of parts) p[type] = value
   return `${p.year}-${p.month}-${p.day}`
-}
-
-// UTC midnight of the zone-local calendar day `date` falls on -- not the
-// zone's own midnight. moonTimes anchors to this and shifts back.
-function zoneDayStart (date, zone) {
-  const key = zoneDateKey(date, zone)
-  const [y, mo, d] = key.split('-').map(Number)
-  return Date.UTC(y, mo - 1, d)
 }
 
 // The first instant whose zone-local date is y-mo-d. Bisected rather than
@@ -229,7 +221,7 @@ function moonPos (t) {
   return { lambda, beta, dist: 385000.56 + sr / 1000, ra, dec }
 }
 
-function moonAltitude (date, lat, lon) {
+export function moonAltitude (date, lat, lon) {
   const { ra, dec } = moonPos(century(date))
   const gmst = norm(280.46061837 + 360.98564736629 * (julianDay(date) - 2451545))
   const h = gmst + lon - ra
@@ -257,7 +249,7 @@ export function moonPhase (date) {
 // This scans a fixed window rather than solving a formula, so the window
 // itself has to start at local midnight, not be shifted after the fact.
 export function moonTimes (date, lat, lon, zone = 'UTC') {
-  const start = zoneDayStart(date, zone) - offsetMinutes(date, zone) * 60000
+  const [start] = dayWindow(date, zone)
   const step = 600000
   const steps = DAY / step
   let rise = null, set = null, lo = Infinity, hi = -Infinity

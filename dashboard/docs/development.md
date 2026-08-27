@@ -21,15 +21,16 @@ before running the bridge if `bridge/public/` doesn't exist yet.
 npm test
 ```
 
-This runs `node --test test/*.test.js`, then `playwright test`: 295 node
+This runs `node --test test/*.test.js`, then `playwright test`: 297 node
 tests against the pure modules, then 228 browser tests in
 `test/*.spec.js` that drive a built page with Playwright. Either suite can
 be run alone with `node --test test/*.test.js` or `npx playwright test`.
 
 `test/astro-sweep.js` is not part of either suite. It sweeps two years of
-local days at 44 sites against an independent bisection of solar altitude and
-prints wrong-day, spurious, missed and timing-error counts, which takes about
-five minutes:
+local days at 44 sites against an independent bisection of solar altitude,
+and moon rise/set against `moonAltitude` over the same independently
+computed local-day windows, printing wrong-day, spurious, missed and
+timing-error counts for both; this takes several minutes:
 
 ```
 node test/astro-sweep.js [--module ../src/astro.js] [--years 2026,2027]

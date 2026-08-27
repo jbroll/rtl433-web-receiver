@@ -385,6 +385,30 @@ test('the Santiago 24:00 spring-forward days are bounded 24 hours apart in real 
   assert.equal(end - mid, 23 * 3600000, 'the transition day is not 23 hours')
 })
 
+// Regression for the moonTimes scan window: it anchored to the offset at the
+// instant passed in rather than at true local midnight, so on 2027-11-07 --
+// New York's fall-back day, 25 hours long -- the window started up to an hour
+// late and cut off a moonset that falls in its first hour.
+test('moonset on the New York DST fall-back day is no longer dropped', () => {
+  const lat = 40.7128, lon = -74.0060, zone = 'America/New_York'
+  const nov7 = localMidnight(2027, 11, 7, zone) + 12 * 3600000
+  const m = moonTimes(new Date(nov7), lat, lon, zone)
+  near(m.set, utc(2027, 11, 7, 4, 51), 2 * MIN, 'moonset')
+})
+
+// The ordinary day before the transition (2026-11-06, a plain 24-hour day)
+// is unaffected by the window-anchor bug: an independent bisection of true
+// moon altitude across its exact local window finds no falling crossing --
+// the real moonset lands 51 minutes into the next day, the same kind of
+// drift the Kolkata case above exercises. This is not the bug being fixed.
+test('moonset stays legitimately absent on the ordinary day before the transition', () => {
+  const lat = 40.7128, lon = -74.0060, zone = 'America/New_York'
+  const nov6 = localMidnight(2027, 11, 6, zone) + 12 * 3600000
+  const m = moonTimes(new Date(nov6), lat, lon, zone)
+  assert.ok(m.rise instanceof Date, `rise was ${m.rise}`)
+  assert.equal(m.set, null, `set was ${m.set}`)
+})
+
 const SITES = [
   [0, 0], [51.5, -0.1], [-33.87, 151.21], [40, -105], [35.7, 139.7],
   [-23.5, -46.6], [59.3, 18.1], [-41.3, 174.8], [19.4, -99.1], [55.8, 37.6]

@@ -18,7 +18,7 @@ const arg = (name, dflt) => {
 const modulePath = arg('module', '../src/astro.js')
 const years = arg('years', '2026,2027').split(',').map(Number)
 
-const { sunEvents, solarPosition } = await import(modulePath)
+const { sunEvents, solarPosition, moonTimes, moonAltitude } = await import(modulePath)
 
 // Zeniths as altitudes, with the direction each event crosses in.
 const EVENTS = [
@@ -193,3 +193,75 @@ if (worst) console.log(`worst         ${worst.err.toFixed(1)}s  ${worst.name} ${
 if (counters) for (const [k, v] of Object.entries(counters)) console.log(`counter ${k}  ${v}`)
 const ranked = [...worstPerSite].sort((a, b) => b[1].err - a[1].err).slice(0, 8)
 for (const [name, w] of ranked) console.log(`  ${name.padEnd(16)} ${w.err.toFixed(1)}s  ${w.event} ${w.key}`)
+
+// Moon: same refMidnight window, moonAltitude straight from the module under
+// test (only the window boundary is independent here, not the lunar
+// formula) so this catches a window-anchor bug like the one it was added
+// for -- moonTimes anchoring its scan to the offset at the instant passed in
+// rather than at true local midnight -- without re-deriving lunar positions.
+const MOON_HORIZON = 0.125
+function refMoonCrossing (from, to, lat, lon, dir) {
+  const step = 60000
+  let prevT = from
+  let prev = moonAltitude(new Date(from), lat, lon) - MOON_HORIZON
+  for (let t = from + step; t <= to; t = Math.min(t + step, to)) {
+    const alt = moonAltitude(new Date(t), lat, lon) - MOON_HORIZON
+    if (dir === 1 ? (prev <= 0 && alt > 0) : (prev > 0 && alt <= 0)) {
+      let lo = prevT, hi = t
+      const loSign = prev <= 0
+      for (let i = 0; i < 40; i++) {
+        const mid = (lo + hi) / 2
+        if ((moonAltitude(new Date(mid), lat, lon) - MOON_HORIZON <= 0) === loSign) lo = mid
+        else hi = mid
+      }
+      return (lo + hi) / 2
+    }
+    prevT = t
+    prev = alt
+    if (t >= to) break
+  }
+  return null
+}
+
+let moonCalls = 0, moonEmitted = 0, moonWrongDay = 0, moonSpurious = 0, moonMissed = 0
+let moonOver60s = 0, moonWorst = null
+const moonWorstPerSite = new Map()
+
+for (const [name, lat, lon, zone] of SITES) {
+  for (const y of years) {
+    for (let day = Date.UTC(y, 0, 1); day < Date.UTC(y + 1, 0, 1); day += DAY) {
+      const d = new Date(day)
+      const [yy, mm, dd] = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()]
+      const key = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+      const from = refMidnight(yy, mm, dd, zone)
+      const to = refMidnight(yy, mm, dd + 1, zone)
+      const m = moonTimes(new Date(from + (to - from) / 2), lat, lon, zone)
+      moonCalls++
+      for (const [event, dir] of [['rise', 1], ['set', -1]]) {
+        const got = m[event]
+        const want = refMoonCrossing(from, to, lat, lon, dir)
+        if (got === null && want === null) continue
+        if (got === null) { moonMissed++; continue }
+        moonEmitted++
+        if (zoneKey(got.getTime(), zone) !== key) moonWrongDay++
+        if (want === null) { moonSpurious++; continue }
+        const err = Math.abs(got.getTime() - want) / 1000
+        if (err > 60) moonOver60s++
+        if (moonWorst === null || err > moonWorst.err) moonWorst = { err, name, event, key }
+        const w = moonWorstPerSite.get(name)
+        if (!w || err > w.err) moonWorstPerSite.set(name, { err, event, key })
+      }
+    }
+  }
+}
+
+console.log('')
+console.log(`moonTimes     ${moonCalls} calls`)
+console.log(`moon events   ${moonEmitted} emitted`)
+console.log(`moon wrong day ${moonWrongDay}`)
+console.log(`moon spurious ${moonSpurious} (emitted where the local window has no crossing)`)
+console.log(`moon missed   ${moonMissed} (crossing in the local window reported as null)`)
+console.log(`moon over 60s ${moonOver60s}`)
+if (moonWorst) console.log(`moon worst    ${moonWorst.err.toFixed(1)}s  ${moonWorst.name} ${moonWorst.event} ${moonWorst.key}`)
+const moonRanked = [...moonWorstPerSite].sort((a, b) => b[1].err - a[1].err).slice(0, 8)
+for (const [name, w] of moonRanked) console.log(`  ${name.padEnd(16)} ${w.err.toFixed(1)}s  ${w.event} ${w.key}`)
