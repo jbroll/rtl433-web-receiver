@@ -7,3 +7,4 @@ test-results
 playwright-report
 tools/core.bin
 tools/elf/
+.cache/
