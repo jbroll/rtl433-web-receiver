@@ -245,3 +245,9 @@ future call site changes that assumption.
   `selfTest()`, though `_total` and `_dropped` are maintained on every record. The
   Receiver telemetry card reports heap, uptime and recovery count but not decode or drop
   counts, which are the obvious two fields to add if that was the intent.
+- `test/binding-server.js`, the model of the firmware's wire format, checks alias name
+  length with JavaScript's `value.length` (UTF-16 code units), while `web_ui.cpp`'s
+  `handleAliasPost` checks `strlen(name)` (bytes). The two agree for ASCII but disagree for
+  any multi-byte alias: a name the model accepts as under `ALIAS_NAME_MAX` can be over the
+  firmware's byte limit, and vice versa. Not fixed here; noted as a model-versus-firmware
+  divergence.

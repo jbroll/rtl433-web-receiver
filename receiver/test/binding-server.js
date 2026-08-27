@@ -150,7 +150,7 @@ function startServer(opts = {}) {
         "Cache-Control": "no-store",
         Connection: "keep-alive",
       });
-      res.write("retry: 3000\n\n");
+      res.write("retry: 15000\n\n");
       const entry = { res: res, filters: filters };
       streams.add(entry);
       req.on("close", () => streams.delete(entry));

@@ -118,3 +118,8 @@
   no delete for the published value.
 - No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly — there's no
   host-testable seam for `web_ui.cpp` routes at all, receiver-wide.
+- The alias rename input has no `maxlength` and ignores the POST response. The
+  firmware's `ALIAS_NAME_MAX` (`receiver/alias_store.h`) is 32; a name of 32 or more
+  characters is silently rejected with a 400 that today's dashboard just drops, where it
+  previously stored the first 31 characters. Needs a `maxlength` on the input and a
+  response check that surfaces the failure.

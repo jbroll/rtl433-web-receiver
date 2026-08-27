@@ -144,6 +144,21 @@ test("+ matches one segment and # matches the remainder", async () => {
   all.close();
 });
 
+test("the SSE preamble's retry directive matches the firmware's reconnect delay", async () => {
+  server = await startServer({});
+  const raw = await new Promise((resolve, reject) => {
+    const req = http.get(server.url.replace(/\/$/, "") + "/events", res => {
+      res.setEncoding("utf8");
+      res.once("data", chunk => {
+        req.destroy();
+        resolve(chunk);
+      });
+    });
+    req.on("error", reject);
+  });
+  expect(raw).toContain("retry: 15000\n\n");
+});
+
 test("a filter matching nothing opens a stream that stays empty", async () => {
   server = await startServer({ devices: [ACURITE] });
   const s = await openStream(server.url, "?f=nobody/%2B/%2B");

@@ -32,7 +32,7 @@ class Frame : public Print {
   }
 
  protected:
-  Frame(char* buf, size_t cap) : _buf(buf), _cap(cap) {}
+  Frame(char* buf, size_t cap) : _buf(buf), _cap(cap) { _buf[0] = '\0'; }
 
  private:
   char*  _buf;

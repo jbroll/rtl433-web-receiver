@@ -39,6 +39,7 @@ static bool      _started = false;
 // A browser reading 32 payloads of 600 bytes in one pass overflows the socket's
 // send buffer and is dropped, so the replay is drained a few frames per loop().
 #define REPLAY_PER_LOOP    3
+#define REAP_INTERVAL_MS   100
 
 static WiFiClient    _sse[WEB_UI_SSE_CLIENTS];
 static uint32_t      _sseAttachedAt[WEB_UI_SSE_CLIENTS] = {0};
@@ -48,7 +49,6 @@ static int16_t       _replay[WEB_UI_SSE_CLIENTS] = {-1, -1, -1, -1, -1, -1};
 static uint32_t      _sseAttachCounter = 0;
 static unsigned long _lastKeepalive = 0;
 static unsigned long _lastReap = 0;
-#define REAP_INTERVAL_MS 100
 
 namespace {
 
@@ -904,7 +904,8 @@ void loop() {
     return;
   }
   // Ahead of the WiFi gate: a drop leaves every slot holding a dead client, and
-  // nothing would free them until four more viewers had each evicted one.
+  // nothing would free them until WEB_UI_SSE_CLIENTS - 1 more viewers had each
+  // evicted one.
   if (millis() - _lastReap >= REAP_INTERVAL_MS) {
     _lastReap = millis();
     reapClosedClients();
