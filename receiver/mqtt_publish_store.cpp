@@ -360,7 +360,11 @@ bool selfTest() {
   // it is the *order* of the two migrations that matters (see begin()'s own
   // comment), so a test that calls them separately in whatever order it
   // likes proves nothing about the order the firmware actually runs.
-  _open = _prefs.begin("mqtt", false);
+  // Tracked apart from _open (repeatedly toggled below, then restored to
+  // saved_open) so the real NVS content can be put back afterward
+  // regardless of what _open ends up holding.
+  _open          = _prefs.begin("mqtt", false);
+  bool nvsOpened = _open;
   if (_open) {
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
@@ -447,6 +451,19 @@ bool selfTest() {
   memcpy(_url, saved_url, sizeof(_url));
   memcpy(_token, saved_token, sizeof(_token));
   memcpy(_used, saved_used, sizeof(_used));
+  // The migrations above erased the real NVS entries (BLOB_KEY, LEGACY_KEY,
+  // the legacy url/token) and wrote test tables in their place; put the
+  // real bridges back so they survive past the next reboot rather than only
+  // until it, same as location_store/units_store's rawPersistForTest().
+  // persist() reads the now-restored _url/_token/_used and needs _open
+  // still true to write.
+  if (nvsOpened) {
+    _open = true;
+    persist();
+    _prefs.remove(LEGACY_KEY);
+    _prefs.remove("url");
+    _prefs.remove("token");
+  }
   _open = saved_open;
   Log.notice(F("mqtt_publish_store selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

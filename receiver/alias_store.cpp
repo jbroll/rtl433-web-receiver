@@ -328,8 +328,11 @@ bool selfTest() {
 
   // The rest runs against NVS: the two-key migration off the string this
   // used to be written as, its idempotency, the half-migrated case, and the
-  // dedup write skip.
-  _open = _prefs.begin("alias", false);
+  // dedup write skip. Tracked apart from _open (restored to saved_open
+  // below) so the real NVS content can be put back afterward regardless of
+  // what _open ends up holding.
+  _open          = _prefs.begin("alias", false);
+  bool nvsOpened = _open;
   if (_open) {
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
@@ -390,6 +393,15 @@ bool selfTest() {
   memcpy(_topics, saved_topics, sizeof(_topics));
   memcpy(_names, saved_names, sizeof(_names));
   memcpy(_used, saved_used, sizeof(_used));
+  // The round trip above erased the real NVS entries (BLOB_KEY, LEGACY_KEY)
+  // and wrote test tables in their place; put the real aliases back so they
+  // survive past the next reboot rather than only until it, same as
+  // location_store/units_store's rawPersistForTest(). persist() reads the
+  // now-restored _topics/_names/_used and needs _open still true to write.
+  if (nvsOpened) {
+    persist();
+    _prefs.remove(LEGACY_KEY);
+  }
   _open  = saved_open;
   Log.notice(F("alias selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;

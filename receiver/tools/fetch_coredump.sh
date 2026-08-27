@@ -30,5 +30,16 @@ if [ ! -f "$elf" ]; then
     exit 1
 fi
 
+# The esp32s3-generic-fakesignals environment builds to its own directory and
+# is never saved to tools/elf/ (see platformio.ini), but an ELF saved before
+# that separation, or one copied in by hand, could still carry FAKE_SIGNALS'
+# symbols; symbolicating a real dump against it produces plausible wrong
+# frames rather than an obvious failure.
+if strings "$elf" 2>/dev/null | grep -q '^fakeSignal'; then
+    echo "warning: $elf looks like a FAKE_SIGNALS build (has fakeSignal symbols)" >&2
+    echo "it will not symbolicate a real coredump correctly; rebuild esp32s3-generic and retry" >&2
+    exit 1
+fi
+
 "$esptool" --port "$port" --baud 921600 read_flash "$offset" "$size" "$here/core.bin"
 "$espcoredump" info_corefile "$here/core.bin" --elf "$elf"

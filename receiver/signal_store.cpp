@@ -178,11 +178,22 @@ static bool buildKey(const JsonDocument& doc, char* key, size_t keySize) {
     }
     copyTruncated(id, sizeof(id), idStr.c_str());
   } else if (doc["channel"].is<const char*>()) {
-    copyTruncated(id, sizeof(id), doc["channel"].as<const char*>());
+    const char* chStr = doc["channel"].as<const char*>();
+    if (strlen(chStr) >= sizeof(id)) {
+      return false;
+    }
+    copyTruncated(id, sizeof(id), chStr);
   } else if (doc["channel"].is<long>()) {
-    snprintf(id, sizeof(id), "%ld", doc["channel"].as<long>());
+    int n = snprintf(id, sizeof(id), "%ld", doc["channel"].as<long>());
+    if (n < 0 || (size_t)n >= sizeof(id)) {
+      return false;
+    }
   } else if (!doc["channel"].isNull()) {
-    copyTruncated(id, sizeof(id), doc["channel"].as<String>().c_str());
+    String chStr = doc["channel"].as<String>();
+    if (chStr.length() >= sizeof(id)) {
+      return false;
+    }
+    copyTruncated(id, sizeof(id), chStr.c_str());
   } else {
     // The binding requires an id segment; a device with one instance uses 0.
     strcpy(id, "0");
@@ -212,10 +223,15 @@ static void freeSlotSubs(int slotIdx) {
   }
 }
 
-static int claimSlot() {
+// evicted, if not NULL, reports which branch was taken: false when a free
+// slot was used (which increments _deviceCount), true when an existing
+// slot was evicted (which does not, since the count is unchanged). A caller
+// that undoes this claim must only decrement _deviceCount in the false case.
+static int claimSlot(bool* evicted = NULL) {
   for (int i = 0; i < SIGNAL_DEVICE_SLOTS; i++) {
     if (!_devices[i].used) {
       _deviceCount++;
+      if (evicted) *evicted = false;
       return i;
     }
   }
@@ -227,6 +243,7 @@ static int claimSlot() {
   }
   freeSlotSubs(oldest);
   memset(&_devices[oldest], 0, sizeof(DeviceSlot));
+  if (evicted) *evicted = true;
   return oldest;
 }
 
@@ -343,7 +360,10 @@ bool record(const char* payload, int rssi, bool isDecode) {
 
   // The frame embeds the payload as JSON rather than as an escaped string, so a
   // truncated one would be unparseable on the wire. Drop it instead, before any
-  // hook runs, so a message the store refuses is never published either.
+  // hook runs, so a message the store refuses is never published either. A
+  // hook can still grow doc past the limit after this check passes; that is
+  // handled below by falling back to this pre-hook serialization instead of
+  // storing whatever the post-hook serialize produced.
   if (measureJson(doc) > SIGNAL_PAYLOAD_MAX) {
     _dropped++;
 #ifdef FAKE_SIGNALS
@@ -353,8 +373,9 @@ bool record(const char* payload, int rssi, bool isDecode) {
   }
 
   bool newSlot = idx < 0;
+  bool newSlotEvicted = false;
   if (newSlot) {
-    idx = claimSlot();
+    idx = claimSlot(&newSlotEvicted);
     copyTruncated(_devices[idx].key, SIGNAL_KEY_MAX, key);
     _devices[idx].used = true;
   }
@@ -377,9 +398,15 @@ bool record(const char* payload, int rssi, bool isDecode) {
     if (subIdx < 0) {
       // The sub table was full and this slot has no sub of its own to evict;
       // undo the claim above rather than leave a slot with no payload.
+      // claimSlot() only incremented _deviceCount on the free-slot branch,
+      // not the eviction branch, so the undo must match: decrementing
+      // unconditionally would underflow the count when idx came from an
+      // eviction.
       if (newSlot) {
         _devices[idx].used = false;
-        _deviceCount--;
+        if (!newSlotEvicted) {
+          _deviceCount--;
+        }
         _seq[idx] = 0;
       }
       _dropped++;
@@ -387,12 +414,28 @@ bool record(const char* payload, int rssi, bool isDecode) {
     }
   }
 
+  DeviceSub& sub = _subs[subIdx];
+  // Captured before any hook runs: measureJson(doc) above already fits
+  // SIGNAL_PAYLOAD_MAX, so this always fits sub.payload and is always
+  // NUL-terminated. It is the fallback if a hook grows doc too far to
+  // reserialize below.
+  char preHookPayload[sizeof(sub.payload)];
+  serializeJson(doc, preHookPayload, sizeof(preHookPayload));
+
   for (uint8_t h = 0; h < _hookCount; h++) {
     _hooks[h](key, doc);
   }
 
-  DeviceSub& sub = _subs[subIdx];
-  serializeJson(doc, sub.payload, sizeof(sub.payload));
+  // serializeJson's return is the length it would have written; it only
+  // NUL-terminates when that length fits the buffer. A hook that grows doc
+  // past SIGNAL_PAYLOAD_MAX must not leave sub.payload truncated or
+  // unterminated, so fall back to the pre-hook serialization instead.
+  int n = serializeJson(doc, sub.payload, sizeof(sub.payload));
+  if (n < 0 || (size_t)n >= sizeof(sub.payload)) {
+    Log.warning(F("signal_store: hook grew %s past SIGNAL_PAYLOAD_MAX; "
+                   "storing the pre-hook payload" CR), key);
+    memcpy(sub.payload, preHookPayload, sizeof(sub.payload));
+  }
   sub.lastSeen = millis();
   slot.lastSeen = sub.lastSeen;
   sub.seq = _seq[idx] = ++_seqCounter;
@@ -739,6 +782,74 @@ bool selfTest() {
   }
 
   reset();
+  {
+    // C1: a hook (like device_hooks::rainHook adding rain_today_mm) can grow
+    // doc past SIGNAL_PAYLOAD_MAX after the pre-hook size check already
+    // passed. Calibrate a note so the pre-hook doc lands right at the
+    // ceiling, same as above, then attach a hook that adds ~22 bytes on top
+    // of it — enough to push the post-hook serialization to exactly
+    // SIGNAL_PAYLOAD_MAX + 1 (601), the buffer size, where ArduinoJson
+    // writes no NUL terminator at all.
+    char calNote[SIGNAL_PAYLOAD_MAX];
+    int  bestLen = 0;
+    for (int n = 1; n < SIGNAL_PAYLOAD_MAX; n++) {
+      memset(calNote, 'A', n);
+      calNote[n] = '\0';
+      JsonDocument calib;
+      calib["model"] = "Grower";
+      calib["id"] = 1;
+      calib["note"] = calNote;
+      char calStamp[24];
+      if (isoTime(calStamp, sizeof(calStamp))) {
+        calib["time"] = calStamp;
+      }
+      calib["rssi"] = -70;
+      calib["count"] = 1;
+      size_t measured = measureJson(calib);
+      if (measured > SIGNAL_PAYLOAD_MAX) break;
+      bestLen = n;
+      if (measured == SIGNAL_PAYLOAD_MAX) break;
+    }
+    memset(calNote, 'A', bestLen);
+    calNote[bestLen] = '\0';
+    snprintf(buf, sizeof(buf), "{\"model\":\"Grower\",\"id\":1,\"note\":\"%s\"}", calNote);
+
+    static int growerHookCalls = 0;
+    uint8_t    savedHookCount5 = _hookCount;
+    RecordHook savedHooks5[SIGNAL_MAX_HOOKS];
+    memcpy(savedHooks5, _hooks, sizeof(_hooks));
+    _hookCount = 0;
+    growerHookCalls = 0;
+    addRecordHook([](const char*, JsonDocument& doc) {
+      growerHookCalls++;
+      doc["rain_today_mm"] = 12.3f;  // ~22 bytes, same order as rainHook's field
+    });
+
+    record(buf, -70);  // pending
+    bool accepted = record(buf, -70);  // promotes; the hook grows doc past the ceiling
+    ok &= check("a record grown past SIGNAL_PAYLOAD_MAX by a hook still promotes",
+                accepted && growerHookCalls == 1 && deviceCount() == 1);
+
+    const char* payload = latestPayload(device(0));
+    // Bounded: never reads past the fixed-size payload buffer regardless of
+    // whether record() left it NUL-terminated, so this cannot itself fault
+    // even when the bug it is checking for is present.
+    bool terminated = payload != NULL &&
+                       memchr(payload, '\0', SIGNAL_PAYLOAD_MAX + 1) != NULL;
+    ok &= check("a hook-grown payload is NUL-terminated within its buffer", terminated);
+
+    JsonDocument         verify;
+    DeserializationError err = payload
+        ? deserializeJson(verify, payload, SIGNAL_PAYLOAD_MAX + 1)
+        : DeserializationError::EmptyInput;
+    ok &= check("a hook-grown payload is valid, parseable JSON",
+                err == DeserializationError::Ok);
+
+    _hookCount = savedHookCount5;
+    memcpy(_hooks, savedHooks5, sizeof(_hooks));
+  }
+
+  reset();
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // pending
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":4.6}", -70);  // promotes: sub for type 0
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":1,\"rain_mm\":0.5}", -71);         // sub for type 1
@@ -865,6 +976,19 @@ bool selfTest() {
                   deviceCount() == 0);
 
   reset();
+  // Two devices whose id-less channel differs only past char[16] must not
+  // collide on the same truncated key.
+  record("{\"model\":\"Dev\",\"channel\":\"1234567890123456A\"}", -70);  // pending regardless
+  ok &= check("a 17-character string channel is rejected rather than truncated into a colliding key",
+              !record("{\"model\":\"Dev\",\"channel\":\"1234567890123456A\"}", -70) &&
+                  deviceCount() == 0);
+  reset();
+  record("{\"model\":\"Dev\",\"channel\":1234567890123456}", -70);  // pending regardless
+  ok &= check("a 16-digit integer channel is rejected rather than truncated into a colliding key",
+              !record("{\"model\":\"Dev\",\"channel\":1234567890123456}", -70) &&
+                  deviceCount() == 0);
+
+  reset();
   static int oversizeHookCalls = 0;
   {
     uint8_t    savedHookCount2 = _hookCount;
@@ -966,6 +1090,58 @@ bool selfTest() {
     DeviceSlot foreign{};
     ok &= check("indexOf rejects a slot outside the table", indexOf(foreign) < 0);
   }
+
+  reset();
+  {
+    // I4: claimSlot()'s eviction branch (a full device table) does not
+    // increment _deviceCount the way its free-slot branch does, since an
+    // eviction is a swap, not a net addition. A failing claimSub() after
+    // that eviction must therefore NOT decrement _deviceCount either, or
+    // it underflows the count over repeated cycles. record() can't reach
+    // that combination today — an evicted device always owns at least one
+    // sub, which freeSlotSubs() frees, always leaving the new device a
+    // free slot to claim — so this is set up directly against the
+    // module's internal state rather than through record()'s normal path.
+    for (int d = 0; d < SIGNAL_DEVICE_SLOTS; d++) {
+      snprintf(buf, sizeof(buf), "{\"model\":\"Evictee\",\"id\":%d}", d);
+      record(buf, -70);  // pending
+      record(buf, -70);  // promotes
+    }
+    ok &= check("the device table is full", deviceCount() == SIGNAL_DEVICE_SLOTS);
+    for (int d = 16; d < SIGNAL_DEVICE_SLOTS; d++) {
+      // A second message_type on an existing slot adds a sub directly, no
+      // pending sighting needed; brings the sub table from 24 to 32, full.
+      snprintf(buf, sizeof(buf), "{\"model\":\"Evictee\",\"id\":%d,\"message_type\":1}", d);
+      record(buf, -70);
+    }
+
+    int oldestIdx = indexOf(device(SIGNAL_DEVICE_SLOTS - 1));
+    ok &= check("device 0 is the oldest, and next in line for eviction",
+                oldestIdx >= 0 &&
+                    strcmp(_devices[oldestIdx].key, "rtl433-a1b2c3/Evictee/0") == 0);
+
+    int ownSub = -1;
+    for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+      if (_subs[i].used && _subs[i].slotIdx == (uint8_t)oldestIdx) {
+        ownSub = i;
+        break;
+      }
+    }
+    ok &= check("device 0 has exactly one sub before the corruption", ownSub >= 0);
+    // Orphan the sub rather than freeing it: still "used" (the sub table
+    // stays completely full, 32/32) but no longer owned by any device, so
+    // freeSlotSubs() on device 0's eviction frees nothing, and claimSub()
+    // for the new device finds neither a free slot nor a sub of its own to
+    // evict.
+    _subs[ownSub].slotIdx = 0xFF;
+
+    uint8_t beforeCount = deviceCount();
+    record("{\"model\":\"NewEvictor\",\"id\":99}", -70);  // pending
+    record("{\"model\":\"NewEvictor\",\"id\":99}", -70);  // evicts device 0; claimSub then fails
+    ok &= check("an evicted slot's failed sub claim does not underflow deviceCount",
+                deviceCount() == beforeCount);
+  }
+
   reset();
   record("{\"model\":\"Dev\",\"id\":1}", -70);
   record("{\"model\":\"Dev\",\"id\":1}", -70);

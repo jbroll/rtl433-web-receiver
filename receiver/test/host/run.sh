@@ -88,10 +88,14 @@ g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \
 # only exist under #ifdef FAKE_SIGNALS. That let af16f45 add calls to
 # host-shim-only Preferences methods inside a selfTest() and pass three
 # reviews' 'pio run', because none of that code was ever compiled for the
-# target. Build the real firmware with FAKE_SIGNALS on (without touching
-# platformio.ini) so that gap can't reopen.
+# target. Build the real firmware with FAKE_SIGNALS on so that gap can't
+# reopen. This uses its own platformio.ini environment
+# (esp32s3-generic-fakesignals), which builds to its own .pio/build/
+# directory and skips post:tools/save_elf.py, so this verification build
+# can never be what flash-ota.js pushes over OTA or what fetch_coredump.sh
+# symbolicates against.
 pio_log="$out/pio_run.log"
-if ! (cd "$root" && PLATFORMIO_BUILD_FLAGS="-DFAKE_SIGNALS=true" pio run) >"$pio_log" 2>&1; then
+if ! (cd "$root" && pio run -e esp32s3-generic-fakesignals) >"$pio_log" 2>&1; then
   cat "$pio_log" >&2
   exit 1
 fi

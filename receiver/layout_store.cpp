@@ -122,8 +122,11 @@ bool selfTest() {
               strcmp(get(), "{\"grid\":{\"cols\":4,\"rows\":3}}") == 0);
 
   // The rest runs against NVS, so it covers the blob round trip and the
-  // migration off the string this used to be written as.
-  _open = _prefs.begin("layout", false);
+  // migration off the string this used to be written as. Tracked apart from
+  // _open (restored to saved_open below) so the real NVS content can be put
+  // back afterward regardless of what _open ends up holding.
+  _open          = _prefs.begin("layout", false);
+  bool nvsOpened = _open;
   if (_open) {
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
@@ -179,7 +182,19 @@ bool selfTest() {
 
   strncpy(_blob, saved_blob, sizeof(saved_blob) - 1);
   _blob[sizeof(saved_blob) - 1] = '\0';
-  _open                         = saved_open;
+  // The round trip above erased the real NVS entries (BLOB_KEY, LEGACY_KEY)
+  // and wrote test blobs in their place; put the real layout back so it
+  // survives past the next reboot rather than only until it, same as
+  // location_store/units_store's rawPersistForTest().
+  if (nvsOpened) {
+    _prefs.remove(LEGACY_KEY);
+    if (saved_blob[0] == '\0') {
+      _prefs.remove(BLOB_KEY);
+    } else {
+      _prefs.putBytes(BLOB_KEY, saved_blob, strlen(saved_blob));
+    }
+  }
+  _open = saved_open;
   Log.notice(F("layout selfTest overall: %s" CR), ok ? "PASS" : "FAIL");
   return ok;
 }
