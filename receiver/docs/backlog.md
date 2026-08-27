@@ -120,28 +120,6 @@ the duration. Worse than the `CHUNK_BUDGET_MS` 1.5 s stall above, which is
 about a slow *reader*; this is about a slow or large *upload*, likely
 several seconds for a ~1.2 MB image over WiFi.
 
-## `POST /$mqtt/remove` returns 204 for a url it never removed
-
-`handleMqttRemovePost()` in `web_ui.cpp` calls `mqtt_publish_store::remove(url)` and
-unconditionally answers `204`, on the stated basis that "a url that was never present is
-not an error." That collapses two different outcomes into one response: a bridge that was
-actually dropped, and one baked into the firmware build (or otherwise never in the runtime
-store) that a client cannot remove at runtime. A caller reading only the status code cannot
-tell them apart, so the dashboard has to re-fetch `GET /$mqtt` after a `204` and check
-whether the url is still listed to know whether anything happened.
-
-## `mqtt_publish_store` leaks a stale `url`/`token` pair when a legacy table string co-exists
-
-`begin()`'s `migrateLegacy()` only removes the pre-existing single-broker `url`/`token` NVS
-keys when it does the migrating itself (`count() == 0` at the time it runs). A device
-holding both a legacy `table` string (which `load()` migrates first, populating the table
-and making `migrateLegacy()` a no-op) and a leftover single `url`/`token` pair from before
-the table existed keeps that stale pair in NVS forever — harmless, since nothing reads it
-once the table is populated, but it never gets cleaned up. Fixing it means restructuring
-`begin()`'s migration logic (tracking "did load() already populate a table" separately from
-"did migrateLegacy() do anything"), more than the one-line retry `load()` got for the
-half-migrated legacy-key case.
-
 ## The 4 KB record() arena is not sufficient for every shape under SIGNAL_PAYLOAD_MAX
 
 `SIGNAL_JSON_POOL_BYTES` (`signal_store.cpp`) was sized against a payload shaped

@@ -57,7 +57,7 @@ token in place.
 | `POST /$units` | Store the unit preferences. Body is a JSON object. `204`; `405` unless the topic is `$units` or under this receiver's source, `403` off-origin |
 | `POST /$mqtt` | Add or update a bridge to push to. Body `{"url":"...","token":"..."}`. `204` on success, `400` on an invalid url/token or a full table, `403` off-origin |
 | `GET /$mqtt` | This receiver's active push connections. `200`, `application/json`: `[{"url":"...","connected":true}, ...]` — never the token |
-| `POST /$mqtt/remove` | Stop pushing to a bridge. Body `{"url":"..."}`. `204` on success, including if the url wasn't present; `403` off-origin |
+| `POST /$mqtt/remove` | Stop pushing to a bridge. Body `{"url":"..."}`. `204` on success, `404` if the url wasn't present, `403` off-origin |
 | `GET /events?f=<filter>&f=<filter>` | Subscribe. `200`, `text/event-stream` |
 | `POST /$update` | Push a firmware image. `multipart/form-data`, bearer token required. `200` and reboots on success |
 

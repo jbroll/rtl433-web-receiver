@@ -520,7 +520,10 @@ static void handleMqttRemovePost() {
     return;
   }
   const char* url = doc["url"];
-  mqtt_publish_store::remove(url); // a url that was never present is not an error
+  if (!mqtt_publish_store::remove(url)) {
+    sendStatus(404, "not found");
+    return;
+  }
   mqtt_publish::begin(signal_store::source());
   sendCors();
   _server.sendHeader("Cache-Control", "no-store");

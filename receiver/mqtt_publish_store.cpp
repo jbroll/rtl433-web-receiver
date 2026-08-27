@@ -244,10 +244,17 @@ bool begin() {
   // (which load() just did) correctly makes it a no-op. selfTest()'s "State
   // 4" below is a regression test for this ordering: reversed, it fails.
   load();
-  String oldUrl = _prefs.getString("url", "");
-  if (migrateLegacy(oldUrl.c_str(), _prefs.getString("token", "").c_str())) {
+  // A table load()ed from the legacy `table` string makes migrateLegacy() a
+  // no-op (count() != 0), but a stale single-broker url/token pair can still
+  // be sitting alongside it; drop the pair whichever path populated the table.
+  bool   tableLoaded = count() != 0;
+  String oldUrl      = _prefs.getString("url", "");
+  bool   migrated    = migrateLegacy(oldUrl.c_str(), _prefs.getString("token", "").c_str());
+  if (tableLoaded || migrated) {
     _prefs.remove("url");
     _prefs.remove("token");
+  }
+  if (migrated) {
     Log.notice(F("mqtt publish store: migrated legacy single-broker setting" CR));
   }
   Log.notice(F("mqtt publish store: %d bridge(s) configured (%d free NVS entries)" CR),
@@ -441,6 +448,9 @@ bool selfTest() {
                 count() == 2 && indexOf("mqtt://b1:1883") >= 0 && indexOf("mqtt://b2:1883") >= 0);
     ok &= CHECK("and does not let the stale single value clobber them",
                 indexOf("mqtt://stale-single:1883") < 0);
+    ok &= CHECK("and removes the stale legacy url/token pair rather than leaking it forever",
+                _prefs.getString("url", "").length() == 0 &&
+                    _prefs.getString("token", "").length() == 0);
 
     _prefs.remove(BLOB_KEY);
     _prefs.remove(LEGACY_KEY);
