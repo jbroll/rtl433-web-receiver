@@ -10,6 +10,59 @@
 namespace signal_store {
 
 #define SIGNAL_PENDING_SLOTS 8
+// JSON_MSG_BUFFER is 512 and the doc gains time, rssi, count and
+// rain_today_mm; 2 KB covers ArduinoJson's own bookkeeping with headroom,
+// given platformio.ini's ARDUINOJSON_POOL_CAPACITY=16 (the 128-slot default
+// would want a 2 KB chunk for bookkeeping alone, before a single field).
+#define SIGNAL_JSON_POOL_BYTES 2048
+
+// A fixed arena for the parser: bump-allocates from a static buffer instead
+// of malloc/realloc, and is reset once per record() call rather than freed,
+// since the doc never outlives the function. A size_t header in front of
+// each block lets reallocate() grow by copying into a fresh block; the
+// common case, ArduinoJson shrinking a string to its final length, reuses
+// the block in place. Returns null on exhaustion so ArduinoJson reports the
+// parse as out of memory instead of falling back to the heap.
+class RecordAllocator : public ArduinoJson::Allocator {
+ public:
+  void* allocate(size_t size) override {
+    return alloc(size);
+  }
+  void deallocate(void*) override {}
+  void* reallocate(void* ptr, size_t newSize) override {
+    if (ptr == nullptr) {
+      return alloc(newSize);
+    }
+    size_t oldSize = reinterpret_cast<size_t*>(ptr)[-1];
+    if (newSize <= oldSize) {
+      return ptr;
+    }
+    void* fresh = alloc(newSize);
+    if (fresh != nullptr) {
+      memcpy(fresh, ptr, oldSize);
+    }
+    return fresh;
+  }
+  void reset() { _used = 0; }
+
+ private:
+  void* alloc(size_t size) {
+    size_t need = sizeof(size_t) + size;
+    need = (need + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
+    if (need > sizeof(_buf) - _used) {
+      return nullptr;
+    }
+    size_t* header = reinterpret_cast<size_t*>(_buf + _used);
+    *header = size;
+    _used += need;
+    return header + 1;
+  }
+
+  alignas(max_align_t) uint8_t _buf[SIGNAL_JSON_POOL_BYTES];
+  size_t _used = 0;
+};
+
+static RecordAllocator _jsonPool;
 
 struct PendingKey {
   char     key[SIGNAL_KEY_MAX];
@@ -30,6 +83,7 @@ static char       _source[SIGNAL_SOURCE_MAX] = "rtl433";
 static DeviceSub  _subs[SIGNAL_SUB_TABLE];
 static RecordHook _hooks[SIGNAL_MAX_HOOKS];
 static uint8_t    _hookCount = 0;
+static int        _lastRecordedIdx = -1;
 
 void reset() {
   memset(_devices, 0, sizeof(_devices));
@@ -40,6 +94,7 @@ void reset() {
   _seqCounter = 0;
   _total = 0;
   _dropped = 0;
+  _lastRecordedIdx = -1;
 }
 
 void setSource(const char* source) {
@@ -78,13 +133,27 @@ static bool buildKey(const JsonDocument& doc, char* key, size_t keySize) {
   sanitizeSegment(model);
 
   char id[16];
-  if (doc["id"].is<const char*>() || doc["id"].is<long>() ||
-      doc["id"].is<unsigned long>()) {
+  if (doc["id"].is<const char*>()) {
+    const char* idStr = doc["id"].as<const char*>();
+    if (strlen(idStr) >= sizeof(id)) {
+      return false;
+    }
+    copyTruncated(id, sizeof(id), idStr);
+  } else if (doc["id"].is<long>()) {
+    int n = snprintf(id, sizeof(id), "%ld", doc["id"].as<long>());
+    if (n < 0 || (size_t)n >= sizeof(id)) {
+      return false;
+    }
+  } else if (doc["id"].is<unsigned long>()) {
     String idStr = doc["id"].as<String>();
     if (idStr.length() >= sizeof(id)) {
       return false;
     }
     copyTruncated(id, sizeof(id), idStr.c_str());
+  } else if (doc["channel"].is<const char*>()) {
+    copyTruncated(id, sizeof(id), doc["channel"].as<const char*>());
+  } else if (doc["channel"].is<long>()) {
+    snprintf(id, sizeof(id), "%ld", doc["channel"].as<long>());
   } else if (!doc["channel"].isNull()) {
     copyTruncated(id, sizeof(id), doc["channel"].as<String>().c_str());
   } else {
@@ -204,7 +273,9 @@ static bool isoTime(char* out, size_t size) {
 }
 
 bool record(const char* payload, int rssi, bool isDecode) {
-  JsonDocument doc;
+  _lastRecordedIdx = -1;
+  _jsonPool.reset();
+  JsonDocument doc(&_jsonPool);
   if (deserializeJson(doc, payload) != DeserializationError::Ok) {
     _dropped++;
     return false;
@@ -257,7 +328,11 @@ bool record(const char* payload, int rssi, bool isDecode) {
   DeviceSlot& slot = _devices[idx];
 
   char msgType[16] = "";
-  if (!doc["message_type"].isNull()) {
+  if (doc["message_type"].is<const char*>()) {
+    copyTruncated(msgType, sizeof(msgType), doc["message_type"].as<const char*>());
+  } else if (doc["message_type"].is<long>()) {
+    snprintf(msgType, sizeof(msgType), "%ld", doc["message_type"].as<long>());
+  } else if (!doc["message_type"].isNull()) {
     copyTruncated(msgType, sizeof(msgType), doc["message_type"].as<String>().c_str());
   }
 
@@ -293,11 +368,23 @@ bool record(const char* payload, int rssi, bool isDecode) {
   if (isDecode) {
     _total++;
   }
+  _lastRecordedIdx = idx;
   return true;
 }
 
 uint8_t deviceCount() {
   return _deviceCount;
+}
+
+// The slot the most recent successful record() touched, which is always the
+// slot device(0) would resolve to (it holds the highest _seq by
+// construction). Null after a failed record(), so a caller that forgets to
+// check the return value broadcasts nothing rather than a stale slot.
+const DeviceSlot* lastRecorded() {
+  if (_lastRecordedIdx < 0) {
+    return NULL;
+  }
+  return &_devices[_lastRecordedIdx];
 }
 
 const DeviceSlot& device(uint8_t i) {
@@ -441,6 +528,8 @@ bool selfTest() {
   ok &= check("record accepts a decode on the second sighting",
               record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70));
   ok &= check("one device after the second sighting", deviceCount() == 1);
+  ok &= check("lastRecorded matches device(0) after a first record",
+              lastRecorded() == &device(0));
   ok &= check("key is source/model/id",
               strcmp(device(0).key, "rtl433-a1b2c3/Acurite-Tower/1234") == 0);
   ok &= check("rssi is stamped into the payload",
@@ -450,6 +539,8 @@ bool selfTest() {
 
   record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.6}", -71);
   ok &= check("same key updates in place", deviceCount() == 1);
+  ok &= check("lastRecorded matches device(0) after a repeat record",
+              lastRecorded() == &device(0));
   ok &= check("count increments", device(0).count == 2);
   ok &= check("the stamped count follows",
               strstr(latestPayload(device(0)), "\"count\":2") != NULL);
@@ -483,6 +574,19 @@ bool selfTest() {
               strcmp(device(0).key, "rtl433-a1b2c3/Dev/29") == 0);
   ok &= check("oldest was evicted",
               strcmp(device(SIGNAL_DEVICE_SLOTS - 1).key, "rtl433-a1b2c3/Dev/6") == 0);
+  ok &= check("lastRecorded matches device(0) after an evicting record",
+              lastRecorded() == &device(0));
+
+  reset();
+  ok &= check("an integer id and a string id build the same key",
+              !record("{\"model\":\"Dev\",\"id\":42}", -70) &&
+                  record("{\"model\":\"Dev\",\"id\":42}", -70) &&
+                  strcmp(device(0).key, "rtl433-a1b2c3/Dev/42") == 0);
+  reset();
+  ok &= check("a string id builds the same key an integer id would",
+              !record("{\"model\":\"Dev\",\"id\":\"42\"}", -70) &&
+                  record("{\"model\":\"Dev\",\"id\":\"42\"}", -70) &&
+                  strcmp(device(0).key, "rtl433-a1b2c3/Dev/42") == 0);
 
   reset();
   record("{\"model\":\"Dev\",\"id\":1}", -70);
@@ -494,6 +598,7 @@ bool selfTest() {
 
   reset();
   ok &= check("unparseable payload is dropped", !record("not json at all", -70));
+  ok &= check("lastRecorded is null after a failed record", lastRecorded() == NULL);
   ok &= check("payload without model is dropped", !record("{\"id\":7}", -70));
   ok &= check("a field outside its valid range is dropped",
               !record("{\"model\":\"Dev\",\"id\":1,\"humidity\":154}", -70));
@@ -669,6 +774,39 @@ bool selfTest() {
                 !record(buf, -70) && oversizeHookCalls == 0);
     _hookCount = savedHookCount2;
     memcpy(_hooks, savedHooks2, sizeof(_hooks));
+  }
+
+  // The record() arena is a fixed SIGNAL_JSON_POOL_BYTES buffer, not malloc, so
+  // a parse that needs more than it holds must fail cleanly rather than
+  // corrupt memory or assert. A single string value bigger than the whole
+  // arena forces that path deterministically, regardless of the pool's slot
+  // bookkeeping overhead.
+  reset();
+  static int poolExhaustedHookCalls = 0;
+  {
+    uint8_t    savedHookCount4 = _hookCount;
+    RecordHook savedHooks4[SIGNAL_MAX_HOOKS];
+    memcpy(savedHooks4, _hooks, sizeof(_hooks));
+    _hookCount = 0;
+    poolExhaustedHookCalls = 0;
+    addRecordHook([](const char*, JsonDocument&) { poolExhaustedHookCalls++; });
+
+    char      hugeNote[4000];
+    memset(hugeNote, 'A', sizeof(hugeNote) - 1);
+    hugeNote[sizeof(hugeNote) - 1] = '\0';
+    char hugeBuf[4200];
+    snprintf(hugeBuf, sizeof(hugeBuf), "{\"model\":\"Huge\",\"id\":1,\"note\":\"%s\"}", hugeNote);
+    uint32_t droppedBefore = droppedCount();
+    ok &= check("a parse too big for the fixed JSON pool is dropped, not crashed",
+                !record(hugeBuf, -70));
+    ok &= check("the pool-exhausted parse advances the drop counter",
+                droppedCount() == droppedBefore + 1);
+    ok &= check("a pool-exhausted parse creates no device", deviceCount() == 0);
+    ok &= check("a pool-exhausted parse never reaches a hook",
+                poolExhaustedHookCalls == 0);
+
+    _hookCount = savedHookCount4;
+    memcpy(_hooks, savedHooks4, sizeof(_hooks));
   }
 
   reset();

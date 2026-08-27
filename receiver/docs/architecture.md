@@ -42,7 +42,29 @@ and, when `channel` stands in for `id`, truncates that too. The `id` field
 itself is rejected rather than truncated when it doesn't fit its 16-byte
 buffer, to avoid two sensors sharing a long id prefix colliding on one slot.
 The assembled `source/model/id` key is rejected as a whole if it doesn't fit
-`SIGNAL_KEY_MAX`, regardless of which segment pushed it over.
+`SIGNAL_KEY_MAX`, regardless of which segment pushed it over. `id`, `channel`
+and `message_type` are each read with `is<const char*>()`/`is<long>()` first
+and formatted straight into the fixed buffer (`copyTruncated` or
+`snprintf("%ld")`); only a type neither covers (an id past `LONG_MAX`, a
+non-string non-integer channel) falls back to `.as<String>()`, which is the
+one path in `buildKey()` that still heap-allocates.
+
+`record()` parses into a `JsonDocument` built over a `RecordAllocator`
+(`signal_store.cpp`): a fixed `SIGNAL_JSON_POOL_BYTES` (2 KB) arena that bump-
+allocates and never frees, reset at the top of every `record()` call rather
+than at the end of scope, since the doc never outlives the function. ArduinoJson
+7.4.3's default allocator is `malloc`/`realloc`, and — because `MemoryPool`
+requests a whole `ARDUINOJSON_POOL_CAPACITY`-slot chunk up front rather than
+growing to fit the document — even a small message costs a few-hundred-byte
+heap round trip per parse; the project's build now sets
+`ARDUINOJSON_POOL_CAPACITY=16` (`platformio.ini`) so that first chunk, and the
+arena that has to hold it, stay small. `RecordAllocator::allocate` returns
+`nullptr` on exhaustion rather than falling back to the heap, which ArduinoJson
+already treats as an ordinary out-of-memory parse error (`DeserializationError::
+NoMemory`) rather than a crash; `reallocate` keeps a block's size in a header
+so it can grow by copying into a fresh block, or, for the common case of
+ArduinoJson shrinking a string to its final length, hand back the same block
+unmoved.
 
 `record()` stamps `time`, `rssi`, and `count` into the decoded JSON, then
 checks `measureJson(doc) > SIGNAL_PAYLOAD_MAX` before running any hook, so a
@@ -334,15 +356,21 @@ every store is about 11 KB against the 20 KB partition.
 The decoder runs on `rtl_433_DecoderTask`, not the loop task, so
 `rtl_433_Callback` cannot touch `signal_store` or `web_ui` directly — both
 assume single-threaded access from `loop()`. The callback instead copies the
-message and RSSI into an 8-deep FreeRTOS queue. `loop()` drains it:
+message and RSSI into an 8-deep FreeRTOS queue, with `memcpy` of the measured
+length rather than a zero-padding `strncpy`, since `xQueueSend` copies the
+whole struct either way and a typical decode is a fraction of the 512-byte
+field. `loop()` drains it:
 
     rtl_433_Callback → queue → loop() → signal_store::record() → web_ui::broadcast() → subscribers
 
 `record()` returns whether the message was stored. On success, `loop()` calls
-`signal_store::device(0)` — the freshest device in recency order — and passes
-it to `broadcast()`, which builds one SSE frame and sends it to every
-subscriber whose filters match and whose replay cursor has already passed
-that device's newest sub.
+`signal_store::lastRecorded()` — the slot the call just touched, stashed in a
+file-static index rather than resolved by re-sorting `_order` the way
+`device(0)` does — and passes it to `broadcast()`, which builds one SSE frame
+and sends it to every subscriber whose filters match and whose replay cursor
+has already passed that device's newest sub. `lastRecorded()` returns `NULL`
+after a `record()` call that returned `false`, so a caller that broadcasts
+without checking the return value gets nothing rather than a stale slot.
 
 After the size check, `record()` calls each registered record hook in turn.
 `device_hooks::dispatch` reads the model from the payload, calls the matching

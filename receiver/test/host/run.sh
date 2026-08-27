@@ -18,21 +18,26 @@ if [ ! -d "$aj" ]; then
   exit 1
 fi
 shim="$root/test/host/arduino_shim"
+# The firmware's ARDUINOJSON_POOL_CAPACITY override (platformio.ini) and
+# ARDUINOJSON_SIZEOF_POINTER=4 (the host is 64-bit; the target is 32-bit, and
+# ArduinoJson's slot size depends on it) keep every ArduinoJson-using host
+# test's pool arithmetic the same as the firmware's.
+ajflags="-DARDUINOJSON_SIZEOF_POINTER=4 -DARDUINOJSON_POOL_CAPACITY=16"
 g++ -std=c++17 -Wall -Wextra -Werror -I"$root" \
     -o "$out/topic_test" "$root/topic.cpp" "$root/test/host/topic_test.cpp"
 "$out/topic_test" "$(dirname "$root")/test/topic_cases.txt"
 g++ -std=c++17 -Wall -Wextra -Werror -I"$root" \
     -o "$out/radio_health_test" "$root/radio_health.cpp" "$root/test/host/radio_health_test.cpp"
 "$out/radio_health_test"
-g++ -std=c++17 -Wall -Wextra -Werror -I"$root" -I"$aj" \
+g++ -std=c++17 -Wall -Wextra -Werror $ajflags -I"$root" -I"$aj" \
     -o "$out/device_hooks_test" "$root/device_hooks.cpp" "$root/test/host/device_hooks_test.cpp"
 "$out/device_hooks_test"
-g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 \
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \
     -I"$shim" -I"$root" -I"$aj" \
     -o "$out/signal_store_test" "$root/signal_store.cpp" "$root/device_hooks.cpp" \
     "$root/test/host/signal_store_test.cpp"
 "$out/signal_store_test"
-g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 \
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \
     -I"$shim" -I"$root" -I"$aj" \
     -o "$out/alias_store_test" "$root/alias_store.cpp" "$root/test/host/alias_store_test.cpp"
 "$out/alias_store_test"
@@ -48,7 +53,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     -I"$shim" -I"$root" \
     -o "$out/units_store_test" "$root/units_store.cpp" "$root/test/host/units_store_test.cpp"
 "$out/units_store_test"
-g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 \
+g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \
     -I"$shim" -I"$root" -I"$aj" \
     -o "$out/mqtt_publish_store_test" "$root/mqtt_publish_store.cpp" "$root/test/host/mqtt_publish_store_test.cpp"
 "$out/mqtt_publish_store_test"

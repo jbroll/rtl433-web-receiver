@@ -50,6 +50,9 @@ void        addRecordHook(RecordHook hook);
 bool              record(const char* payload, int rssi, bool isDecode = true);
 uint8_t           deviceCount();
 const DeviceSlot& device(uint8_t i);
+// The slot the most recent successful record() call touched, or NULL if that
+// call returned false.
+const DeviceSlot* lastRecorded();
 // Raw table index rather than recency order, so a cursor over it does not skip
 // or repeat a slot when a device is heard from mid-walk.
 const DeviceSlot* slotAt(uint8_t i);

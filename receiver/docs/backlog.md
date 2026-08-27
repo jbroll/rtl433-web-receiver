@@ -65,27 +65,6 @@ telemetry would name the fault in the log instead of leaving it to a probe
 sketch. A scratch write to `RegOokFix` and a `RegVersion` check would settle
 the bus question in the same pass.
 
-## The decode path still allocates
-
-Beyond the `JsonDocument` and `String` noted below: ArduinoJson 7.4.3's default
-allocator is `malloc`/`realloc`, and it reallocs several times per parse. A
-static pool (an `ArduinoJson::Allocator` subclass over a fixed buffer, passed to
-the `JsonDocument` constructor) removes it without touching the parse.
-
-## Heap allocation on the decode path
-
-`signal_store::record()` builds a `JsonDocument` (`signal_store.cpp:207`) and
-calls `.as<String>()` on `doc["id"]`, `doc["channel"]` and `doc["message_type"]`
-(`:87`, `:89`, `:263`) for every decode — plus once per BMP280 sample and once
-per telemetry cycle. Each one heap-allocates a `String` only to copy it into a
-fixed buffer, where the underlying value is already an `int` or a
-`const char*`. ArduinoJson 7
-pools and reallocates, and `String` allocates outright, so both run against the
-project's "static allocation only" rule. They are transient and uniformly sized,
-so the footprint stays flat — free heap held steady across a 4 minute sample —
-but the `String` is avoidable in two lines by formatting the id as an integer
-and falling back only when it is genuinely a string.
-
 ## A slow HTTP client can still stall the receive path
 
 `ChunkedResponse::flush()` waits up to `CHUNK_WAIT_US` 150 ms per chunk with a
@@ -297,12 +276,6 @@ back on the next `$alias` frame until it receives this build.
   against the live connections to leave unchanged slots alone would avoid
   this, at the cost of the per-slot comparison logic (url, token, plain-vs-TLS)
   that produced the original teardown bug in the first place.
-- `signal_store::device()` rebuilds `_order` and runs an insertion sort over every
-  used slot on each call. All four callers pass 0, all from `WebReceiver.ino`
-  immediately after a successful `record()`, and the slot just written always has
-  the highest `_seq`, so `device(0)` is by construction the slot `record()` just
-  touched. Having `record()` return or stash that index takes an O(n²) sort off the
-  per-decode path; `web_ui` uses `slotAt()` and has no other need for `device()`.
 - `web_ui::loop()` calls `reapClosedClients()` unconditionally at the top and again
   inside the keepalive branch, and each call costs an `operator bool` plus a
   `recv(MSG_DONTWAIT|MSG_PEEK)` syscall per SSE slot. At loop rate that is thousands
@@ -331,6 +304,3 @@ back on the next `$alias` frame until it receives this build.
   `selfTest()`, though `_total` and `_dropped` are maintained on every record. The
   Receiver telemetry card reports heap, uptime and recovery count but not decode or drop
   counts, which are the obvious two fields to add if that was the intent.
-- `strncpy` into `item.payload` in `rtl_433_Callback` zero-pads the whole 512-byte field,
-  so a typical 120-byte decode writes about 390 wasted bytes on the decoder task.
-  Marginal, since `xQueueSend` copies the struct either way.

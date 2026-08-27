@@ -228,8 +228,9 @@ void rtl_433_Callback(char* message) {
   Log.notice(F("Received message : %s" CR), message);
   lastDecodeAt = millis();
   SignalQueueItem item;
-  strncpy(item.payload, message, sizeof(item.payload) - 1);
-  item.payload[sizeof(item.payload) - 1] = '\0';
+  size_t len = strnlen(message, sizeof(item.payload) - 1);
+  memcpy(item.payload, message, len);
+  item.payload[len] = '\0';
   item.rssi = rtl_433_ESP::signalRssi;
   if (rtl433Queue == nullptr || xQueueSend(rtl433Queue, &item, 0) != pdTRUE) {
     rtl433QueueDropped++;
@@ -248,7 +249,7 @@ static void drainSignalQueue() {
   for (int n = 0; n < RTL433_QUEUE_LEN &&
                   xQueueReceive(rtl433Queue, &item, 0) == pdTRUE; n++) {
     if (signal_store::record(item.payload, item.rssi)) {
-      web_ui::broadcast(signal_store::device(0));
+      web_ui::broadcast(*signal_store::lastRecorded());
     }
   }
 }
@@ -384,7 +385,7 @@ static void recordBMP280() {
   Log.notice(F("BMP280: %s" CR), buf);
 
   if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0)) {
-    web_ui::broadcast(signal_store::device(0));
+    web_ui::broadcast(*signal_store::lastRecorded());
   }
 }
 
@@ -430,7 +431,7 @@ static void recordReceiver() {
   appendf(buf, sizeof(buf), n, "}");
 
   if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0, false)) {
-    web_ui::broadcast(signal_store::device(0));
+    web_ui::broadcast(*signal_store::lastRecorded());
   }
 }
 
@@ -451,7 +452,7 @@ static bool fakeSignalTick() {
            seq % 25);
   seq++;
   if (signal_store::record(buf, -60 - (seq % 30))) {
-    web_ui::broadcast(signal_store::device(0));
+    web_ui::broadcast(*signal_store::lastRecorded());
   }
   return true;
 }
