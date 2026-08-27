@@ -34,10 +34,13 @@ void publishAlias(const char* topic, const char* name);
 // Publishes the current tz offset, retained, to <clientId>/$tz, on every
 // connected connection. Same fire-and-forget behavior as onRecord.
 void publishTz(int16_t minutes);
-// Active connections: table slots with a valid broker url, plus the
-// build-flag default if MQTT_BROKER_URL is set and valid. Used by the
+// Active connections: table slots plus the build-flag default if
+// MQTT_BROKER_URL is set, whether or not each one's url parsed. Used by the
 // /$mqtt HTTP endpoint to report status; token is never exposed here.
 uint8_t     count();
 const char* urlAt(uint8_t i);
 bool        connectedAt(uint8_t i);
+// Why urlAt(i) will never connect, or nullptr if it's enabled or does not
+// exist. Set when a slot's url fails mqtt(s)://host:port parsing.
+const char* reasonAt(uint8_t i);
 } // namespace mqtt_publish

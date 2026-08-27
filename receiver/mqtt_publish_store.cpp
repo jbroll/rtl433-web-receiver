@@ -123,6 +123,14 @@ bool add(const char* url, const char* token) {
   if (!validUrl(url) || !validToken(token)) {
     return false;
   }
+#ifdef MQTT_BROKER_URL
+  // The build-flag broker connects unconditionally; adding it again from the
+  // dashboard would open a second session under the same client ID, which
+  // most brokers resolve by kicking one, producing a connect/disconnect flap.
+  if (strcmp(url, MQTT_BROKER_URL) == 0) {
+    return false;
+  }
+#endif
   int  i = find(url);
   bool inserting = (i < 0);
   if (inserting) {
@@ -249,12 +257,12 @@ bool selfTest() {
   int i0 = indexOf("mqtt://broker.local:1883");
   ok &= check("indexOf finds it", i0 >= 0);
   ok &= check("urlAt/tokenAt round-trip",
-              strcmp(urlAt((uint8_t)i0), "mqtt://broker.local:1883") == 0 &&
+              i0 >= 0 && strcmp(urlAt((uint8_t)i0), "mqtt://broker.local:1883") == 0 &&
                   strcmp(tokenAt((uint8_t)i0), "tok") == 0);
 
   ok &= check("re-adding the same url updates the token in place",
               add("mqtt://broker.local:1883", "tok2") && count() == 1 &&
-                  strcmp(tokenAt((uint8_t)i0), "tok2") == 0);
+                  i0 >= 0 && strcmp(tokenAt((uint8_t)i0), "tok2") == 0);
 
   ok &= check("add rejects an invalid url", !add("http://broker.local", "tok"));
   ok &= check("a rejected add leaves the table alone", count() == 1);
@@ -297,6 +305,12 @@ bool selfTest() {
   memset(_used, 0, sizeof(_used));
   loadTable("not json at all");
   ok &= check("an unparseable blob loads as empty", count() == 0);
+
+#ifdef MQTT_BROKER_URL
+  memset(_used, 0, sizeof(_used));
+  ok &= check("add rejects the build-flag broker url",
+              !add(MQTT_BROKER_URL, "tok") && count() == 0);
+#endif
 
   memcpy(_url, saved_url, sizeof(_url));
   memcpy(_token, saved_token, sizeof(_token));

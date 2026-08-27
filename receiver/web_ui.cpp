@@ -535,6 +535,8 @@ static void handleMqttGet() {
     JsonObject o = arr.add<JsonObject>();
     o["url"] = mqtt_publish::urlAt(i);
     o["connected"] = mqtt_publish::connectedAt(i);
+    const char* reason = mqtt_publish::reasonAt(i);
+    if (reason != nullptr) o["reason"] = reason;
   }
   String body;
   serializeJson(doc, body);

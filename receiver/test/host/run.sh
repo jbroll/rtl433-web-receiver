@@ -53,7 +53,9 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
     -I"$shim" -I"$root" \
     -o "$out/units_store_test" "$root/units_store.cpp" "$root/test/host/units_store_test.cpp"
 "$out/units_store_test"
+# MQTT_BROKER_URL exercises add()'s rejection of the build-flag broker's own url.
 g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO_STRING=1 $ajflags \
+    -DMQTT_BROKER_URL='"mqtt://buildflag.example:1883"' \
     -I"$shim" -I"$root" -I"$aj" \
     -o "$out/mqtt_publish_store_test" "$root/mqtt_publish_store.cpp" "$root/test/host/mqtt_publish_store_test.cpp"
 "$out/mqtt_publish_store_test"

@@ -255,7 +255,10 @@ same shape `alias_store`'s 32-slot table uses, for the same reason: NVS keys
 are capped at 15 characters, so one key per slot doesn't scale. `add()`
 validates the same `mqtt://`/`mqtts://` scheme and length caps the old
 single-value `set()` did, updates a slot in place when its url is already
-present, and fails with the table full and no matching url. A pre-existing
+present, and fails with the table full and no matching url, or with the url
+equal to the build-flag `MQTT_BROKER_URL` — that broker already connects
+unconditionally, and a second connection to it under the same client ID
+just gets one session kicked by the other. A pre-existing
 single `url`/`token` NVS value (from before this table existed) is copied
 into slot 0 the first time `begin()` runs against an otherwise-empty table,
 then the old keys are removed — a one-time, silent migration. The
@@ -270,9 +273,15 @@ build-flag default as a fourth. Each is a fixed `Connection` (a
 `WiFiClient`/`WiFiClientSecure` pair, a `PubSubClient`, and its own backoff
 timer) in a compile-time-sized array, never a dynamic list — `PubSubClient`
 holds a reference to its client, so a slot's address has to stay stable
-across a `begin()` rebuild. `begin()` re-reads the store and rebuilds every
-connection from scratch; it's called once at boot and again whenever
-`web_ui.cpp`'s `/$mqtt` handlers change the table. Each connection
+across a `begin()` rebuild. `begin()` is called once at boot and again
+whenever `web_ui.cpp`'s `/$mqtt` handlers change the table; each call diffs
+the store's table (plus the build-flag default) against the live
+connections by url, token and TLS flag together, leaves an exact match's
+slot untouched, and only tears down and rebuilds the rest — matching by
+array index instead would reconnect the wrong broker whenever an add or
+remove reshuffles which index serves which entry. A slot whose url fails
+`mqtt(s)://host:port` parsing is still counted, carrying a reason string
+that `/$mqtt` reports instead of silently dropping the row. Each connection
 connects/reconnects and backs off independently, so one broker being
 unreachable doesn't stall another. `mqtt://` picks a plain `WiFiClient`,
 `mqtts://` a `WiFiClientSecure` with the ISRG Root X1 root CA compiled in —
@@ -284,12 +293,14 @@ cannot stall `loop()` — and with it `rf.loop()` draining the decode queue —
 indefinitely, though the phases are sequential and a worst case on the TLS
 path adds up to roughly 15 s per connection. `MQTT_MAX_PACKET_SIZE` (5300, up
 from PubSubClient's 768 default, to fit a full `LAYOUT_STORE_MAX` `$layout`
-blob plus its topic) is a permanently allocated buffer per connection, not
-just a per-message cap, so it costs about 5 KB of RAM per active connection
-for the process lifetime. That figure excludes TLS: an `mqtts://` connection
-also holds an mbedTLS context and its buffers, on the order of tens of KB of
-heap once the handshake completes, and that cost — not the packet buffer —
-is the real limit on how many `mqtts://` bridges a device can hold
+blob plus its topic) is a permanently allocated buffer, about 5 KB, per
+connected broker — but only once `setupConnection()` grows it there; each
+`Connection`'s `PubSubClient` starts at a small idle buffer, so a slot with
+no broker configured, or an invalid url, costs a few hundred bytes of heap
+instead of 5 KB. That figure excludes TLS: an `mqtts://` connection also
+holds an mbedTLS context and its buffers, on the order of tens of KB of heap
+once the handshake completes, and that cost — not the packet buffer — is
+the real limit on how many `mqtts://` bridges a device can hold
 concurrently.
 
 `onRecord()`, registered as a second `signal_store` record hook,

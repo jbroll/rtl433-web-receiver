@@ -193,17 +193,6 @@ headroom: `set()` accepts anything under 5120 and the write either works or does
 Shrinking the per-card template on the dashboard side would help; raising the partition is
 blocked on the platform hardcoding `app0`'s offset, as `partitions.csv` notes.
 
-## Every MQTT slot allocates its 5300-byte buffer at startup
-
-`mqtt_publish.cpp` declares `Connection _conn[MQTT_PUBLISH_SLOTS + 1]`, four entries, each
-holding a `PubSubClient` whose default constructor mallocs `MQTT_MAX_PACKET_SIZE`. With
-that flag at 5300 the array costs 21,200 bytes of heap at static-init time, before
-`setup()` runs, on a device that typically has one broker configured. Constructing the
-clients small and calling `setBufferSize(MQTT_MAX_PACKET_SIZE)` from `setupConnection()`
-only for slots that parsed a valid URL recovers about 16 KB with no change to what gets
-published. The `platformio.ini` comment already flags that this buffer costs RAM for the
-life of the process; this would make it cost it once rather than four times.
-
 ## The SSE frame buffer is memset on every broadcast
 
 `SizedFrame` in `web_ui.cpp` zero-initialises its storage, and `FRAME_DEVICE_CAP` is 1363,
@@ -273,41 +262,21 @@ future call site changes that assumption.
 - `monitor.py:80-91` declares `--reset/-r` as `action="store_true",
   default=True`, so the flag is a no-op and `args.reset` is never read (`:138`
   tests `args.no_reset`). Harmless today, wrong the moment the default changes.
-- `mqtt_publish_store::add()` doesn't reject a url identical to the build-flag
-  `MQTT_BROKER_URL` default — adding it again from the dashboard creates two
-  connections to the same broker under the same client ID, which most brokers
-  resolve by kicking one session, producing an endless connect/disconnect flap.
 - Every `mqtts://` bridge is pinned to the ISRG Root X1 CA with no way to
   configure another; a broker not chained to Let's Encrypt (a commercial cloud
   broker, a self-signed LAN broker) will fail its handshake silently, showing
   only a dot that never turns green.
-- `mqtt_publish::begin()` tears down and reconnects every configured
-  connection on every `POST /$mqtt`/`/$mqtt/remove` (`mqtt_publish.cpp:207-221`),
-  not just the one that changed, so adding or removing one bridge drops and
-  re-handshakes every other already-working bridge too — up to ~15 s per TLS
-  connection, plus a full `replayAll()` re-publish to each. Diffing the table
-  against the live connections to leave unchanged slots alone would avoid
-  this, at the cost of the per-slot comparison logic (url, token, plain-vs-TLS)
-  that produced the original teardown bug in the first place.
 - `web_ui::loop()` calls `reapClosedClients()` unconditionally at the top and again
   inside the keepalive branch, and each call costs an `operator bool` plus a
   `recv(MSG_DONTWAIT|MSG_PEEK)` syscall per SSE slot. At loop rate that is thousands
   of syscalls a second to notice something that matters within a second or two.
   Gating it on a ~100 ms timer like the keepalive changes slot-free latency by at
   most that much.
-- `mqtt_publish::aliasPayload()` builds a `JsonDocument` to escape one string, and
-  `replayAll()` calls it once per alias, so a broker reconnect costs up to 32
-  heap-allocating documents. `web_ui::writeJsonString` does the same escaping without
-  allocating and is already exported in `web_ui.h`.
 - Each record is serialised twice: `mqtt_publish::onRecord` writes the doc into a
   601-byte stack buffer and `signal_store::record()` writes the identical doc into
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
   from there means changing the hook contract from "gets the doc" to "gets the
   serialised payload", so it is worth doing only if the decode path measures hot.
-- `setupConnection()` sets `enabled = false` and returns early on a broker URL it cannot
-  parse, but the caller increments `_connCount` regardless, so `count()`, `urlAt()` and
-  `connectedAt()` — and through them `GET /$mqtt` — list a bridge that will never connect
-  and give no reason for it.
 - A `POST /<topic>/$alias` with a name longer than `ALIAS_NAME_MAX` answers `204` and
   stores 31 characters. `web_ui.cpp` checks the topic length and returns `400` for a long
   one, but nothing checks the name, and `alias_store::set` truncates. The truncation at

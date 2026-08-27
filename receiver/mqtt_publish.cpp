@@ -14,6 +14,7 @@
 #include "mqtt_publish_store.h"
 #include "signal_store.h"
 #include "tz_store.h"
+#include "web_ui.h"
 
 #ifndef MQTT_RECONNECT_BACKOFF_MS
 #define MQTT_RECONNECT_BACKOFF_MS 30000
@@ -101,6 +102,11 @@ static ParsedBroker parseBrokerUrl(const char* url) {
 // never dangles across a begin() rebuild.
 #define MQTT_PUBLISH_MAX_CONNECTIONS (MQTT_PUBLISH_SLOTS + 1)
 
+// PubSubClient's default constructor mallocs MQTT_MAX_PACKET_SIZE
+// immediately; every unused slot sits at this size instead until
+// setupConnection() grows it for a broker actually in use.
+#define MQTT_PUBLISH_IDLE_BUFFER_SIZE 128
+
 struct Connection {
   WiFiClient       plainClient;
   WiFiClientSecure secureClient;
@@ -108,11 +114,15 @@ struct Connection {
   ParsedBroker     broker;
   char             url[MQTT_PUBLISH_STORE_URL_MAX] = "";
   char             token[MQTT_PUBLISH_STORE_TOKEN_MAX] = "";
+  const char*      reason = nullptr;
   bool             enabled = false;
   unsigned long    lastAttempt = 0;
+
+  Connection() { mqtt.setBufferSize(MQTT_PUBLISH_IDLE_BUFFER_SIZE); }
 };
 
 static Connection _conn[MQTT_PUBLISH_MAX_CONNECTIONS];
+static uint8_t    _slotOrder[MQTT_PUBLISH_MAX_CONNECTIONS];
 static uint8_t    _connCount = 0;
 static char       _clientId[64] = "";
 
@@ -123,10 +133,16 @@ static void setupConnection(Connection& c, const char* url, const char* token) {
   if (!c.broker.valid) {
     Log.warning(F("mqtt publish: broker URL \"%s\" is not a valid mqtt(s)://host:port, skipped" CR), url);
     c.enabled = false;
+    c.reason  = "invalid mqtt(s)://host:port url";
     return;
   }
   strncpy(c.token, token ? token : "", sizeof(c.token) - 1);
   c.token[sizeof(c.token) - 1] = '\0';
+  c.reason = nullptr;
+
+  // Grown here, before enabled is set, so nothing can connect through this
+  // slot while it still holds the idle-sized buffer.
+  c.mqtt.setBufferSize(MQTT_MAX_PACKET_SIZE);
 
   if (c.broker.tls) {
     c.secureClient.setCACert(ISRG_ROOT_X1);
@@ -150,11 +166,32 @@ static void setupConnection(Connection& c, const char* url, const char* token) {
 // quotes and the terminator.
 #define ALIAS_PAYLOAD_MAX (ALIAS_NAME_MAX * 6 + 3)
 
+// A Print sink over a fixed buffer for web_ui::writeJsonString, which needs a
+// Print& and would otherwise have to allocate a JsonDocument just to escape
+// one string.
+class BufferPrint : public Print {
+ public:
+  BufferPrint(char* buf, size_t cap) : _buf(buf), _cap(cap) { _buf[0] = '\0'; }
+  size_t write(uint8_t b) override {
+    if (_len + 1 >= _cap) { _overflow = true; return 0; }
+    _buf[_len++] = (char)b;
+    _buf[_len] = '\0';
+    return 1;
+  }
+  size_t length() const { return _len; }
+  bool   overflowed() const { return _overflow; }
+
+ private:
+  char*  _buf;
+  size_t _cap;
+  size_t _len = 0;
+  bool   _overflow = false;
+};
+
 static size_t aliasPayload(char* out, size_t outSize, const char* name) {
-  JsonDocument doc;
-  doc.set(name);
-  size_t n = serializeJson(doc, out, outSize);
-  return n > 0 && n < outSize ? n : 0;
+  BufferPrint bp(out, outSize);
+  web_ui::writeJsonString(bp, name);
+  return !bp.overflowed() && bp.length() > 0 ? bp.length() : 0;
 }
 
 static void replayAll(Connection& c) {
@@ -220,43 +257,91 @@ static bool connectOnce(Connection& c) {
   return ok;
 }
 
+static void teardown(Connection& c) {
+  if (c.mqtt.connected()) {
+    c.mqtt.disconnect();
+  }
+  c.plainClient.stop();
+  c.secureClient.stop();
+  c.enabled  = false;
+  c.reason   = nullptr;
+  c.url[0]   = '\0';
+  c.token[0] = '\0';
+}
+
 void begin(const char* clientId) {
   strncpy(_clientId, clientId, sizeof(_clientId) - 1);
   _clientId[sizeof(_clientId) - 1] = '\0';
 
-  // Every slot may already hold a live socket from a prior begin() — a
-  // dashboard add/remove reshuffles which broker each array index serves, so
-  // every one of them (not just the ones about to be reused) must be torn
-  // down first, or a stale connection keeps publishing to a removed broker.
-  for (uint8_t i = 0; i < MQTT_PUBLISH_MAX_CONNECTIONS; i++) {
-    Connection& c = _conn[i];
-    if (c.mqtt.connected()) {
-      c.mqtt.disconnect();
-    }
-    c.plainClient.stop();
-    c.secureClient.stop();
-    c.enabled = false;
-    c.url[0]   = '\0';
-    c.token[0] = '\0';
-  }
-
-  _connCount = 0;
+  // The wanted table: dashboard slots in store order, then the build-flag
+  // default. Collected before touching _conn so the match below compares
+  // against a stable snapshot.
+  const char* wantUrl[MQTT_PUBLISH_MAX_CONNECTIONS];
+  const char* wantToken[MQTT_PUBLISH_MAX_CONNECTIONS];
+  uint8_t     wantCount = 0;
   for (uint8_t i = 0; i < MQTT_PUBLISH_SLOTS; i++) {
     const char* url = mqtt_publish_store::urlAt(i);
     if (url == nullptr) continue;
-    setupConnection(_conn[_connCount], url, mqtt_publish_store::tokenAt(i));
-    _connCount++;
+    wantUrl[wantCount]   = url;
+    wantToken[wantCount] = mqtt_publish_store::tokenAt(i);
+    wantCount++;
   }
 #ifdef MQTT_BROKER_URL
-  setupConnection(_conn[_connCount], MQTT_BROKER_URL,
+  wantUrl[wantCount] = MQTT_BROKER_URL;
+  wantToken[wantCount] =
 #ifdef MQTT_TOKEN
-                   MQTT_TOKEN
+      MQTT_TOKEN;
 #else
-                   ""
+      "";
 #endif
-  );
-  _connCount++;
+  wantCount++;
 #endif
+
+  // Match each wanted entry against a live slot with the same url, token and
+  // TLS flag (TLS is derived from the url, so this is the same comparison
+  // twice, but explicit rather than assumed). A dashboard add or remove
+  // reshuffles which index used to serve which broker, so matching by index
+  // instead of by this triple is what would leave a stale connection
+  // publishing to a broker the table no longer names.
+  bool    claimed[MQTT_PUBLISH_MAX_CONNECTIONS] = {false};
+  uint8_t assignedSlot[MQTT_PUBLISH_MAX_CONNECTIONS];
+  for (uint8_t w = 0; w < wantCount; w++) {
+    const char* token = wantToken[w] ? wantToken[w] : "";
+    ParsedBroker wantBroker = parseBrokerUrl(wantUrl[w]);
+    assignedSlot[w] = MQTT_PUBLISH_MAX_CONNECTIONS;
+    for (uint8_t s = 0; s < MQTT_PUBLISH_MAX_CONNECTIONS; s++) {
+      if (claimed[s]) continue;
+      Connection& c = _conn[s];
+      if (c.enabled && strcmp(c.url, wantUrl[w]) == 0 && strcmp(c.token, token) == 0 &&
+          c.broker.tls == wantBroker.tls) {
+        claimed[s]      = true;
+        assignedSlot[w] = s;
+        break;
+      }
+    }
+  }
+
+  // Tear down every live slot not kept for a still-wanted broker.
+  for (uint8_t s = 0; s < MQTT_PUBLISH_MAX_CONNECTIONS; s++) {
+    if (!claimed[s]) teardown(_conn[s]);
+  }
+
+  // Set up the wanted entries that found no match, into the slots freed above.
+  for (uint8_t w = 0; w < wantCount; w++) {
+    if (assignedSlot[w] != MQTT_PUBLISH_MAX_CONNECTIONS) continue;
+    for (uint8_t s = 0; s < MQTT_PUBLISH_MAX_CONNECTIONS; s++) {
+      if (claimed[s]) continue;
+      claimed[s]      = true;
+      assignedSlot[w] = s;
+      setupConnection(_conn[s], wantUrl[w], wantToken[w]);
+      break;
+    }
+  }
+
+  for (uint8_t w = 0; w < wantCount; w++) {
+    _slotOrder[w] = assignedSlot[w];
+  }
+  _connCount = wantCount;
   if (_connCount == 0) {
     Log.notice(F("mqtt publish: no broker configured, disabled" CR));
   }
@@ -266,7 +351,7 @@ void loop() {
   if (_connCount == 0) return;
   if (WiFi.status() != WL_CONNECTED) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (!c.enabled) continue;
     if (!c.mqtt.connected()) {
       connectOnce(c);
@@ -282,7 +367,7 @@ void onRecord(const char* key, JsonDocument& doc) {
   size_t n = serializeJson(doc, payload, sizeof(payload));
   if (n == 0 || n >= sizeof(payload)) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(key, payload, true);
   }
 }
@@ -294,7 +379,7 @@ void publishLayout(const char* blob) {
   int  n = snprintf(topic, sizeof(topic), "%s/$layout", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
   }
 }
@@ -306,7 +391,7 @@ void publishLocation(const char* blob) {
   int  n = snprintf(topic, sizeof(topic), "%s/$location", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
   }
 }
@@ -318,7 +403,7 @@ void publishUnits(const char* blob) {
   int  n = snprintf(topic, sizeof(topic), "%s/$units", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, blob, true);
   }
 }
@@ -333,7 +418,7 @@ void publishAlias(const char* topic, const char* name) {
   if (name != nullptr && name[0] != '\0'
       && aliasPayload(payload, sizeof(payload), name) == 0) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, payload, true);
   }
 }
@@ -347,15 +432,17 @@ void publishTz(int16_t minutes) {
   int  n = snprintf(topic, sizeof(topic), "%s/$tz", _clientId);
   if (n < 0 || (size_t)n >= sizeof(topic)) return;
   for (uint8_t i = 0; i < _connCount; i++) {
-    Connection& c = _conn[i];
+    Connection& c = _conn[_slotOrder[i]];
     if (c.enabled && c.mqtt.connected()) c.mqtt.publish(topic, payload, true);
   }
 }
 
 uint8_t count() { return _connCount; }
 
-const char* urlAt(uint8_t i) { return i < _connCount ? _conn[i].url : nullptr; }
+const char* urlAt(uint8_t i) { return i < _connCount ? _conn[_slotOrder[i]].url : nullptr; }
 
-bool connectedAt(uint8_t i) { return i < _connCount && _conn[i].mqtt.connected(); }
+bool connectedAt(uint8_t i) { return i < _connCount && _conn[_slotOrder[i]].mqtt.connected(); }
+
+const char* reasonAt(uint8_t i) { return i < _connCount ? _conn[_slotOrder[i]].reason : nullptr; }
 
 } // namespace mqtt_publish
