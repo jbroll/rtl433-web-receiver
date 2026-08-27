@@ -13,8 +13,11 @@ Connect the serial port and run:
 
     ./tools/fetch_coredump.sh /dev/ttyACM0
 
-The script reads 64 KiB from `0xFF0000` into `core.bin` and decodes it against
-`receiver/.pio/build/esp32s3-generic/firmware.elf`.
+The script reads the coredump partition (offset and size from
+`receiver/partitions.csv`) into `core.bin` and decodes it against the ELF saved
+for the currently checked-out build (`receiver/tools/elf/$BUILD_ID.elf`, written
+by the `save_elf.py` post-build hook), falling back to
+`receiver/.pio/build/esp32s3-generic/firmware.elf` if that ELF isn't there.
 
 The tools used are:
 

@@ -80,12 +80,14 @@ def main():
     parser.add_argument(
         "--reset",
         "-r",
-        action="store_true",
-        default=True,
+        dest="no_reset",
+        action="store_false",
+        default=False,
         help="Reset the board on connect (default)",
     )
     parser.add_argument(
         "--no-reset",
+        dest="no_reset",
         action="store_true",
         help="Do not reset the board on connect",
     )

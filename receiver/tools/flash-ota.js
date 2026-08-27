@@ -16,8 +16,9 @@ function readEnvToken() {
   const envPath = path.join(__dirname, "..", ".env");
   if (!fs.existsSync(envPath)) return null;
   for (const raw of fs.readFileSync(envPath, "utf8").split("\n")) {
-    const line = raw.trim();
+    let line = raw.trim();
     if (!line || line.startsWith("#") || !line.includes("=")) continue;
+    if (line.startsWith("export ")) line = line.slice(7);
     const [key, ...rest] = line.split("=");
     if (key.trim() !== "OTA_TOKEN") continue;
     return rest.join("=").trim().replace(/^["']|["']$/g, "");
@@ -62,4 +63,7 @@ async function main() {
   console.log("device is rebooting into the new firmware");
 }
 
-main();
+main().catch((e) => {
+  console.error(e.message);
+  process.exit(1);
+});

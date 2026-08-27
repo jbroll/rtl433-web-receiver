@@ -17,6 +17,8 @@ wifi_store.cpp/.h          WiFi credential storage
 provisioning.cpp/.h        SoftAP captive portal
 monitor.py                 headless serial monitor
 tools/flash-ota.js         push a firmware image over OTA (`npx flash-ota`)
+tools/save_elf.py          post-build hook: saves firmware.elf to tools/elf/$BUILD_ID.elf
+tools/fetch_coredump.sh    read and decode a crash dump (tools/coredump.md)
 test/                      host topic tests, binding spec, fixtures
 docs/                      these pages
 ```
@@ -34,7 +36,8 @@ Run for a fixed duration, timestamp lines, and suppress startup noise:
 
 `monitor.py` auto-detects the first USB serial port and reads the baud rate from
 `platformio.ini`. Pass `--port` and `--baud` to override. It resets the board on
-connect by default; use `--no-reset` to leave it running.
+connect by default (`--reset` is that default made explicit); use `--no-reset`
+to leave it running.
 
 ## OTA flash
 
@@ -45,9 +48,12 @@ connect by default; use `--no-reset` to leave it running.
     npx flash-ota rtl433-a1b2c3.local .pio/build/esp32s3-generic/firmware.bin
 
 Run from `receiver/`, after `pio run` has produced a firmware image. The
-token comes from `OTA_TOKEN` in the environment or `.env`; without one it
-exits before making a request. On `200` the device reboots into the new
-image; any other status is printed and the exit code is nonzero.
+token comes from `OTA_TOKEN` in the environment or `.env` (an `export
+OTA_TOKEN=...` line is accepted the same as `load_env.py` accepts it for the
+firmware build); without one it exits before making a request. On `200` the
+device reboots into the new image; any other status is printed and the exit
+code is nonzero. An unreachable host prints one line and exits nonzero
+instead of a stack trace.
 
 There's no hash returned to check the pushed image against — `Update.end()`
 only confirms the write completed at the expected size. To confirm the
