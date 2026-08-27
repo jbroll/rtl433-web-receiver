@@ -22,9 +22,6 @@
   `store.js`'s `getCardState`/`setCardState` exist only to serve it. `store.js`'s
   `isStorageBroken()` and `exposeForTests()`'s `window.storageBroken` grew the same
   hook further.
-- `dashboard/README.md` carries the install and build commands and the test commands.
-  The bridge splits the same material into `docs/install.md` and `docs/development.md`.
-  The dashboard should match.
 - No way to rename a module itself (the receiver or bridge a source points at), only the
   individual device cards it reports. Settings has no field for a source's own label or for
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
