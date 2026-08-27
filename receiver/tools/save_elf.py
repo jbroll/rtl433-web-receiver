@@ -5,9 +5,8 @@ import subprocess
 Import("env")
 
 
-# fetch_coredump.sh needs the ELF that matches whatever build produced a given
-# dump, not just whatever's newest in .pio/build/ (which a later build may have
-# overwritten before the dump is fetched).
+# Saves the ELF fetch_coredump.sh needs to match a given dump, since a later
+# build may overwrite .pio/build/ before the dump is fetched.
 def build_id():
     try:
         out = subprocess.run(["git", "describe", "--always", "--dirty", "--exclude", "*"],
@@ -18,9 +17,14 @@ def build_id():
 
 
 def save_elf(source, target, env):
-    elf_dir = os.path.join(env.subst("$PROJECT_DIR"), "tools", "elf")
-    os.makedirs(elf_dir, exist_ok=True)
-    shutil.copy(str(target[0]), os.path.join(elf_dir, build_id() + ".elf"))
+    # A convenience copy for later core-dump symbolication must never fail the
+    # firmware build, so any error here is swallowed after a warning.
+    try:
+        elf_dir = os.path.join(env.subst("$PROJECT_DIR"), "tools", "elf")
+        os.makedirs(elf_dir, exist_ok=True)
+        shutil.copy(str(target[0]), os.path.join(elf_dir, build_id() + ".elf"))
+    except OSError as e:
+        print("save_elf.py: warning: could not save ELF copy: %s" % e)
 
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.elf", save_elf)
