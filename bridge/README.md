@@ -23,4 +23,3 @@ the server.
 - [`docs/binding.md`](docs/binding.md) — the protocol this implements
 - [`docs/architecture.md`](docs/architecture.md) — module boundaries and the tradeoffs
 - [`docs/development.md`](docs/development.md) — repo layout and tests
-- [`docs/backlog.md`](docs/backlog.md) — what's deliberately left undone

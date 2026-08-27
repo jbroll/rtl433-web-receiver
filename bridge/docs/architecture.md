@@ -38,6 +38,12 @@ subscribes to `#` plus `DOLLAR_TOPICS`, an explicit list of the `$`-leading
 topic names the binding uses (`$tz` today), in one `subscribe` call so
 `broker.subscribed` resolves only once every topic in it is granted.
 
+Subscribing to `#` means the cache grows with every topic the broker carries,
+not just the ones a client is watching, which doesn't scale to a busy broker.
+`MAX_SSE_CLIENTS` and `MAX_SSE_FILTERS` bound what the cache costs to serve,
+which relieves part of the pressure without changing what the cache itself
+holds.
+
 The broker is the only writer of the cache. A `POST` publishes and then waits
 for the broker to echo the message back over the `#` subscription before it
 answers `204`, so a `GET` right after a `204` reads what was posted, the
@@ -51,11 +57,25 @@ answered by the other's echo, and a foreign publisher's message could answer a
 publish the broker never took. Identical bytes from another publisher still
 answer: the cache then holds exactly what the waiter published.
 
+That still lets a `204` answer a publish the broker actually lost: another
+publisher sending the same bytes to that topic inside the wait answers it
+instead, and the same match can fire across a reconnect, when the retained
+replay of the waiter's own earlier message matches the bytes still waiting.
+Closing it needs QoS 1 and a match on the packet identifier instead of
+payload bytes, which was rejected: it changes the cache-write ordering the
+design rests on, since the echo is what confirms a publish and the broker is
+meant to be the only writer of the cache.
+
 Writing the payload locally as well was the alternative, and answers sooner.
 It also puts a second writer on the cache: a late echo of an earlier publish
 lands on top of a newer local write, and a `GET` after a `204` goes
 backwards. Measured over a 40 ms link, two sequential `POST`s to one topic
 made a `GET` return the new value, then the old one, then the new one again.
+
+Waiting for the echo also means a publisher's throughput is bounded by the
+link's round trip rather than by the bridge, since each `POST` sits until its
+own echo comes back before answering; a publish the broker never echoes holds
+the request the full wait before the `503` below.
 
 The wait is bounded by `ECHO_TIMEOUT_MS` in `src/broker.js`, 5 seconds, after
 which the `POST` is `503`. A broker on the same network echoes in a
@@ -131,7 +151,7 @@ A stream that opens during the settle window is `ready()` from `SUBACK`
 onward, so it receives `deleted` frames alongside everyone else — including
 for topics it never saw a message for, since it wasn't connected before the
 drop. A topic already marked deleted while still connected also stays in
-the cache as an empty entry (a separate, tracked backlog item), so it is
+the cache as an empty entry (see "Payloads stay bytes" below), so it is
 counted as missing at the next reconnect and announced deleted a second
 time; harmless, since the frame is advisory.
 
@@ -163,11 +183,18 @@ message — both arrive as a zero-length payload with the retain flag cleared.
 message: a zero-length payload that follows one is treated as `'deleted'`,
 one that doesn't is an ordinary empty message and returns `'set'`. Either way
 the cache is set to the empty payload, not cleared — the topic stays a
-distinct "empty message" entry rather than one the bridge has forgotten.
+distinct "empty message" entry rather than one the bridge has forgotten. A
+`GET` reads `404` for that entry the same as for a topic with no entry at
+all, so a genuine retained delete stays cached as an empty message, not
+cleared out, until the next reconnect rebuilds the cache from the broker's
+actual retained set.
 
 This fallback misreads a foreign publisher's non-retained empty message that
 happens to follow real content as a deletion, the same ambiguity that masks a
-topic's retained message below; it cannot be resolved by caching alone.
+topic's retained message below; it cannot be resolved by caching alone. MQTT
+5's retain-as-published subscription option would tell the two apart, but
+`aedes`, what the embedded broker runs, is MQTT 3.1.1 only, so that fix was
+rejected.
 
 An empty body is never a valid message, and `binding.md` defines `404` for a
 topic with no message, so a `GET` of either an actual delete or an ordinary
@@ -176,8 +203,7 @@ message therefore reads as `404` even while the broker still holds that
 topic's own retained message, until a later message overwrites the cache
 entry or the connection is remade and the cache is rebuilt from the broker's
 actual retained set. The bridge cannot see that set without resubscribing, so
-this is a standing gap, not just a stale-until-reconnect one; see
-[`docs/backlog.md`](backlog.md).
+this is a standing gap, not just a stale-until-reconnect one.
 
 A `GET` of a topic whose cached payload is empty is `404`, not a `200` with an
 empty body, because an empty body is not the JSON a `200` promises and a
