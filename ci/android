@@ -10,6 +10,8 @@ export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME
 WORKTREE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$WORKTREE"
 
+command -v adb >/dev/null || { echo "[ci/android] adb not found" >&2; exit 1; }
+
 echo "[ci/android] dashboard: npm ci"
 npm ci --prefix dashboard
 
@@ -25,8 +27,17 @@ npm ci --prefix bridge
 echo "[ci/android] dashboard: playwright install chromium"
 npx --prefix dashboard playwright install chromium
 
-echo "[ci/android] bin/test.sh"
-bin/test.sh
+# bin/test.sh also runs receiver/test/host/run.sh, which needs PlatformIO's
+# ArduinoJson headers (fetched by `pio run`) and `pio` on PATH; neither is on
+# this host, so run each suite bin/test.sh would run except that one.
+echo "[ci/android] receiver: npm test (binding suite)"
+(cd receiver && npm test)
+
+echo "[ci/android] bridge: npm test"
+(cd bridge && npm test)
+
+echo "[ci/android] dashboard: npm test"
+(cd dashboard && npm test)
 
 echo "[ci/android] dashboard: npm run build"
 npm run build --prefix dashboard
@@ -41,9 +52,9 @@ APK="app/android/app/build/outputs/apk/debug/app-debug.apk"
 echo "[ci/android] APK: $APK"
 ls -lh "$APK"
 
-command -v adb >/dev/null || { echo "[ci/android] adb not found" >&2; exit 1; }
+adb_list=$(adb devices) || { echo "[ci/android] adb devices failed (broken adb server)" >&2; exit 1; }
 
-if adb devices | grep -q '[[:space:]]device$'; then
+if echo "$adb_list" | grep -q '[[:space:]]device$'; then
     echo "[ci/android] adb device found, running CDP smoke test"
     adb install -r "$APK"
     adb shell am start -n com.rkroll.rtl433/.MainActivity

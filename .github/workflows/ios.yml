@@ -26,15 +26,17 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
+      - name: Install bridge dependencies
+        working-directory: bridge
+        run: npm ci
+
       - name: Build dashboard
         working-directory: dashboard
         run: npm run build
 
       - name: Test bridge
         working-directory: bridge
-        run: |
-          npm ci
-          node --test test/*.test.js
+        run: node --test test/*.test.js
 
       - name: Test receiver binding suite
         working-directory: receiver
@@ -42,6 +44,8 @@ jobs:
           npm ci
           npx playwright test
 
+      # dashboard's test harness starts a real bridge, so bridge/node_modules
+      # (installed above) must exist before this runs.
       - name: Test dashboard
         working-directory: dashboard
         run: |

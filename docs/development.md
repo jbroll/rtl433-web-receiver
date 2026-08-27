@@ -23,12 +23,16 @@ npm run build
 
 `bin/test.sh` runs every sub-project's suite in one command: the receiver's host tests and
 its Playwright binding suite, then bridge and dashboard `npm test`. It expects
-`node_modules` to already exist in each sub-project; on a fresh clone, install first:
+`node_modules` to already exist in each sub-project, and needs `pio` (PlatformIO) on
+`PATH` with `receiver/.pio/libdeps/` already populated, since the receiver's host suite
+compiles against the ArduinoJson headers PlatformIO fetches and also runs a full `pio run`
+of the firmware. On a fresh clone, install and prime all of that first:
 
 ```bash
 npm ci --prefix receiver
 npm ci --prefix bridge
 npm ci --prefix dashboard
+(cd receiver && pio run)   # one-time: fetches ArduinoJson into .pio/libdeps/
 bin/test.sh
 ```
 
