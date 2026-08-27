@@ -143,7 +143,7 @@ future call site changes that assumption.
   about whether to allow no verification at all, so it waits until someone has
   a broker that needs it. The cheap mitigation is to log the
   `WiFiClientSecure` handshake error rather than only PubSubClient's
-  `state()`, so the reason reaches the serial log. That has not been done.
+  `state()`, so the reason reaches the serial log.
 - Each record is serialised twice: `mqtt_publish::onRecord` writes the doc into a
   601-byte stack buffer and `signal_store::record()` writes the identical doc into
   `sub.payload` a few lines later. Serialising once into `sub.payload` and publishing
@@ -151,9 +151,3 @@ future call site changes that assumption.
   serialised payload", so it is worth doing only if the decode path measures hot.
 - No test exercises `web_ui.cpp`'s `/$mqtt` HTTP dispatch directly, and there
   is no host-testable seam for `web_ui.cpp` routes at all.
-- `test/binding-server.js`, the model of the firmware's wire format, checks alias name
-  length with JavaScript's `value.length` (UTF-16 code units), while `web_ui.cpp`'s
-  `handleAliasPost` checks `strlen(name)` (bytes). The two agree for ASCII but disagree for
-  any multi-byte alias: a name the model accepts as under `ALIAS_NAME_MAX` can be over the
-  firmware's byte limit, and vice versa. Not fixed here; noted as a model-versus-firmware
-  divergence.

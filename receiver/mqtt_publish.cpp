@@ -254,6 +254,14 @@ static bool connectOnce(Connection& c) {
   } else {
     Log.warning(F("mqtt publish: connect to %s:%u failed, state=%d" CR),
                 c.broker.host, c.broker.port, c.mqtt.state());
+    // state() alone can't distinguish a bad CA/handshake from a broker that
+    // just refused the connection; only WiFiClientSecure knows which.
+    if (c.broker.tls) {
+      char tlsErr[128];
+      if (c.secureClient.lastError(tlsErr, sizeof(tlsErr)) != 0) {
+        Log.warning(F("mqtt publish: TLS error: %s" CR), tlsErr);
+      }
+    }
   }
   return ok;
 }

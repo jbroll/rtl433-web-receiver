@@ -15,6 +15,11 @@ class WiFiClientSecure : public WiFiClient {
     return 1;
   }
   void setHandshakeTimeout(unsigned long seconds) { handshakeTimeoutSeconds = seconds; }
+  // No real handshake ever runs here, so there is never an error to report.
+  int lastError(char* buf, size_t size) {
+    if (size > 0) buf[0] = '\0';
+    return 0;
+  }
   void resetForTest() {
     WiFiClient::resetForTest();
     caCert                  = nullptr;

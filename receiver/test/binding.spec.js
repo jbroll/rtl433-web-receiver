@@ -105,6 +105,23 @@ test("a name at ALIAS_NAME_MAX is 400 and leaves the stored alias alone", async 
   expect((await server.get(topic)).body).toBe(JSON.stringify(underMax));
 });
 
+test("a multi-byte name is measured in UTF-8 bytes, not UTF-16 code units", async () => {
+  server = await startServer({ devices: [ACURITE] });
+  const topic = topicOf(ACURITE) + "/$alias";
+  await server.post(topic, JSON.stringify("Back fence"));
+
+  // 16 code units but 32 UTF-8 bytes ("é" is 2 bytes each): over budget
+  // by byte count even though under it by .length, matching strlen(name) in
+  // web_ui.cpp's handleAliasPost.
+  const atMaxBytes = "é".repeat(16);
+  expect((await server.post(topic, JSON.stringify(atMaxBytes))).status).toBe(400);
+  expect((await server.get(topic)).body).toBe(JSON.stringify("Back fence"));
+
+  const underMaxBytes = "é".repeat(15);
+  expect((await server.post(topic, JSON.stringify(underMaxBytes))).status).toBe(204);
+  expect((await server.get(topic)).body).toBe(JSON.stringify(underMaxBytes));
+});
+
 test("a post to a non-$alias topic is 405", async () => {
   server = await startServer({ devices: [ACURITE] });
   expect((await server.post(topicOf(ACURITE), JSON.stringify("x"))).status).toBe(405);

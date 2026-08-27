@@ -259,7 +259,7 @@ function startServer(opts = {}) {
         res.writeHead(400).end("body must be a JSON string");
         return;
       }
-      if (value.length >= ALIAS_NAME_MAX) {
+      if (Buffer.byteLength(value, "utf8") >= ALIAS_NAME_MAX) {
         res.writeHead(400).end("alias name too long");
         return;
       }
