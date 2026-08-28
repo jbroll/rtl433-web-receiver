@@ -1,4 +1,4 @@
-:root { color-scheme: light dark; --line:#8883; scrollbar-gutter: stable; }
+:root { color-scheme: light dark; --line:#8883; --err:#e5484d; scrollbar-gutter: stable; }
 body { margin:0; font:14px/1.4 system-ui,sans-serif; }
 header { display:flex; gap:1rem; align-items:baseline; padding:.6rem 1rem; border-bottom:1px solid var(--line);
          position:sticky; top:0; z-index:10; background:Canvas; }
@@ -55,6 +55,8 @@ section[hidden] { display:none; }
    .body is height:100% over what is left. .age is on every card. */
 .card { position:relative; margin:.35rem; border:1px solid var(--line); border-radius:.7rem;
         padding:.5rem .45rem 1.2rem; }
+.card.err { border-color:var(--err); }
+.card .val.err .fn, .card .val.err .fv { color:var(--err); }
 .card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
              padding:0 .4rem; background:Canvas; font-size:.75rem;
              display:flex; align-items:baseline; overflow:hidden;

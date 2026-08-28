@@ -1,6 +1,6 @@
 import { registerValue } from './render-values.js'
 import { tick } from './tick.js'
-import { displayValue } from './units.js'
+import { displayValue, fmtValue } from './units.js'
 import { settings } from './settings.js'
 import { glyphOf } from './feeds/wx-icons.js'
 import { textWidthEm } from './grid.js'
@@ -195,10 +195,21 @@ registerValue('forecastDay', ({ v }) => {
   )
 })
 
+// The station a point resolves to can be a long way off; the distance the
+// stations lookup already carries is what makes that legible at a glance.
+function stationText(v, s) {
+  if (!v.station) return ''
+  if (typeof v.stationDistanceM !== 'number') return v.station
+  const mi = s && s.custom && s.custom.wind === 'mi/h'
+  const dist = mi ? v.stationDistanceM / 1609.344 : v.stationDistanceM / 1000
+  return `${v.station} · ${fmtValue(dist, 0)} ${mi ? 'mi' : 'km'}`
+}
+
 registerValue('now', ({ v }) => {
   const s = settings.value
   const g = glyphOf(v.sky, v.night)
   const t = temp(v.temp, v.unit, s)
+  const station = stationText(v, s)
   return (
     <>
       {v.place && <div class="cfn">{v.place}</div>}
@@ -207,6 +218,7 @@ registerValue('now', ({ v }) => {
         <span class="big">{t}</span>
       </div>
       <div class="csub">{v.text || ''}</div>
+      {station && <div class="csub station">{station}</div>}
     </>
   )
 })

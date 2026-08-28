@@ -3,7 +3,7 @@ import { useLayoutEffect, useEffect, useRef } from 'preact/hooks'
 import { devices } from './devices.js'
 import { cardState, cardEntry, visibleValues, bottomFields, setCardHidden } from './store.js'
 import { aliasOf, displayName, postAlias } from './alias.js'
-import { ageText, displayValue } from './units.js'
+import { ageText, displayValue, isBadReading } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, cellSignal, viewCols, viewColsSignal,
@@ -102,10 +102,13 @@ const Card = memo(function Card({ rec }) {
 
   const flashClass = rec.flashing.value ? 'flash' : ''
   const editingClass = editing.value ? 'editing' : ''
+  // radio_ok arrives unconditionally on the Receiver's own telemetry; every
+  // other device's merged object simply lacks the field.
+  const errClass = merged.radio_ok === 0 ? 'err' : ''
 
   return (
     <div
-      class={`card ${flashClass} ${editingClass}`}
+      class={`card ${flashClass} ${editingClass} ${errClass}`}
       style={{ gridColumn: `span ${w}`, gridRow: `span ${h}` }}
       data-key={key}
       onPointerDown={(ev) => {
@@ -231,6 +234,7 @@ function RichValue({ rec, raw, field }) {
 
 function Value({ raw, field }) {
   const d = displayValue(field, raw, settings.value)
+  const bad = isBadReading(field, raw)
   const valRef = useRef(null)
 
   // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
@@ -253,7 +257,7 @@ function Value({ raw, field }) {
 
   return (
     <div
-      class="val"
+      class={`val${bad ? ' err' : ''}`}
       data-f={field}
       onPointerDown={(ev) => {
         if (!editing.value) return

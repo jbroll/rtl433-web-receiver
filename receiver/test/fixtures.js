@@ -32,7 +32,7 @@ const FREEZER = {
 // What the firmware records about itself, keyed on the model alone.
 const RECEIVER = {
   model: "Receiver", build: "test", temperature_C: 47.2, radio_C: 31,
-  noise_dBm: -104, heap_kB: 177, decodes: 42, drops: 3,
+  radio_ok: 1, noise_dBm: -104, heap_kB: 177, decodes: 42, drops: 3,
 };
 
 const ACURITE_WIND = {

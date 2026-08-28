@@ -143,6 +143,11 @@ Forget layouts, in edit mode, clears the lot after a confirmation prompt. The
 devices on screen at the time keep their cards; only ones seen afterwards
 start hidden.
 
+The receiver's own card turns its border red, and reddens the `radio ok` and
+`noise` readings, when `radio ok` reads 0 or the noise floor reads at or below
+about -120 dBm — the radio refusing mode changes reads at or below its own
+measurement floor, so a below-floor reading is a fault, not a quiet band.
+
 ## Cards edit mode
 
 The pencil button opens edit mode, which arranges the card and nothing else:
@@ -234,7 +239,10 @@ values from the Devices tab exactly as with a radio device.
 value so you can keep the three you care about and hide the rest. Readings from
 the nearest reporting station — temperature, humidity, wind, pressure — arrive
 as ordinary readings, so the Units setting converts them like any sensor. It
-refreshes every 15 minutes.
+refreshes every 15 minutes. Current conditions name the station and its distance
+from your point — a station chosen by proximity can still be a long way off, so
+the card says which one and how far, converting the distance with the Units
+setting the same way the readings themselves do.
 
 Weather comes from the National Weather Service, which covers the United States
 only. Elsewhere the card says so and stops asking; the other three cards work

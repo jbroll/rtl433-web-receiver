@@ -169,11 +169,24 @@ test("the receiver's own card is shown without checking a box", async ({ page })
   await expect(card.locator('.val[data-f="noise_dBm"] .u')).toHaveText("dBm");
   await expect(card.locator('.val[data-f="heap_kB"] .u')).toHaveText("kB");
   await expect(card.locator('.val[data-f="radio_C"] .u')).toHaveText("°C");
+  await expect(card).not.toHaveClass(/\berr\b/);
+  await expect(card.locator('.val[data-f="noise_dBm"]')).not.toHaveClass(/\berr\b/);
 
   await page.click("#tab-devices");
   await page.click("#subtab-log");
   await expect(page.locator("#logrows tr")).toHaveCount(1);
   await expect(page.locator("#logrows")).not.toContainText("Receiver");
+});
+
+test("a radio stuck below its own noise floor marks the receiver card as broken", async ({ page }) => {
+  server = await startServer({ devices: [{ ...RECEIVER, radio_ok: 0, noise_dBm: -125 }] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/live/);
+
+  const card = page.locator(`.card[data-key$="${RECEIVER_KEY}"]`);
+  await expect(card).toHaveClass(/\berr\b/);
+  await expect(card.locator('.val[data-f="noise_dBm"]')).toHaveClass(/\berr\b/);
+  await expect(card.locator('.val[data-f="radio_ok"]')).toHaveClass(/\berr\b/);
 });
 
 test("a device the user never showed is dropped once it is gone", async ({ page }) => {

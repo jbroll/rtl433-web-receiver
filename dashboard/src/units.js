@@ -56,6 +56,17 @@ export function fmtValue(v, decimals = 1) {
   return String(parseFloat(v.toFixed(decimals)));
 }
 
+// A radio stuck refusing OP_MODE writes reads at or below the SX1231's own
+// measurement floor: see receiver/docs/architecture.md, "A refused OP_MODE
+// write is not an SPI fault".
+export const NOISE_FLOOR_DBM = -120;
+
+export function isBadReading(field, raw) {
+  if (field === "radio_ok") return raw === 0;
+  if (field === "noise_dBm") return typeof raw === "number" && raw <= NOISE_FLOOR_DBM;
+  return false;
+}
+
 // Unit groups that convert at display time, keyed on the display unit from splitUnit.
 const GROUP_OF_UNIT = {
   "°F": "temperature", "°C": "temperature",

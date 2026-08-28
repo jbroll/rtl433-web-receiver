@@ -36,14 +36,21 @@ export function parsePoints(json) {
   }
 }
 
+// The stations feature carries its own distance from the queried point
+// (properties.distance, in meters), so naming a station costs nothing extra
+// to also place it.
 export function parseStations(json) {
   const f = json && json.features
-  if (!Array.isArray(f)) return ''
+  if (!Array.isArray(f)) return { id: '', distanceM: null }
   for (const s of f) {
-    const id = s && s.properties && s.properties.stationIdentifier
-    if (id) return id
+    const p = s && s.properties
+    const id = p && p.stationIdentifier
+    if (id) {
+      const d = p.distance
+      return { id, distanceM: d && Number.isFinite(d.value) ? d.value : null }
+    }
   }
-  return ''
+  return { id: '', distanceM: null }
 }
 
 function pop(period) {
@@ -124,7 +131,9 @@ export default {
     let meta = ctx.meta
     if (!meta || !meta.forecast) {
       meta = parsePoints(await get(`${API}/points/${round(ctx.lat)},${round(ctx.lon)}`, ctx.signal))
-      meta.station = meta.stations ? parseStations(await get(meta.stations, ctx.signal)) : ''
+      const st = meta.stations ? parseStations(await get(meta.stations, ctx.signal)) : { id: '', distanceM: null }
+      meta.station = st.id
+      meta.stationDistanceM = st.distanceM
     }
 
     const { days } = parseForecast(await get(meta.forecast, ctx.signal))
@@ -149,6 +158,8 @@ export default {
       unit: obs && obs.fields.temperature_C !== undefined ? 'C' : (lead ? lead.unit : 'F'),
       place: meta.city ? `${meta.city}, ${meta.state}` : '',
       brief: (obs && obs.text) || (lead && lead.text) || '',
+      station: meta.station || '',
+      stationDistanceM: typeof meta.stationDistanceM === 'number' ? meta.stationDistanceM : null,
     }
     days.forEach((d, i) => { fields['day' + i] = d })
     if (obs) Object.assign(fields, obs.fields)

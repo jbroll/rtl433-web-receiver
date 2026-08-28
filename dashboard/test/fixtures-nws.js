@@ -294,7 +294,8 @@ export const STATIONS = {
     {
       "properties": {
         "stationIdentifier": "KBDU",
-        "name": "Boulder Municipal Airport"
+        "name": "Boulder Municipal Airport",
+        "distance": { "unitCode": "wmoUnit:m", "value": 6437 }
       }
     },
     {

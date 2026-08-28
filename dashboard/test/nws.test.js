@@ -38,10 +38,12 @@ test('a point outside the united states is terminal, not a retry', () => {
   assert.throws(() => parsePoints(null), Unsupported)
 })
 
-test('the first usable station identifier is taken', () => {
-  assert.equal(parseStations(STATIONS), 'KBDU')
-  assert.equal(parseStations({ features: [{ properties: {} }, { properties: { stationIdentifier: 'KLMO' } }] }), 'KLMO')
-  assert.equal(parseStations({}), '')
+test('the first usable station identifier is taken, with its distance', () => {
+  assert.deepEqual(parseStations(STATIONS), { id: 'KBDU', distanceM: 6437 })
+  assert.deepEqual(
+    parseStations({ features: [{ properties: {} }, { properties: { stationIdentifier: 'KLMO' } }] }),
+    { id: 'KLMO', distanceM: null })
+  assert.deepEqual(parseStations({}), { id: '', distanceM: null })
 })
 
 test('fourteen periods fold into seven days with a high and a low', () => {

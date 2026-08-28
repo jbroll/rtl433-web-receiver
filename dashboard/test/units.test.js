@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { splitUnit, fmtValue, displayValue, ageText, readings, mergeReadings } from '../src/units.js'
+import { splitUnit, fmtValue, displayValue, ageText, readings, mergeReadings, isBadReading } from '../src/units.js'
 
 const METRIC = { decimals: 1, custom: { temp: 'C', rain: 'mm', wind: 'km/h', pressure: 'hPa' } }
 const IMPERIAL = { decimals: 1, custom: { temp: 'F', rain: 'in', wind: 'mi/h', pressure: 'hPa' } }
@@ -24,6 +24,16 @@ test('fmtValue rounds to the requested decimals and trims trailing zeros', () =>
   assert.equal(fmtValue(-4.5678, 2), '-4.57')
   assert.equal(fmtValue('CRC', 2), 'CRC')
   assert.equal(fmtValue(true, 2), 'true')
+})
+
+test('radio_ok false and a below-floor noise reading are bad; a quiet one is not', () => {
+  assert.equal(isBadReading('radio_ok', 0), true)
+  assert.equal(isBadReading('radio_ok', 1), false)
+  assert.equal(isBadReading('noise_dBm', -121), true)
+  assert.equal(isBadReading('noise_dBm', -120), true)
+  assert.equal(isBadReading('noise_dBm', -104), false)
+  assert.equal(isBadReading('noise_dBm', 'CRC'), false)
+  assert.equal(isBadReading('heap_kB', 0), false)
 })
 
 test('temperature converts between Fahrenheit and Celsius', () => {

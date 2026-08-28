@@ -34,6 +34,22 @@ test("the weather card carries seven forecast days plus current conditions", asy
   await expect(page.locator(`${CARD} .val[data-f="day7"]`)).toHaveCount(0);
 });
 
+test("the observation station's identifier and distance show on the current-conditions cell", async ({ page }) => {
+  await open(page);
+  await setPlace(page);
+  await expect(page.locator(CARD)).toBeVisible();
+
+  const station = page.locator(`${CARD} .val[data-f="now"] .csub.station`);
+  await expect(station).toHaveText("KBDU · 6 km");
+
+  await page.locator("#tab-devices").click();
+  await page.locator("#subtab-settings").click();
+  await page.locator("#settings-units").selectOption("imperial");
+  await page.locator("#tab-cards").click();
+
+  await expect(station).toHaveText("KBDU · 4 mi");
+});
+
 test("the point and station lookups happen once, the forecast every refresh", async ({ page }) => {
   await open(page);
   await setPlace(page);

@@ -2,12 +2,6 @@
 
 - A device seen through two bridges is two cards. Nothing merges them.
 - A reading that cannot fit even at 11px still ellipsizes.
-- A below-floor noise reading has no error marking on the receiver's card. The firmware
-  already publishes the signature: `radio_ok`, `noise_dBm` and `rssi_thresh` are all in
-  the telemetry, and a radio stuck refusing `OP_MODE` writes reads at or below the
-  SX1231's own measurement floor of about -120 dBm. The card renders `noise_dBm` as a
-  plain value, so a broken radio reads as merely quiet. Needs an indicator keyed on
-  `radio_ok`.
 - `src/main.jsx` exposes page internals on `window` through `exposeForTests()`, because
   tests in `test/cards.spec.js` drive the page through the globals the firmware version had
   at script level. 39 of its 88 tests reach for `window.` or `page.evaluate`. Deliberate
@@ -38,8 +32,6 @@
 - Weather is United States only. `feeds/nws.js` sits behind the generic feed
   interface, so a worldwide provider such as Open-Meteo would be a new file
   rather than a refactor.
-- The observation station the weather card reads can be a long way from the
-  point. Nothing shows which station, or how far.
 - Moonrise and moonset are found by sampling altitude every ten minutes and
   interpolating, so they are good to a couple of minutes, not seconds.
 - "Use my location" cannot work on the page the receiver serves, because plain
