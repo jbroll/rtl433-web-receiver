@@ -1156,7 +1156,7 @@ test("another device's live signal does not disturb a card mid-drag", async ({ p
 });
 
 // See docs/architecture.md's "Card memo".
-test("a card's own signal update reaches its DOM mid-gesture, despite areEqual", async ({ page }) => {
+test("a card's own signal update does not reach its DOM mid-gesture, thanks to areEqual", async ({ page }) => {
   await open(page, [ACURITE, OREGON]);
   await edit(page);
   const box = await page.locator(CARD + " .lbl").boundingBox();
@@ -1169,12 +1169,21 @@ test("a card's own signal update reaches its DOM mid-gesture, despite areEqual",
   const before = await value();
 
   await server.emit({ ...ACURITE, temperature_F: 999.9 });
-  await expect.poll(value).not.toBe(before);
+  // The signal did update -- wait for it to reach the record itself -- but the
+  // frozen card must not show it while the gesture holds this key.
+  await expect.poll(() => page.evaluate(
+    k => devices.get(k).merged.temperature_F, storeKey(server, ACURITE_KEY)
+  )).toBe(999.9);
+  await page.waitForTimeout(200);
+  expect(await value()).toBe(before);
 
-  // The gesture itself is unaffected by the update reaching the card's DOM.
+  // The gesture itself is unaffected by the update.
   await expect(page.locator(".ghostcard")).toHaveCount(1);
   await expect(page.locator(CARD)).toHaveClass(/lifting/);
   await page.mouse.up();
+
+  // Releasing the gesture unfreezes the card, showing the update it missed.
+  await expect.poll(value).not.toBe(before);
 });
 
 test("the label straddling the top border is not clipped by the card", async ({ page }) => {

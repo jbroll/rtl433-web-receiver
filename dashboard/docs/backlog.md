@@ -38,16 +38,6 @@
   what `abortProbe()` leaves behind. Nothing has confirmed the probe fails there. If it
   succeeds instead, the script lands on the cards tab and fails at its first wait.
 
-- `Card`'s gesture freeze (`memo(Card, areEqual)` in `cards.jsx`) does not survive a
-  live reading arriving for the card being dragged, resized, or renamed: `Card` reads
-  `rec.merged.value` directly, and `@preact/signals` re-renders a component that read a
-  changed signal on its own, bypassing `memo`/`areEqual` entirely. Confirmed by
-  `test/cards.spec.js`, "a card's own signal update reaches its DOM mid-gesture, despite
-  areEqual" (see `docs/architecture.md`'s "Card memo"). The gesture mechanics themselves
-  (ghost, `lifting` class, drop zones) are unaffected since none of it lives in `Card`'s
-  render output; only the frozen-values guarantee is missing. `areEqual` would need to
-  gate on the signal read too, not just on props, to actually freeze the display.
-
 ## Information feeds
 
 - NWS documents a required identifying `User-Agent`. A browser cannot send one:

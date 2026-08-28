@@ -140,20 +140,23 @@ rule violation rather than an observed bug.
 
 ## Card memo
 
-`Card` in `cards.jsx` is wrapped in `memo(Card, areEqual)`. `areEqual` returns `false`
-unconditionally except while a drag, resize, or rename is in flight on that same card's
-key, when it returns `true` -- the intent being to freeze a card's DOM while a gesture
-has it, so a live reading arriving mid-drag doesn't move or resize it under the pointer.
+`Card` in `cards.jsx` is wrapped in `memo(Card, areEqual)`. `areEqual` returns `true`
+while a drag, resize, or rename is in flight on that same card's key, `false` otherwise
+-- freezing a card's DOM while a gesture has it, so a live reading arriving mid-drag
+doesn't move or resize it under the pointer.
 
-That freeze does not hold. `Card`'s own body reads `rec.merged.value` (and other signals)
-directly, and `@preact/signals`' Preact integration re-renders a component that read a
-signal whenever that signal changes, independent of props or `memo` -- `areEqual` is
-never consulted for that path. A reading arriving for the card being dragged updates its
-displayed values in place while the drag continues (`test/cards.spec.js`, "a card's own
-signal update reaches its DOM mid-gesture, despite areEqual"). The gesture's own imperative
-state (the ghost element, the `lifting` class, drop zones) is untouched, because none of it
-lives in `Card`'s render output, so the drag itself keeps working; only the frozen-values
-guarantee `areEqual` was written for does not exist.
+`memo`'s comparison only gates a re-render `Card`'s parent asks for. `@preact/signals`'
+Preact integration re-renders a component directly, bypassing `memo`, when a signal it
+read during its own last render changes -- so any component under `Card` that reads
+`rec.merged.value` itself would freeze past `areEqual` regardless of what `Card` does.
+`Card` reads `rec.merged` once, through `useFrozenValue`: while the gesture holds this
+card's key, the hook returns the value it last read instead of touching `sig.value`,
+so it doesn't resubscribe for the duration and the forced re-render a change would
+otherwise trigger doesn't happen. `Card` passes the result down as a plain `merged`
+prop; `Body`, `Value`, `RichValue`, and `BottomStrip` read fields off that prop rather
+than the signal, so none of them can independently subscribe and leak an update past
+the freeze. The gesture's own imperative state (the ghost element, the `lifting` class,
+drop zones) lives outside `Card`'s render output and is unaffected either way.
 
 ## Render cost per message
 

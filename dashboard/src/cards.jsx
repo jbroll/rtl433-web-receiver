@@ -68,21 +68,33 @@ export function CardsView() {
   )
 }
 
+// The card key a drag, resize, or rename currently has hold of, or null.
+function gestureTargetKey() {
+  if (!gestureInFlight()) return null
+  const gesture = dragging.value || resizing.value
+  return gesture ? gesture.key : renaming.value
+}
+
 // areEqual returns true when props are "equal" (skip re-render)
-function areEqual(props, otherProps) {
-  if (gestureInFlight()) {
-    const gesture = dragging.value || resizing.value
-    const gestureKey = gesture ? gesture.key : renaming.value
-    if (gestureKey === props.cardKey) return true
-  }
-  return false
+function areEqual(props) {
+  return gestureTargetKey() === props.cardKey
+}
+
+// Holds merged's last-read value across a render that must not observe a
+// newer one -- reading sig.value only when unfrozen keeps this component
+// unsubscribed from it for the render(s) where the freeze applies, so a
+// signals-forced update can't leak the new value past memo/areEqual.
+function useFrozenValue(sig, frozen) {
+  const ref = useRef(sig.peek())
+  if (!frozen) ref.current = sig.value
+  return ref.current
 }
 
 const Card = memo(function Card({ rec }) {
   const key = rec.key
   const c = cardEntry(key)
   if (!c) return null
-  const merged = rec.merged.value
+  const merged = useFrozenValue(rec.merged, gestureTargetKey() === key)
   const vis = visibleValues(key, merged)
   const g = cardState.value.grid
   const w = Math.max(1, Math.min(c.w, viewCols()))
@@ -104,8 +116,8 @@ const Card = memo(function Card({ rec }) {
       onDragStart={(ev) => { if (editing.value) ev.preventDefault() }}
     >
       <Label rec={rec} />
-      <Body rec={rec} vis={vis} h={h} w={w} cardKey={key} />
-      <BottomStrip rec={rec} />
+      <Body rec={rec} merged={merged} vis={vis} h={h} w={w} cardKey={key} />
+      <BottomStrip rec={rec} merged={merged} />
       <Age rec={rec} />
       <CloseButton rec={rec} />
       <ResizeHandle rec={rec} c={c} w={w} h={h} />
@@ -177,7 +189,7 @@ function RenameInput({ rec }) {
   )
 }
 
-function Body({ rec, vis, h, w, cardKey }) {
+function Body({ rec, merged, vis, h, w, cardKey }) {
   const valueCols = Math.max(1, Math.min(w, vis.length))
   const valueRows = Math.max(h, Math.ceil(vis.length / valueCols))
 
@@ -190,16 +202,15 @@ function Body({ rec, vis, h, w, cardKey }) {
       }}
     >
       {vis.map(f => (
-        isRich(rec.merged.value[f])
-          ? <RichValue key={f} rec={rec} field={f} cardKey={cardKey} />
-          : <Value key={f} rec={rec} field={f} cardKey={cardKey} />
+        isRich(merged[f])
+          ? <RichValue key={f} rec={rec} raw={merged[f]} field={f} cardKey={cardKey} />
+          : <Value key={f} rec={rec} raw={merged[f]} field={f} cardKey={cardKey} />
       ))}
     </div>
   )
 }
 
-function RichValue({ rec, field }) {
-  const raw = rec.merged.value[field]
+function RichValue({ rec, raw, field }) {
   const R = rendererFor(raw)
 
   return (
@@ -217,8 +228,8 @@ function RichValue({ rec, field }) {
   )
 }
 
-function Value({ rec, field, cardKey }) {
-  const d = displayValue(field, rec.merged.value[field], settings.value)
+function Value({ rec, raw, field, cardKey }) {
+  const d = displayValue(field, raw, settings.value)
   const valRef = useRef(null)
 
   // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
@@ -260,14 +271,14 @@ function Value({ rec, field, cardKey }) {
   )
 }
 
-function BottomStrip({ rec }) {
+function BottomStrip({ rec, merged }) {
   const key = rec.key
-  const bottom = bottomFields(key, rec.merged.value)
+  const bottom = bottomFields(key, merged)
 
   return (
     <div class="btm">
       {bottom.map(f => {
-        const raw = rec.merged.value[f]
+        const raw = merged[f]
         if (isRich(raw)) {
           const brief = briefOf(raw)
           if (!brief) return null
