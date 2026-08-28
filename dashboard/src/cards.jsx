@@ -92,9 +92,9 @@ function useFrozenValue(sig, frozen) {
 
 const Card = memo(function Card({ rec }) {
   const key = rec.key
+  const merged = useFrozenValue(rec.merged, gestureTargetKey() === key)
   const c = cardEntry(key)
   if (!c) return null
-  const merged = useFrozenValue(rec.merged, gestureTargetKey() === key)
   const vis = visibleValues(key, merged)
   const g = cardState.value.grid
   const w = Math.max(1, Math.min(c.w, viewCols()))
@@ -116,11 +116,11 @@ const Card = memo(function Card({ rec }) {
       onDragStart={(ev) => { if (editing.value) ev.preventDefault() }}
     >
       <Label rec={rec} />
-      <Body rec={rec} merged={merged} vis={vis} h={h} w={w} cardKey={key} />
+      <Body rec={rec} merged={merged} vis={vis} h={h} w={w} />
       <BottomStrip rec={rec} merged={merged} />
       <Age rec={rec} />
       <CloseButton rec={rec} />
-      <ResizeHandle rec={rec} c={c} w={w} h={h} />
+      <ResizeHandle c={c} />
     </div>
   )
 }, areEqual)
@@ -189,7 +189,7 @@ function RenameInput({ rec }) {
   )
 }
 
-function Body({ rec, merged, vis, h, w, cardKey }) {
+function Body({ rec, merged, vis, h, w }) {
   const valueCols = Math.max(1, Math.min(w, vis.length))
   const valueRows = Math.max(h, Math.ceil(vis.length / valueCols))
 
@@ -203,8 +203,8 @@ function Body({ rec, merged, vis, h, w, cardKey }) {
     >
       {vis.map(f => (
         isRich(merged[f])
-          ? <RichValue key={f} rec={rec} raw={merged[f]} field={f} cardKey={cardKey} />
-          : <Value key={f} rec={rec} raw={merged[f]} field={f} cardKey={cardKey} />
+          ? <RichValue key={f} rec={rec} raw={merged[f]} field={f} />
+          : <Value key={f} raw={merged[f]} field={f} />
       ))}
     </div>
   )
@@ -228,7 +228,7 @@ function RichValue({ rec, raw, field }) {
   )
 }
 
-function Value({ rec, raw, field, cardKey }) {
+function Value({ raw, field }) {
   const d = displayValue(field, raw, settings.value)
   const valRef = useRef(null)
 
@@ -331,8 +331,7 @@ function CloseButton({ rec }) {
   )
 }
 
-function ResizeHandle({ rec, c, w, h }) {
-  const key = rec.key
+function ResizeHandle({ c }) {
   return (
     <button
       class="rz"
