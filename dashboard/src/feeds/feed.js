@@ -55,7 +55,7 @@ function publish(feed, fields, at) {
   const key = feedKey(feed)
   upsert({
     key, merged: fields, obj: null,
-    rssi: undefined, count: undefined, flashUntil: 0,
+    rssi: undefined, count: undefined,
     // A computed feed is never stale, so it reports no age. Only a feed that
     // fetched something stamps the time its data came from.
     seenAt: feed.stamped ? at : 0,

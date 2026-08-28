@@ -268,7 +268,7 @@ test("the longest phase and time strings still fit", async ({ page }) => {
       moon: { $r: "moon", brief: "x", illumination: 1, phase: 0.5, waxing: true,
               name: "Waning Crescent", pct: 100, riseText: "22:22", setText: "23:59" },
     };
-    upsert({ key, merged, seenAt: 0, flashUntil: 0, rssi: undefined, count: 0, obj: null, raw: "" });
+    upsert({ key, merged, seenAt: 0, rssi: undefined, count: 0, obj: null, raw: "" });
   });
   await expect(page.locator(`${MOON} .val.cval text`).last()).toHaveText("Waning Crescent 100%");
 

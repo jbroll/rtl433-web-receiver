@@ -30,7 +30,7 @@ async function addRichCard(page) {
     const merged = {
       note: { $r: "text", label: "Forecast", brief: "long", text: "Partly sunny then chance showers and thunderstorms" },
     };
-    upsert({ key, merged, seenAt: 0, flashUntil: 0, rssi: undefined, count: 0, obj: null, raw: "" });
+    upsert({ key, merged, seenAt: 0, rssi: undefined, count: 0, obj: null, raw: "" });
     ensureCard(key, merged, { autoShow: true });
     saveCardState();
   });

@@ -82,9 +82,9 @@ export function postAlias(key, name) {
       return
     }
     if (!res.ok) {
-      console.error(`POST ${url} failed: ${res.status}`)
+      showToast(`Rename failed: the bridge rejected it (${res.status}).`)
     }
   }).catch(err => {
-    console.error(`POST ${url} failed: ${err.message || err}`)
+    showToast(`Rename failed: ${err.message || err}`)
   })
 }

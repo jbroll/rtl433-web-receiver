@@ -157,6 +157,7 @@ function RenameInput({ rec }) {
       <input
         ref={inputRef}
         type="text"
+        maxlength="32"
         defaultValue={alias}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter') {

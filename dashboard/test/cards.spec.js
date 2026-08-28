@@ -483,7 +483,7 @@ test("an order entry naming a key absent from cards does not crash the page", as
 
   const orphan = storeKey(server, ACURITE_KEY) + "-orphan";
   await page.evaluate((k) => {
-    upsert({ key: k, merged: { temperature_F: 1 }, seenAt: 0, flashUntil: 0,
+    upsert({ key: k, merged: { temperature_F: 1 }, seenAt: 0,
       rssi: undefined, count: 0, obj: null, raw: "" });
     cardState = { ...cardState, order: [...cardState.order, k] };
   }, orphan);

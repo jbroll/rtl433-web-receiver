@@ -37,10 +37,10 @@ export async function addBridge(url, token) {
   return true
 }
 
-// The receiver's /$mqtt/remove always answers 204, even for a url it never
-// removed -- one baked into the firmware build can't be dropped from the
-// runtime store. So a 204 alone doesn't mean the bridge is gone; the reload
-// below checks whether it actually left the list.
+// /$mqtt/remove answers 404 when it removed nothing and 204 when it removed
+// something, so the status code alone tells the two outcomes apart. A 404
+// can also mean a rare NVS-persist failure after rollback, where the bridge
+// is still live -- callers must not read a 404 as proof the bridge is gone.
 export async function removeBridge(url) {
   try {
     const res = await fetch(`${location.origin}/$mqtt/remove`, {
@@ -53,6 +53,5 @@ export async function removeBridge(url) {
     return false
   }
   await loadBridges()
-  const stillThere = Array.isArray(bridges.value) && bridges.value.some(b => b.url === url)
-  return stillThere ? 'stuck' : true
+  return true
 }

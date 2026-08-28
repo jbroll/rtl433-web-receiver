@@ -301,12 +301,11 @@ same url with a new token replaces it.
 
 Adding and removing both report what happened. An add that the receiver
 rejects marks the URL field invalid and shows "Add failed. Check the URL and
-try again." A remove that fails outright shows "Remove failed for <url>." The
-third case is a remove the receiver answers `204` to while the row is still
-there on the refetch: `/$mqtt/remove` answers `204` even for a URL it never
-held, which is what a bridge baked into the firmware build does, so the
-dashboard refetches `/$mqtt` and shows "<url> was not removed." rather than
-letting the row silently reappear. A success is silent in all cases.
+try again." `/$mqtt/remove` answers `404` when it removed nothing and `204`
+when it removed something; a `404` (or any other failed request) leaves the
+row in place and shows "Remove failed for <url>." A `404` can also mean a
+rare NVS-persist failure after rollback, where the bridge is still live, so
+that message does not claim the URL is gone. A success is silent.
 
 ## Access token
 

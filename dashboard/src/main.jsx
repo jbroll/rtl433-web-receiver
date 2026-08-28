@@ -63,7 +63,6 @@ function onMessage(base, topic, obj) {
   upsert({
     key, obj, rssi: obj.rssi, count: obj.count, seenAt: at, at,
     merged,
-    flashUntil: Date.now() + 1000,
   })
   store.ensureCard(key, merged)
   flash(key)
@@ -178,7 +177,6 @@ function wrapRec(rec) {
     get rssi() { return rec.rssi.value },
     get count() { return rec.count.value },
     get seenAt() { return rec.seenAt.value },
-    get flashUntil() { return rec.flashUntil.value },
     get flashing() { return rec.flashing.value },
     get obj() { return rec.obj.value },
     // raw isn't kept on the record; only tests read it, so it's rebuilt on demand.

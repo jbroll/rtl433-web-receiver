@@ -21,11 +21,6 @@
   the receiver's mDNS hostname, which today has no runtime equivalent to its build-time
   `MDNS_PREFIX` (see `receiver/docs/backlog.md`).
 
-- `flashUntil` is dead for rendering: `devices.js` writes it on every `upsert`, `main.jsx`
-  and `feeds/feed.js` set it, and five test files construct records with it, but the flash
-  class on a card comes from `rec.flashing`, which nothing reads `flashUntil` to derive.
-  Removing it touches the `rec` shape in `devices.js`, the two writers, and every fixture
-  that still passes it.
 - `test/android-smoke.js` was updated for the gear-panel split (dropped the dead
   `#settings summary` click, switched to `#subtab-devices`) without a run against the
   tablet — no device was attached to verify it. Needs one manual run to confirm the
@@ -60,9 +55,3 @@
   receiver's own published `$location` immediately supplies the fallback, so the
   feed cards stay and the location the user just cleared still resolves. There is
   no delete for the published value.
-- The alias rename input has no `maxlength`. `postAlias` now reads the POST response,
-  but only a `401` reaches the user; every other failure goes to the console. The
-  firmware's `ALIAS_NAME_MAX` (`receiver/alias_store.h`) is 32, so a name of 32 or more
-  characters is rejected with a `400` the user never sees, and the local alias map keeps
-  the name the device refused. Needs a `maxlength` on the input and a toast on the
-  non-401 failures.

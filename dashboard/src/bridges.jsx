@@ -11,12 +11,8 @@ export function BridgesView() {
             <span class="dot" data-state={b.connected ? 'connected' : 'connecting'} />
             <span class="url">{b.url}</span>
             <button class="rm" title={`Remove ${b.url}`} onClick={async () => {
-              const result = await removeBridge(b.url)
-              if (result === 'stuck') {
-                showToast(`${b.url} was not removed.`)
-              } else if (!result) {
-                showToast(`Remove failed for ${b.url}.`)
-              }
+              const ok = await removeBridge(b.url)
+              if (!ok) showToast(`Remove failed for ${b.url}.`)
             }}>✕</button>
           </li>
         ))}

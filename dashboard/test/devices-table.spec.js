@@ -64,7 +64,7 @@ test("the table survives a packet arriving while a select has focus", async ({ p
   await page.evaluate(() => {
     const rec = [...devices.values()].find(d => !d.key.startsWith("local "));
     upsert({ key: rec.key, merged: { ...rec.merged, humidity: 41 }, obj: rec.obj,
-             rssi: -70, count: 9, seenAt: Date.now(), flashUntil: Date.now() + 1000 });
+             rssi: -70, count: 9, seenAt: Date.now() });
   });
 
   await expect(page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"]`)).toHaveCount(1);

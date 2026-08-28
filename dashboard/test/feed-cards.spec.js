@@ -30,7 +30,7 @@ async function addSunFeed(page) {
   await page.evaluate(() => {
     const key = "local feed/Sun";
     const merged = { sunrise: "05:42", sunset: "20:11", solar_noon: "12:56" };
-    upsert({ key, merged, seenAt: 0, flashUntil: 0, rssi: undefined, count: 0, obj: null, raw: "" });
+    upsert({ key, merged, seenAt: 0, rssi: undefined, count: 0, obj: null, raw: "" });
     ensureCard(key, merged, { autoShow: true });
     saveCardState();
   });

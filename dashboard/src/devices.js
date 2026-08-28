@@ -28,7 +28,6 @@ export function upsert(rec) {
     existing.rssi.value = rec.rssi
     existing.count.value = rec.count
     existing.seenAt.value = rec.seenAt
-    existing.flashUntil.value = rec.flashUntil
     existing.obj.value = rec.obj
     existing.merged.value = rec.merged
   } else {
@@ -38,7 +37,6 @@ export function upsert(rec) {
       rssi: signal(rec.rssi),
       count: signal(rec.count),
       seenAt: signal(rec.seenAt),
-      flashUntil: signal(rec.flashUntil),
       flashing: signal(false),
       obj: signal(rec.obj),
       merged: signal(rec.merged),

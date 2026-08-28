@@ -30,6 +30,7 @@ function AliasInput({ r, name }) {
   return (
     <input
       type="text"
+      maxlength="32"
       value={editing !== null ? editing : aliasOf(r.key)}
       placeholder={name}
       title="Name shown on this device's card"

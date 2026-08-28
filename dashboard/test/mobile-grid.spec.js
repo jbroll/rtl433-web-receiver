@@ -146,7 +146,7 @@ test("#grid-size stays on screen at 320px wide in edit mode", async ({ page }) =
 async function addMinimalCard(page, key) {
   await page.evaluate((k) => {
     const merged = { v: 1 };
-    upsert({ key: k, merged, seenAt: 0, flashUntil: 0, rssi: undefined, count: 0, obj: null, raw: "" });
+    upsert({ key: k, merged, seenAt: 0, rssi: undefined, count: 0, obj: null, raw: "" });
     ensureCard(k, merged, { autoShow: true });
     setCardSize(k, 1, 1);
     saveCardState();

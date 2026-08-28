@@ -28,7 +28,7 @@ function fakeStorage() {
 function addDevice(key, model, id) {
   upsert({
     key, obj: id === undefined ? { model } : { model, id }, raw: '{}', rssi: -50, count: 1, seenAt: 1, at: 1,
-    merged: { temperature_C: 21 }, flashUntil: 0,
+    merged: { temperature_C: 21 },
   })
 }
 
