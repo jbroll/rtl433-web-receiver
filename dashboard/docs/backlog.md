@@ -1,9 +1,5 @@
 # Backlog
 
-- `feeds/feed.js`'s `publish()` calls `saveCardState()` unconditionally on every feed
-  run, on top of the save `ensureCard()` already makes when the card actually changed.
-  Every feed tick writes `localStorage` and notifies subscribers even when nothing about
-  the card changed.
 - A device seen through two bridges is two cards. Nothing merges them.
 - A reading that cannot fit even at 11px still ellipsizes.
 - A below-floor noise reading has no error marking on the receiver's card. The firmware
@@ -60,10 +56,6 @@
 - Container queries size the type inside a rich value cell. The minimum WebView
   the Capacitor shell ships with is unconfirmed; older engines fall back to
   inherited body type rather than breaking.
-- `runFeed()` discards a reply that lands after the location has moved on, but the request
-  itself still runs to completion: nothing cancels the pending `fetch` inside `nws.js`'s
-  `get()`. An `AbortController` threaded from `pump()` through `feed.run(ctx)` into `get()`
-  would cancel the wasted request instead of just ignoring its answer.
 - "Clear" clears only the local location. On a page the receiver serves, the
   receiver's own published `$location` immediately supplies the fallback, so the
   feed cards stay and the location the user just cleared still resolves. There is

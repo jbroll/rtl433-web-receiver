@@ -4,10 +4,25 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { parsePoints, parseStations, parseForecast, parseObservation } from '../src/feeds/nws.js'
+import nws from '../src/feeds/nws.js'
 import { Unsupported } from '../src/feeds/feed.js'
 import { skyOf, isNight, glyphOf } from '../src/feeds/wx-icons.js'
 import { splitUnit } from '../src/units.js'
 import { POINTS, FORECAST, STATIONS, OBSERVATION } from './fixtures-nws.js'
+
+// A fetch that behaves like a real one under AbortController: it never
+// settles on its own, but rejects with an AbortError once its signal fires.
+function fetchThatHonorsAbort() {
+  return (url, opts) => new Promise((resolve, reject) => {
+    if (opts && opts.signal) {
+      opts.signal.addEventListener('abort', () => {
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+      })
+    }
+  })
+}
+
+const timeout = (ms, message) => new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
 
 test('the point lookup yields the urls, the zone and the place', () => {
   const m = parsePoints(POINTS)
@@ -126,6 +141,22 @@ test('night is read from the same path', () => {
   assert.equal(isNight('https://api.weather.gov/icons/land/night/skc?size=medium'), true)
   assert.equal(isNight('https://api.weather.gov/icons/land/day/skc?size=medium'), false)
   assert.equal(isNight(null), false)
+})
+
+test('aborting the run signal actually cancels the underlying fetch request', async () => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = fetchThatHonorsAbort()
+  try {
+    const controller = new AbortController()
+    const run = nws.run({ lat: 40.015, lon: -105.2705, signal: controller.signal })
+    controller.abort()
+    await assert.rejects(
+      Promise.race([run, timeout(500, 'the request was not aborted; it kept running')]),
+      (e) => e.name === 'AbortError',
+    )
+  } finally {
+    globalThis.fetch = realFetch
+  }
 })
 
 test('every condition in the fixture maps to a glyph, and the unknown falls back', () => {

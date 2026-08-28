@@ -2,9 +2,10 @@ globalThis.DEVICE_MAX = 24
 
 import { test, beforeEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
+import { effect } from '@preact/signals'
 
 import { devices } from '../src/devices.js'
-import { cardHidden, loadCardState, setHideNewCards } from '../src/store.js'
+import { cardHidden, cardState, loadCardState, setHideNewCards } from '../src/store.js'
 import { loadSettings, setLocation, onLocationFrame } from '../src/settings.js'
 import { sources } from '../src/sources.js'
 import { loadFeedCache, cacheGet, cacheSet } from '../src/feeds/cache.js'
@@ -385,4 +386,64 @@ test('an uncached feed is not painted from a cache entry left behind', async () 
   pump(Date.now())
   await settle()
   assert.deepEqual(devices.value.get(KEY).merged.value, { value: 1 })
+})
+
+test('a run that changes nothing does not write storage or notify subscribers', async () => {
+  atBoulder()
+  registerFeed(fakeFeed())
+  pump(1000)
+  await settle()
+
+  let notifications = 0
+  const stop = effect(() => { cardState.value; notifications++ })
+  notifications = 0
+  const sets = []
+  localStorage.setItem = (...args) => sets.push(args)
+
+  expire('test')
+  pump(2000)
+  await settle()
+
+  assert.equal(sets.length, 0, 'an unchanged feed run wrote localStorage')
+  assert.equal(notifications, 0, 'an unchanged feed run notified subscribers')
+  stop()
+})
+
+test('a run that changes the card saves exactly once', async () => {
+  atBoulder()
+  let extra = false
+  registerFeed(fakeFeed({
+    run: async () => { ran++; return { fields: extra ? { value: 1, extra: 2 } : { value: 1 } } },
+  }))
+  pump(1000)
+  await settle()
+
+  const sets = []
+  localStorage.setItem = (...args) => sets.push(args)
+
+  extra = true
+  expire('test')
+  pump(2000)
+  await settle()
+
+  assert.equal(sets.length, 1, 'a changed feed run must save exactly once')
+})
+
+test('moving the location aborts an in-flight feed request', async () => {
+  atBoulder()
+  let seenSignal
+  registerFeed(fakeFeed({
+    run: (ctx) => { seenSignal = ctx.signal; ran++; return new Promise(() => {}) },
+  }))
+  pump(1000)
+  await settle()
+  assert.equal(ran, 1)
+  assert.ok(seenSignal, 'no AbortSignal reached the feed')
+  assert.equal(seenSignal.aborted, false)
+
+  setLocation({ lat: 51.5, lon: -0.1 })
+  pump(2000)
+  await settle()
+
+  assert.equal(seenSignal.aborted, true, 'the superseded request was not aborted')
 })

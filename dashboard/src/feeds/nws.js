@@ -11,8 +11,8 @@ function round(v) { return Number(v.toFixed(4)) }
 // send: it is a forbidden header name and fetch drops it. Nothing else is sent
 // either, because a non-safelisted header would force a preflight this API
 // does not answer.
-async function get(url) {
-  const res = await fetch(url, { headers: { Accept: 'application/geo+json' } })
+async function get(url, signal) {
+  const res = await fetch(url, { headers: { Accept: 'application/geo+json' }, signal })
   if (res.status === 404) throw new Unsupported('No NWS forecast for this location (United States only)')
   if (!res.ok) {
     const err = new Error(`weather.gov returned ${res.status}`)
@@ -123,17 +123,17 @@ export default {
   async run(ctx) {
     let meta = ctx.meta
     if (!meta || !meta.forecast) {
-      meta = parsePoints(await get(`${API}/points/${round(ctx.lat)},${round(ctx.lon)}`))
-      meta.station = meta.stations ? parseStations(await get(meta.stations)) : ''
+      meta = parsePoints(await get(`${API}/points/${round(ctx.lat)},${round(ctx.lon)}`, ctx.signal))
+      meta.station = meta.stations ? parseStations(await get(meta.stations, ctx.signal)) : ''
     }
 
-    const { days } = parseForecast(await get(meta.forecast))
+    const { days } = parseForecast(await get(meta.forecast, ctx.signal))
 
     let obs = null
     if (meta.station) {
       // A station can be offline while the forecast is fine, so the current
       // conditions are optional and never fail the whole feed.
-      try { obs = parseObservation(await get(`${API}/stations/${meta.station}/observations/latest`)) }
+      try { obs = parseObservation(await get(`${API}/stations/${meta.station}/observations/latest`, ctx.signal)) }
       catch (e) { obs = null }
     }
 

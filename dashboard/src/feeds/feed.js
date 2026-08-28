@@ -11,6 +11,7 @@ const BACKOFF = [30, 60, 120, 240, 360].map(m => m * 60000)
 
 const FEEDS = []
 const running = new Set()
+const inFlight = new Map()
 let place = ''
 
 export const feedState = signal(new Map())
@@ -59,8 +60,10 @@ function publish(feed, fields, at) {
     // fetched something stamps the time its data came from.
     seenAt: feed.stamped ? at : 0,
   })
-  ensureCard(key, fields, { autoShow: true, hiddenValues: feed.defaultHidden })
-  saveCardState()
+  // Save only when the card actually changed, or every feed tick would write
+  // storage and notify subscribers for nothing.
+  const changed = ensureCard(key, fields, { autoShow: true, hiddenValues: feed.defaultHidden, save: false })
+  if (changed) saveCardState()
 }
 
 // The last good fields stay on the card; the error joins them as a plain
@@ -75,9 +78,15 @@ function publishError(feed, message) {
 async function runFeed(feed, ctx) {
   if (running.has(feed.id)) return
   running.add(feed.id)
+  const controller = new AbortController()
+  inFlight.set(feed.id, controller)
   try {
     const cached = feed.cached ? cacheGet(feed.id) : null
-    const out = await feed.run({ ...ctx, meta: cached && cached.place === ctx.place ? cached.meta : null })
+    const out = await feed.run({
+      ...ctx,
+      meta: cached && cached.place === ctx.place ? cached.meta : null,
+      signal: controller.signal,
+    })
     // The place can move while a request is in flight; a reply for a place
     // nobody asked for any more must not reach the card, the cache, or state.
     if (ctx.place !== place) return
@@ -109,6 +118,7 @@ async function runFeed(feed, ctx) {
     }
   } finally {
     running.delete(feed.id)
+    inFlight.delete(feed.id)
   }
 }
 
@@ -121,6 +131,10 @@ export function pump(now = Date.now()) {
   // times. Nothing carries over. An empty previous place is priming still
   // waiting on its first frame, not a real place to invalidate away from.
   if (next !== place && place !== '') {
+    // A reply for the old place is already discarded on arrival; abort the
+    // request too so it does not keep running for nothing.
+    for (const c of inFlight.values()) c.abort()
+    inFlight.clear()
     cacheClear()
     feedState.value = new Map()
   }
@@ -163,6 +177,7 @@ export function expireFeeds() {
 export function resetFeeds() {
   FEEDS.length = 0
   running.clear()
+  inFlight.clear()
   place = ''
   feedState.value = new Map()
 }

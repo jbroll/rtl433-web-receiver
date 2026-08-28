@@ -167,7 +167,7 @@ export function ensureCard(key, merged, opts) {
   if (s.order.indexOf(key) < 0) { s.order.push(key); changed = true }
   const save = !opts || opts.save !== false
   if (changed && save) saveCardState()
-  return c
+  return changed
 }
 
 export function cardEntry(key) { return cardState.value.cards[key] }
