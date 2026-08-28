@@ -194,3 +194,53 @@ test('postAlias surfaces a 401 as a toast, not only console.error', async () => 
   assert.ok(toast.value)
   assert.match(toast.value.msg, /401|token|unauthorized/i)
 })
+
+test('postAlias reverts the local alias when the device rejects the rename', async () => {
+  aliases.value.set(K, 'Original')
+  globalThis.fetch = () => Promise.resolve({ ok: false, status: 503 })
+  postAlias(K, 'Rejected name')
+  assert.equal(aliasOf(K), 'Rejected name')
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(aliasOf(K), 'Original')
+  assert.deepEqual(JSON.parse(localStorage.getItem(ALIASES_KEY)), { [K]: 'Original' })
+})
+
+test('postAlias reverts to no alias when there was none before a rejected rename', async () => {
+  globalThis.fetch = () => Promise.resolve({ ok: false, status: 503 })
+  postAlias(K, 'Rejected name')
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(aliasOf(K), '')
+  assert.equal(localStorage.getItem(ALIASES_KEY), '{}')
+})
+
+test('postAlias also reverts on a 401, since the device did not take the name either', async () => {
+  aliases.value.set(K, 'Original')
+  globalThis.fetch = () => Promise.resolve({ ok: false, status: 401 })
+  postAlias(K, 'Rejected name')
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(aliasOf(K), 'Original')
+})
+
+test('postAlias reverts on a fetch rejection with no response at all', async () => {
+  aliases.value.set(K, 'Original')
+  globalThis.fetch = () => Promise.reject(new Error('network down'))
+  postAlias(K, 'Rejected name')
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(aliasOf(K), 'Original')
+})
+
+test('a late failure from a superseded rename does not clobber a newer successful rename', async () => {
+  aliases.value.set(K, 'Original')
+  let resolveFirst
+  globalThis.fetch = () => new Promise((resolve) => { resolveFirst = resolve })
+  postAlias(K, 'First attempt')
+
+  globalThis.fetch = () => Promise.resolve({ ok: true })
+  postAlias(K, 'Second attempt')
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(aliasOf(K), 'Second attempt')
+
+  resolveFirst({ ok: false, status: 503 })
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(aliasOf(K), 'Second attempt')
+})

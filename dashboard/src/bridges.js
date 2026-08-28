@@ -37,10 +37,9 @@ export async function addBridge(url, token) {
   return true
 }
 
-// /$mqtt/remove answers 404 when it removed nothing and 204 when it removed
-// something, so the status code alone tells the two outcomes apart. A 404
-// can also mean a rare NVS-persist failure after rollback, where the bridge
-// is still live -- callers must not read a 404 as proof the bridge is gone.
+// /$mqtt/remove answers 404 when it removed nothing (including a rare
+// NVS-persist failure after rollback, where the bridge is still live) and
+// 204 when it removed something -- callers must not read a 404 as proof.
 export async function removeBridge(url) {
   try {
     const res = await fetch(`${location.origin}/$mqtt/remove`, {

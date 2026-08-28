@@ -60,13 +60,31 @@ export function applyAliasFrame(key, payload) {
   saveAliases()
 }
 
+// Tracks the most recent postAlias() attempt per key, so a late-arriving
+// failure from a superseded attempt can't revert a newer, already-settled
+// rename of the same device.
+const renameAttempts = new Map()
+
 export function postAlias(key, name) {
   const trimmed = String(name).trim()
+  const previous = aliases.value.get(key)
   const next = new Map(aliases.value)
   if (trimmed) next.set(key, trimmed)
   else next.delete(key)
   aliases.value = next
   saveAliases()
+
+  const attempt = (renameAttempts.get(key) || 0) + 1
+  renameAttempts.set(key, attempt)
+  const revert = () => {
+    if (renameAttempts.get(key) !== attempt) return
+    const reverted = new Map(aliases.value)
+    if (previous) reverted.set(key, previous)
+    else reverted.delete(key)
+    aliases.value = reverted
+    saveAliases()
+  }
+
   const origin = sourceOf(key)
   if (origin !== location.origin) return
   const url = `${origin}/${topicOf(key)}${ALIAS_SUFFIX}`
@@ -79,12 +97,15 @@ export function postAlias(key, name) {
   fetch(url, options).then(res => {
     if (res.status === 401) {
       showToast('Rename rejected: the bridge needs an access token. Set it in Settings.')
+      revert()
       return
     }
     if (!res.ok) {
       showToast(`Rename failed: the bridge rejected it (${res.status}).`)
+      revert()
     }
   }).catch(err => {
     showToast(`Rename failed: ${err.message || err}`)
+    revert()
   })
 }
