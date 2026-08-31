@@ -21,7 +21,7 @@ before running the bridge if `bridge/public/` doesn't exist yet.
 npm test
 ```
 
-This runs `node --test test/*.test.js`, then `playwright test`: 322 node
+This runs `node --test test/*.test.js`, then `playwright test`: 323 node
 tests against the pure modules, then 230 browser tests in
 `test/*.spec.js` that drive a built page with Playwright. Either suite can
 be run alone with `node --test test/*.test.js` or `npx playwright test`.

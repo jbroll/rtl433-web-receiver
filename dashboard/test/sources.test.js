@@ -175,3 +175,10 @@ test('a public serving origin is still adopted on the native shell', () => {
   assert.equal(src.addSource(location.origin), true)
   assert.deepEqual(src.sources.value, ['https://weather.rkroll.com'])
 })
+
+test('a public serving origin over plain http is still adopted on the native shell', () => {
+  src.setNativePlatform(true)
+  globalThis.location = { origin: 'http://weather.rkroll.com' }
+  assert.equal(src.addSource(location.origin), true)
+  assert.deepEqual(src.sources.value, ['http://weather.rkroll.com'])
+})

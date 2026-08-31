@@ -101,9 +101,8 @@ function save() {
 
 export function configured() { return sources.value.slice() }
 
-// Reason a candidate base would be refused ('invalid', 'duplicate', 'remote'),
-// or null if it would be accepted. Shared by addSource and the UI, which
-// needs the reason to distinguish a guard rejection from a malformed URL.
+// Shared by addSource and the UI, which need the reason to distinguish a guard
+// rejection from a malformed URL.
 export function rejectionReason(raw) {
   const base = normalizeBase(raw)
   if (!base) return 'invalid'
