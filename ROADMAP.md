@@ -79,13 +79,11 @@ done.
    stored value, but the prefix also feeds `signal_store::source()`, so
    renaming it orphans the stored `$layout` and every alias, which key on
    the full topic. On the dashboard, Settings has no field for a source's
-   own label. One goal covers both halves; the dashboard's backlog entry for
-   this is deleted on a later branch.
+   own label. One goal covers both halves.
 8. **Deferred: clearing a location clears only the local receiver's copy.**
    No `DELETE`/empty-body path exists on the receiver's `$location` route,
    so a dashboard "Clear" only clears what it holds locally, not what the
-   receiver has stored. Deferred by decision, not by a blocker; the
-   dashboard's half of this entry is deleted on a later branch.
+   receiver has stored. Deferred by decision, not by a blocker.
 9. **Device identity across sources.** A device seen through two bridges is
    two cards today; nothing merges them, because a device is keyed on its
    source's base URL plus topic (see `dashboard/docs/architecture.md`'s
@@ -106,6 +104,10 @@ buildable today. iOS release after. Electron last because it adds the least.
 
 Bridge auth (Goal 3) and the dashboard mobile fixes in Goal 4 are independent
 and can run in parallel. Linearly, auth then mobile is simpler.
+
+Goals 6-10 are not sequenced against 1-5: each is either deferred by
+decision (8) or needs a design pass before it becomes an implementation
+goal (6, 7, 9, 10). None is scheduled until that design work happens.
 
 ## Ordered actions
 

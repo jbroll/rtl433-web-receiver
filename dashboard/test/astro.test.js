@@ -182,8 +182,8 @@ function trueAltitude (date, lat, lon) {
 
 // UTC instant of the zone's local midnight for the given Y-M-D. Takes the
 // offset at that midnight, not at UTC midnight -- the two differ by an hour
-// on a DST transition day, which is the same shortcut docs/backlog.md faults
-// `moonTimes` for.
+// on a DST transition day, which is the same shortcut `dashboard/docs/architecture.md`
+// (Moonrise and moonset section) faults `moonTimes` for.
 function trueLocalMidnight (y, mo, d, zone) {
   const guess = Date.UTC(y, mo - 1, d)
   const near = guess - offsetMinutes(new Date(guess), zone) * 60000

@@ -109,8 +109,8 @@ waveform-level guarantee that avoids this for arbitrary radio traffic.
 Sharing one pin with the radio SPI bus is no better: NSS (GPIO 39) is pulsed by
 the receiver task continuously for RSSI reads, MOSI/SCK are actively driven, and
 MISO is acted on by the radio. Reusing any of them forces the receiver task to
-suspend during every sensor read and adds a third client to a bus the backlog
-already flags as contended (`receiver/docs/backlog.md:43-54`).
+suspend during every sensor read and adds a third client to an already
+contended bus.
 
 Reusing UART0 RX (GPIO 44) works electrically but loses a future serial-console
 input. Reusing the radio RESET line (GPIO 38) works electrically but loses radio
@@ -213,7 +213,7 @@ JSON payload. The model is `"BMP280"`, the id is a stable value derived from the
 ESP32's MAC, and the channel is a fixed constant. Fields are `temperature_C` and
 `pressure_hPa`, matching the field names rtl_433 already uses for the weather
 sensors this receiver decodes. This is the "receiver's own card" pattern already
-documented in `receiver/docs/backlog.md:23-32`.
+documented in `receiver/docs/architecture.md`'s "The receiver's own card" section.
 
 ### AHT20 later
 
@@ -244,11 +244,10 @@ is required; the BMP280 reads as a normal device on the existing page.
 ## Documentation
 
 Update `receiver/docs/architecture.md` and `receiver/docs/install.md` with the
-new RFM69 and I2C pin maps. Update `receiver/docs/backlog.md` to remove the
-stale "ESP32-S3-CAM" comment and note the planned I2C bus on GPIO 21/47. Update
-the carrier README Pin map and `rtl433-carrier/docs/architecture.md` to record
-the new RFM69 wiring on GPIO 38/39/40, the `I2C_SDA` / `I2C_SCL` nets on GPIO
-21/47, the J6 sensor header, R3/R4 pull-ups, and the dropped microSD.
+new RFM69 and I2C pin maps. Update the carrier README Pin map and
+`rtl433-carrier/docs/architecture.md` to record the new RFM69 wiring on GPIO
+38/39/40, the `I2C_SDA` / `I2C_SCL` nets on GPIO 21/47, the J6 sensor header,
+R3/R4 pull-ups, and the dropped microSD.
 
 ## Out of scope
 

@@ -239,14 +239,11 @@ bool begin() {
     Log.warning(F("mqtt publish store: NVS unavailable, settings will not persist" CR));
     return false;
   }
-  // load() first, migrateLegacy() second: migrateLegacy only fires when the
-  // table is still empty, so a table already migrated from the string key
-  // (which load() just did) correctly makes it a no-op. selfTest()'s "State
-  // 4" below is a regression test for this ordering: reversed, it fails.
+  // load() first, migrateLegacy() second: migrateLegacy only fires on an
+  // empty table, so a table load() already migrated is a correct no-op.
   load();
-  // A table load()ed from the legacy `table` string makes migrateLegacy() a
-  // no-op (count() != 0), but a stale single-broker url/token pair can still
-  // be sitting alongside it; drop the pair whichever path populated the table.
+  // A stale single-broker url/token pair can sit alongside an already
+  // migrated table; drop it regardless of which path populated the table.
   bool   tableLoaded = count() != 0;
   String oldUrl      = _prefs.getString("url", "");
   bool   migrated    = migrateLegacy(oldUrl.c_str(), _prefs.getString("token", "").c_str());
@@ -448,7 +445,7 @@ bool selfTest() {
                 count() == 2 && indexOf("mqtt://b1:1883") >= 0 && indexOf("mqtt://b2:1883") >= 0);
     ok &= CHECK("and does not let the stale single value clobber them",
                 indexOf("mqtt://stale-single:1883") < 0);
-    ok &= CHECK("and removes the stale legacy url/token pair rather than leaking it forever",
+    ok &= CHECK("and removes the stale legacy url/token pair",
                 _prefs.getString("url", "").length() == 0 &&
                     _prefs.getString("token", "").length() == 0);
 

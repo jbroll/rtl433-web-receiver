@@ -106,9 +106,25 @@ the usual `topic` and `payload`:
 
     {"topic": "rtl433-a1b2c3/Acurite-5n1/1234", "payload": "", "deleted": true}
 
-`deleted` is present only on a deletion; an ordinary message never carries it.
-A subscriber that ignores unknown fields sees an unmarked empty message
-instead, which is what every subscriber saw before this field existed.
+An ordinary message never carries `deleted`. A subscriber that ignores
+unknown fields sees an unmarked empty message instead, which is what every
+subscriber saw before this field existed.
+
+The bridge also sends a `deleted` frame on its own, without a client
+request: after reconnecting to the broker it waits for retained replay to
+settle, then announces `deleted` for every topic that was in its cache
+before the reconnect and did not reappear (see "Announcing departed topics
+on reconnect" in `architecture.md`). Because MQTT gives no signal for when
+retained replay finishes, this is a timed guess, and by design it can fire
+early: a `deleted` frame can announce a topic gone that is about to be
+corrected by its own retained message arriving right after. A client must
+tolerate a `deleted` frame it later sees corrected by an ordinary message
+for the same topic, and must not treat `deleted` as a permanent removal
+until no correcting message follows.
+
+This reconnect announcement is bridge-only. The receiver's own
+implementation of this binding never emits `deleted` outside a
+client-requested deletion.
 
 ## Aliases
 
@@ -259,6 +275,9 @@ The spec is the test list. Both implementations run the same cases:
 - The receiver returns `405` for a `POST` to a topic that is not `$alias`,
   `$tz`, `$layout`, or `$location`, and a value written to any of the four
   survives a reboot.
+- Bridge only: after a broker reconnect, a topic that does not reappear
+  before the settle timer fires is broadcast as a `deleted` frame, and a
+  topic that does reappear is not.
 
 ## What this unblocked
 

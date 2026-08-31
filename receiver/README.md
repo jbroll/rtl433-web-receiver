@@ -9,3 +9,4 @@ serves a page listing every signal it hears, updating as they arrive.
 - [`docs/user-manual.md`](docs/user-manual.md) — every route, status, topic, and limit
 - [`docs/architecture.md`](docs/architecture.md) — module boundaries and the tradeoffs
 - [`docs/development.md`](docs/development.md) — repo layout, the serial monitor, and testing without a radio
+- [`docs/backlog.md`](docs/backlog.md) — what is deliberately left undone

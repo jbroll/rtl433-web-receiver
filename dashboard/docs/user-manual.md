@@ -325,9 +325,13 @@ Adding and removing both report what happened. An add that the receiver
 rejects marks the URL field invalid and shows "Add failed. Check the URL and
 try again." `/$mqtt/remove` answers `404` when it removed nothing and `204`
 when it removed something; a `404` (or any other failed request) leaves the
-row in place and shows "Remove failed for <url>." A `404` can also mean a
-rare NVS-persist failure after rollback, where the bridge is still live, so
-that message does not claim the URL is gone. A success is silent.
+row in place and shows "Remove failed for <url>." The common cause is the
+build-flag broker (`MQTT_BROKER_URL`): it's always in the list this panel
+shows but can never be removed through it, so removing it always `404`s
+(see `receiver/docs/install.md`'s "Publishing to a remote broker"). A `404`
+can also mean a rare NVS-persist failure after rollback, where the bridge is
+still live, so that message does not claim the URL is gone. A success is
+silent.
 
 ## Access token
 

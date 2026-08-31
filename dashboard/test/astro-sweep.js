@@ -176,7 +176,6 @@ for (const [name, lat, lon, zone] of SITES) {
   }
 }
 
-const counters = globalThis.__sweepCounters
 console.log(`module        ${modulePath}`)
 console.log(`years         ${years.join(', ')}`)
 console.log(`sites         ${SITES.length}`)
@@ -190,7 +189,6 @@ console.log(`over 60s      ${over60s}`)
 console.log(`two-crossing  ${ambiguous} events on a day holding two crossings of that direction`)
 console.log(`alternate     ${alternate} of those reported as the other crossing`)
 if (worst) console.log(`worst         ${worst.err.toFixed(1)}s  ${worst.name} ${worst.lat} ${worst.event} ${worst.key}`)
-if (counters) for (const [k, v] of Object.entries(counters)) console.log(`counter ${k}  ${v}`)
 const ranked = [...worstPerSite].sort((a, b) => b[1].err - a[1].err).slice(0, 8)
 for (const [name, w] of ranked) console.log(`  ${name.padEnd(16)} ${w.err.toFixed(1)}s  ${w.event} ${w.key}`)
 

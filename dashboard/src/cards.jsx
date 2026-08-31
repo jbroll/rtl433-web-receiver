@@ -268,7 +268,7 @@ function Value({ raw, field }) {
       <div class="fn">
         <span>{d.name}</span>
         <span class="end">
-          {bad && <span class="warn" aria-hidden="true" title="reading may be unreliable">&#9888;</span>}
+          {bad && <span class="warn" title="reading may be unreliable">&#9888;</span>}
           {d.unit && <span class="u">{d.unit}</span>}
         </span>
       </div>

@@ -582,6 +582,20 @@ and too fast against a source that is off for the afternoon. `onerror` retries o
 the socket it fired on is still the current one and has reached `CLOSED`, so a socket
 superseded by `close()` cannot overwrite the attempt count or leak a timer.
 
+`stream.js`'s `onmessage` never reads `msg.deleted` — it dispatches on the
+topic suffix alone, so a bridge's own reconnect `deleted` frame (see
+`bridge/docs/binding.md`'s Deletion section) reaches `onAlias`/`onLayout`
+exactly like a real deletion. For `$alias` this clears the alias and
+persists that through `saveAliases()`; for `$layout` it drops the base's
+layout, including a site default. Both self-correct: the frame is only sent
+for a topic that failed to reappear during the settle window, and the
+broker's retained copy remains the authoritative source, so a follow-up
+message (the real cause of the frame being wrong) overwrites the cleared
+state again. Nothing is durably lost, but a layout is visibly blank for the
+gap. Left unguarded: the race window is the bridge's few-second reconnect
+settle period, and a guard would need to distinguish a stale `deleted` from
+a real one, which `stream.js` has no way to do.
+
 ## Bridges
 
 The reverse of Sources: `bridges.js` fetches `GET /$mqtt` against
