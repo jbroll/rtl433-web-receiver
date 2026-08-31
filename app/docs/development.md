@@ -26,7 +26,7 @@ The debug APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`.
 The dashboard is served over plain http by a receiver on the LAN, so the WebView
 must be allowed to fetch it without TLS. `network_security_config.xml` sets
 `cleartextTrafficPermitted="true"` in `base-config`, with nothing narrower:
-Android's config schema has no CIDR/subnet syntax -- `<domain>` matches only an
+Android's config schema has no CIDR/subnet syntax — `<domain>` matches only an
 exact hostname or IP literal plus `includeSubdomains`, so no rule in this file
 can cover an arbitrary RFC 1918 address the way iOS's `NSAllowsLocalNetworking`
 does for the whole local network. Cleartext is permitted to any host, on
@@ -37,7 +37,7 @@ host is `isLocalHost()` in `dashboard/src/sources.js`, called from
 `addSource()` before a typed or scanned source is accepted. It is a UI guard,
 not a network control: it rejects a non-local hostname or IP typed into the
 Sources form, but it does not, and cannot, stop a redirect from a local host
-to a remote one, traffic from a native plugin, or a `ws://` connection --
+to a remote one, traffic from a native plugin, or a `ws://` connection —
 none of those go through `addSource()`. Android is looser here than iOS,
 which enforces `NSAllowsLocalNetworking` at the OS network layer regardless
 of what the app's own code does.

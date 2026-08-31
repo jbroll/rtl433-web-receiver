@@ -1,9 +1,14 @@
 import { useState } from 'preact/hooks'
 import { Capacitor } from '@capacitor/core'
 import { mDNS } from '@devioarts/capacitor-mdns'
-import { sources, sourceState, addSource, removeSource, normalizeBase } from './sources.js'
+import { sources, sourceState, addSource, removeSource, normalizeBase, rejectionReason,
+         setNativePlatform } from './sources.js'
+import { showToast } from './toast.js'
+
+setNativePlatform(Capacitor.isNativePlatform())
 
 const MDNS_NAME_PREFIX = 'rtl433-'
+const REMOTE_HINT = "That address isn't on your local network."
 
 export function SourcesView() {
   return (
@@ -71,10 +76,14 @@ function candidateBase(svc) {
 function ScanResult({ svc }) {
   const base = candidateBase(svc)
   const already = base && sources.value.indexOf(base) >= 0
+  function add() {
+    if (!base || addSource(base)) return
+    showToast(REMOTE_HINT)
+  }
   return (
     <li>
       <span class="url">{svc.name}{base ? ` — ${base}` : ' (no address)'}</span>
-      <button type="button" disabled={!base || already} onClick={() => base && addSource(base)}>
+      <button type="button" disabled={!base || already} onClick={add}>
         {already ? 'Added' : 'Add'}
       </button>
     </li>
@@ -86,8 +95,10 @@ function SourceForm() {
   return (
     <form id="source-form" onSubmit={(ev) => {
       ev.preventDefault()
+      const reason = rejectionReason(input.value)
       if (!addSource(input.value)) {
         input.setAttribute('aria-invalid', 'true')
+        if (reason === 'remote') showToast(REMOTE_HINT)
         return
       }
       input.removeAttribute('aria-invalid')

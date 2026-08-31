@@ -538,6 +538,41 @@ not affect another. Connection state shows as a dot in the settings panel and ne
 becomes a column in the device table. With no sources configured the dashboard reads the
 origin it was served from, so the firmware-served build works with no setup.
 
+### Local-source scoping
+
+`isLocalHost()` in `sources.js` classifies a hostname as local: the private IPv4
+ranges (RFC 1918, loopback, link-local, and the `100.64.0.0/10` CGNAT block
+Tailscale hands out), IPv6 loopback/unique-local/link-local and the
+IPv4-mapped form, `localhost`, a bare single-label hostname (no dot can only
+resolve via a local search domain, never public DNS), and hosts ending in
+`.local` (mDNS, RFC 6762), `.home.arpa` (RFC 8375), `.lan` (a common but
+unofficial router convention), or `.ts.net` (Tailscale MagicDNS — publicly
+resolvable as a name, but only to an address inside the tailnet's own
+`100.64.0.0/10` block, so it is local in the sense this guard cares about). A
+trailing dot on an otherwise-local name (the canonical absolute form the
+WHATWG URL parser preserves, e.g. `receiver.local.`) is stripped before
+matching.
+
+`addSource()` only applies this guard when `setNativePlatform(true)` has been
+called — set once at startup from `sources.jsx`, which already imports
+`@capacitor/core` for the scan button, so `sources.js` itself stays free of a
+Capacitor import and importable by the plain Node test suite. In a browser or
+PWA build the guard never applies: nothing there needs scoping the way the
+Android WebView's blanket cleartext permission does (see
+`app/docs/development.md`). The guard also only ever constrains `http:`; a
+`https:` source is always accepted, local or not, since TLS is exactly the
+protection cleartext lacks. And the origin the app is already being served
+from is always accepted regardless of platform or scheme — probing and
+adopting `location.origin` is how a source-less deploy bootstraps itself, and
+by definition the page is already loaded from there.
+
+This is a UI guard, not a platform control: it rejects a non-local hostname
+or IP typed or scanned into the Sources form, but it does not, and cannot,
+stop a redirect from a local host to a remote one, traffic from a native
+plugin, or a `ws://` connection — none of those go through `addSource()`.
+Android is looser here than iOS, which enforces `NSAllowsLocalNetworking` at
+the OS network layer regardless of what the app's own code does.
+
 `stream.js` retries on a backoff ladder rather than a fixed interval:
 `Math.min(30000, 1000 * 2 ** attempt) * (0.8 + 0.4 * Math.random())`, with `attempt`
 reset to zero in `onopen`. It doubles from a second to a thirty-second ceiling, and the

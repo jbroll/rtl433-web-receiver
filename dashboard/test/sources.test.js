@@ -16,6 +16,7 @@ function fakeStorage() {
 beforeEach(() => {
   fakeStorage()
   globalThis.location = { origin: 'http://origin.test' }
+  src.setNativePlatform(false)
   src.loadSources()
 })
 
@@ -103,37 +104,74 @@ test('a storage exception keeps adoption in memory and turns saves into no-ops',
 })
 
 test('a private IPv4 host is accepted', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://192.168.1.5'), true)
 })
 
 test('a loopback host is accepted', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://127.0.0.1:8080'), true)
 })
 
 test('a .local host is accepted', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://receiver.local'), true)
 })
 
 test('a bare single-label hostname is accepted', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://bridge'), true)
 })
 
 test('an IPv6 literal with a port is accepted when private', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://[fc00::1]:8080'), true)
   assert.equal(src.addSource('http://[::1]:8080'), true)
 })
 
-test('a public host is refused', () => {
+test('on the native shell a public host is refused', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://example.com'), false)
   assert.equal(src.addSource('http://api.example.com'), false)
 })
 
-test('a public IPv4 or IPv6 host is refused', () => {
+test('on the native shell a public IPv4 or IPv6 host is refused', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://8.8.8.8'), false)
   assert.equal(src.addSource('http://[2001:db8::1]'), false)
 })
 
-test('.lan and .home.arpa suffixes are accepted like .local', () => {
+test('.lan, .home.arpa and .ts.net suffixes are accepted like .local', () => {
+  src.setNativePlatform(true)
   assert.equal(src.addSource('http://nas.lan'), true)
   assert.equal(src.addSource('http://router.home.arpa'), true)
+  assert.equal(src.addSource('http://laptop.tail1234.ts.net'), true)
+})
+
+test('outside the native shell (plain browser or PWA) a public host is allowed', () => {
+  assert.equal(src.addSource('http://example.com'), true)
+})
+
+test('a TLS remote source is allowed even on the native shell', () => {
+  src.setNativePlatform(true)
+  assert.equal(src.addSource('https://api.weather.gov'), true)
+})
+
+test('a trailing-dot mDNS name is accepted like its bare form', () => {
+  src.setNativePlatform(true)
+  assert.equal(src.addSource('http://receiver.local.'), true)
+})
+
+test('the Tailscale CGNAT range is accepted', () => {
+  src.setNativePlatform(true)
+  assert.equal(src.addSource('http://100.101.102.103'), true)
+  assert.equal(src.addSource('http://100.63.0.1'), false)
+  assert.equal(src.addSource('http://100.128.0.1'), false)
+})
+
+test('a public serving origin is still adopted on the native shell', () => {
+  src.setNativePlatform(true)
+  globalThis.location = { origin: 'https://weather.rkroll.com' }
+  assert.equal(src.addSource(location.origin), true)
+  assert.deepEqual(src.sources.value, ['https://weather.rkroll.com'])
 })

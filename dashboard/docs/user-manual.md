@@ -274,20 +274,27 @@ Results are cached, so reopening the page paints immediately without refetching.
 
 ## Sources
 
-With no sources configured the dashboard reads the origin it was served from. The
-settings panel adds and removes base URLs, stored in `localStorage` under
-`rtl433.sources.v1` beside the layout.
+With no sources configured the dashboard reads the origin it was served from and
+adopts it automatically, whether that origin is on the local network or a public
+deploy such as a bridge published at a domain. The settings panel adds and removes
+further base URLs, stored in `localStorage` under `rtl433.sources.v1` beside the
+layout.
 
 A base URL is an origin with no trailing slash: `http://rtl433-a1b2c3.local` or
 `http://bridge.local:8080`. Each gets its own SSE stream and reconnects on its own, so
 one source being down does not affect another. A dot beside each URL shows that source's
 connection state.
 
-The host must be on the local network: a private or link-local address, `localhost`,
-a bare hostname, or one ending in `.local`, `.lan`, or `.home.arpa`. A public host is
-refused, and the input is marked invalid. This is a UI guard against pointing the app
-at a remote cleartext source; it does not, by itself, stop a redirect from a local host
-to a remote one, native plugin traffic, or a `ws://` connection.
+Inside the native Android or iOS shell, a plain `http://` source must be on the local
+network: a private, link-local, or CGNAT address, `localhost`, a bare hostname, or one
+ending in `.local`, `.lan`, `.home.arpa`, or `.ts.net`. A public `http://` host is
+refused there, and the input is marked invalid with a toast explaining why. An
+`https://` source is never restricted this way, on any build, since TLS is what the
+guard exists to require in place of. In the plain browser or the PWA build the guard
+does not apply at all — nothing there needs scoping the way the Android WebView's
+cleartext permission does. This is a UI guard, not a platform control; it does not, by
+itself, stop a redirect from a local host to a remote one, native plugin traffic, or a
+`ws://` connection.
 
 Two sources publishing the same topic stay two devices with two cards. Removing a source
 drops its devices and its cards; re-adding it starts them from defaults again.
