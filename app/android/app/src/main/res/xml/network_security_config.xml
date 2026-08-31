@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Local-network scoping is enforced by LocalNetworkWebViewClient, not
-         this file; see app/docs/development.md#local-network-cleartext. -->
     <base-config cleartextTrafficPermitted="true" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">local</domain>
-    </domain-config>
 </network-security-config>

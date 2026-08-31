@@ -283,6 +283,12 @@ A base URL is an origin with no trailing slash: `http://rtl433-a1b2c3.local` or
 one source being down does not affect another. A dot beside each URL shows that source's
 connection state.
 
+The host must be on the local network: a private or link-local address, `localhost`,
+a bare hostname, or one ending in `.local`, `.lan`, or `.home.arpa`. A public host is
+refused, and the input is marked invalid. This is a UI guard against pointing the app
+at a remote cleartext source; it does not, by itself, stop a redirect from a local host
+to a remote one, native plugin traffic, or a `ws://` connection.
+
 Two sources publishing the same topic stay two devices with two cards. Removing a source
 drops its devices and its cards; re-adding it starts them from defaults again.
 

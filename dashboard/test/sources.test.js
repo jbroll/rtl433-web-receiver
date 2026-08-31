@@ -33,9 +33,9 @@ test('a stored empty list is empty, not absent', () => {
 })
 
 test('a stored populated list is populated', () => {
-  src.addSource('http://a.b')
+  src.addSource('http://bridge.local')
   src.loadSources()
-  assert.deepEqual(src.sources.value, ['http://a.b'])
+  assert.deepEqual(src.sources.value, ['http://bridge.local'])
   assert.equal(src.storageState(), 'populated')
 })
 
@@ -53,12 +53,12 @@ test('a URL that is not http is refused', () => {
 })
 
 test('added sources persist and reload', () => {
-  assert.equal(src.addSource('http://a.b/'), true)
-  assert.equal(src.addSource('http://a.b'), false)
-  assert.equal(src.addSource('http://c.d:80'), true)
-  assert.deepEqual(src.sources.value, ['http://a.b', 'http://c.d'])
+  assert.equal(src.addSource('http://bridge.local/'), true)
+  assert.equal(src.addSource('http://bridge.local'), false)
+  assert.equal(src.addSource('http://nas.local:80'), true)
+  assert.deepEqual(src.sources.value, ['http://bridge.local', 'http://nas.local'])
   src.loadSources()
-  assert.deepEqual(src.sources.value, ['http://a.b', 'http://c.d'])
+  assert.deepEqual(src.sources.value, ['http://bridge.local', 'http://nas.local'])
 })
 
 test('a URL with a query, fragment, or credentials is refused', () => {
@@ -70,9 +70,9 @@ test('a URL with a query, fragment, or credentials is refused', () => {
 })
 
 test('removing the last source leaves an empty list', () => {
-  src.addSource('http://a.b')
-  assert.equal(src.removeSource('http://a.b'), true)
-  assert.equal(src.removeSource('http://a.b'), false)
+  src.addSource('http://bridge.local')
+  assert.equal(src.removeSource('http://bridge.local'), true)
+  assert.equal(src.removeSource('http://bridge.local'), false)
   assert.deepEqual(src.sources.value, [])
   src.loadSources()
   assert.equal(src.storageState(), 'empty')
@@ -96,8 +96,44 @@ test('a storage exception keeps adoption in memory and turns saves into no-ops',
   }
   src.loadSources()
   assert.equal(src.storageState(), 'absent')
-  assert.equal(src.addSource('http://a.b'), true)
-  assert.equal(src.addSource('http://c.d'), true)
-  assert.deepEqual(src.sources.value, ['http://a.b', 'http://c.d'])
+  assert.equal(src.addSource('http://bridge.local'), true)
+  assert.equal(src.addSource('http://nas.local'), true)
+  assert.deepEqual(src.sources.value, ['http://bridge.local', 'http://nas.local'])
   assert.deepEqual(writes, [])
+})
+
+test('a private IPv4 host is accepted', () => {
+  assert.equal(src.addSource('http://192.168.1.5'), true)
+})
+
+test('a loopback host is accepted', () => {
+  assert.equal(src.addSource('http://127.0.0.1:8080'), true)
+})
+
+test('a .local host is accepted', () => {
+  assert.equal(src.addSource('http://receiver.local'), true)
+})
+
+test('a bare single-label hostname is accepted', () => {
+  assert.equal(src.addSource('http://bridge'), true)
+})
+
+test('an IPv6 literal with a port is accepted when private', () => {
+  assert.equal(src.addSource('http://[fc00::1]:8080'), true)
+  assert.equal(src.addSource('http://[::1]:8080'), true)
+})
+
+test('a public host is refused', () => {
+  assert.equal(src.addSource('http://example.com'), false)
+  assert.equal(src.addSource('http://api.example.com'), false)
+})
+
+test('a public IPv4 or IPv6 host is refused', () => {
+  assert.equal(src.addSource('http://8.8.8.8'), false)
+  assert.equal(src.addSource('http://[2001:db8::1]'), false)
+})
+
+test('.lan and .home.arpa suffixes are accepted like .local', () => {
+  assert.equal(src.addSource('http://nas.lan'), true)
+  assert.equal(src.addSource('http://router.home.arpa'), true)
 })

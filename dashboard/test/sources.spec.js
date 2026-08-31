@@ -147,7 +147,7 @@ test("a source whose SSE endpoint stays down backs off, not on a flat 5s timer",
   });
 
   await open(page, host.url);
-  await page.fill("#source-url", "http://source.invalid");
+  await page.fill("#source-url", "http://source-down.local");
   await page.click("#source-add");
 
   await expect.poll(() => attempts.length, { timeout: 25000, intervals: [200] }).toBeGreaterThanOrEqual(6);

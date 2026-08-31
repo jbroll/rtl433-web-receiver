@@ -25,15 +25,15 @@ beforeEach(() => {
 })
 
 test('the device cap scales with the number of configured sources', () => {
-  src.addSource('http://a.b')
-  src.addSource('http://c.d')
+  src.addSource('http://bridge.local')
+  src.addSource('http://nas.local')
   assert.equal(src.configured().length, 2)
 
   for (let i = 0; i < 30; i++) {
-    upsert({ key: `http://a.b src/Acurite/${i}`, seenAt: i })
+    upsert({ key: `http://bridge.local src/Acurite/${i}`, seenAt: i })
   }
   for (let i = 0; i < 30; i++) {
-    upsert({ key: `http://c.d src/Acurite/${i}`, seenAt: i })
+    upsert({ key: `http://nas.local src/Acurite/${i}`, seenAt: i })
   }
 
   assert.ok(devices.value.size > DEVICE_MAX, `expected more than ${DEVICE_MAX} devices, got ${devices.value.size}`)
@@ -45,18 +45,18 @@ test('feed records are exempt from the cap, which is zero with no sources', () =
 
   upsert({ key: 'local feed/Sun', seenAt: 0 })
   upsert({ key: 'local feed/Moon', seenAt: 0 })
-  upsert({ key: 'http://a.b src/Acurite/1', seenAt: 5 })
+  upsert({ key: 'http://bridge.local src/Acurite/1', seenAt: 5 })
 
   assert.ok(devices.value.has('local feed/Sun'))
   assert.ok(devices.value.has('local feed/Moon'))
-  assert.ok(!devices.value.has('http://a.b src/Acurite/1'))
+  assert.ok(!devices.value.has('http://bridge.local src/Acurite/1'))
 })
 
 test('feed records survive a full cap of radio devices', () => {
-  src.addSource('http://a.b')
+  src.addSource('http://bridge.local')
   upsert({ key: 'local feed/Weather', seenAt: 0 })
   for (let i = 0; i < 30; i++) {
-    upsert({ key: `http://a.b src/Acurite/${i}`, seenAt: i })
+    upsert({ key: `http://bridge.local src/Acurite/${i}`, seenAt: i })
   }
 
   assert.equal(devices.value.size, DEVICE_MAX + 1)
@@ -64,25 +64,25 @@ test('feed records survive a full cap of radio devices', () => {
 })
 
 test('an evicted device is reported through the evict hook', () => {
-  src.addSource('http://a.b')
+  src.addSource('http://bridge.local')
   const evicted = []
   setEvictHook(key => evicted.push(key))
 
   for (let i = 0; i < DEVICE_MAX + 1; i++) {
-    upsert({ key: `http://a.b src/Acurite/${i}`, seenAt: i })
+    upsert({ key: `http://bridge.local src/Acurite/${i}`, seenAt: i })
   }
 
-  assert.deepEqual(evicted, ['http://a.b src/Acurite/0'])
+  assert.deepEqual(evicted, ['http://bridge.local src/Acurite/0'])
 })
 
 test('eviction notifies subscribers as its own change, not folded into the triggering upsert', () => {
-  src.addSource('http://a.b')
+  src.addSource('http://bridge.local')
   const snapshots = []
   const stop = effect(() => { snapshots.push(devices.value) })
   snapshots.length = 0 // drop the effect's initial subscribe firing
 
   for (let i = 0; i < DEVICE_MAX + 1; i++) {
-    upsert({ key: `http://a.b src/Acurite/${i}`, seenAt: i })
+    upsert({ key: `http://bridge.local src/Acurite/${i}`, seenAt: i })
   }
   stop()
 
@@ -91,17 +91,17 @@ test('eviction notifies subscribers as its own change, not folded into the trigg
   // leave this at DEVICE_MAX + 1 even though the final map looks correct.
   assert.equal(snapshots.length, DEVICE_MAX + 2)
   const last = snapshots[snapshots.length - 1]
-  assert.ok(!last.has('http://a.b src/Acurite/0'))
+  assert.ok(!last.has('http://bridge.local src/Acurite/0'))
   assert.equal(last.size, DEVICE_MAX)
 })
 
 test('clearing a source leaves feed records alone', () => {
-  src.addSource('http://a.b')
+  src.addSource('http://bridge.local')
   upsert({ key: 'local feed/Sun', seenAt: 0 })
-  upsert({ key: 'http://a.b src/Acurite/1', seenAt: 5 })
+  upsert({ key: 'http://bridge.local src/Acurite/1', seenAt: 5 })
 
-  clearSource('http://a.b')
+  clearSource('http://bridge.local')
 
   assert.ok(devices.value.has('local feed/Sun'))
-  assert.ok(!devices.value.has('http://a.b src/Acurite/1'))
+  assert.ok(!devices.value.has('http://bridge.local src/Acurite/1'))
 })
