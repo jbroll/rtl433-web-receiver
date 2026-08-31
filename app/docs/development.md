@@ -21,6 +21,28 @@ JAVA_HOME=/usr/lib/jvm/openjdk21 ANDROID_HOME=$HOME/android-sdk npm run build:an
 
 The debug APK lands at `android/app/build/outputs/apk/debug/app-debug.apk`.
 
+## Local-network cleartext
+
+The dashboard is served over plain http by a receiver on the LAN, so the WebView
+must be allowed to fetch it without TLS. `network_security_config.xml` still sets
+`cleartextTrafficPermitted="true"` in `base-config`, because Android's config
+schema has no CIDR/subnet syntax -- `<domain>` matches an exact hostname or IP
+literal, so a rule can't cover an arbitrary RFC 1918 address the way iOS's
+`NSAllowsLocalNetworking` does for the whole local network.
+
+The actual scoping happens in `LocalNetworkWebViewClient`
+(`app/android/app/src/main/java/com/rkroll/rtl433/`), which `MainActivity`
+installs in place of Capacitor's default client. It refuses a plain-http
+request unless the host is a private, link-local, or loopback address, or ends
+in `.local` (mDNS) -- matching the scan flow, whose results come back as
+resolved numeric addresses, and the iOS `Info.plist`'s `NSBonjourServices`
+scope. A remote host typed as a hostname or a raw IP is refused before it
+reaches the network; a receiver's LAN address or `.local` name still connects.
+
+The `<domain-config>` for `local` in the XML file is redundant with the code
+check but documents the same scope declaratively, for whatever the schema can
+express.
+
 ## Local iOS
 
 iOS needs macOS, Xcode, and CocoaPods:
