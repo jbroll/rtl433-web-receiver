@@ -57,8 +57,7 @@ export function fmtValue(v, decimals = 1) {
 }
 
 // A radio stuck refusing OP_MODE writes reads at or below the SX1231's own
-// measurement floor: see receiver/docs/architecture.md, "A refused OP_MODE
-// write is not an SPI fault".
+// measurement floor (receiver/docs/architecture.md, "A refused OP_MODE write is not an SPI fault").
 export const NOISE_FLOOR_DBM = -120;
 
 export function isBadReading(field, raw) {

@@ -144,9 +144,10 @@ devices on screen at the time keep their cards; only ones seen afterwards
 start hidden.
 
 The receiver's own card turns its border red, and reddens the `radio ok` and
-`noise` readings, when `radio ok` reads 0 or the noise floor reads at or below
-about -120 dBm — the radio refusing mode changes reads at or below its own
-measurement floor, so a below-floor reading is a fault, not a quiet band.
+`noise` readings and marks each with a warning icon (⚠), when `radio ok` reads
+0 or the noise floor reads at or below about -120 dBm — the radio refusing
+mode changes reads at or below its own measurement floor, so a below-floor
+reading is a fault, not a quiet band.
 
 ## Cards edit mode
 

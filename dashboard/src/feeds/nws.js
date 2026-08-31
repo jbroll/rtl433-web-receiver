@@ -37,8 +37,7 @@ export function parsePoints(json) {
 }
 
 // The stations feature carries its own distance from the queried point
-// (properties.distance, in meters), so naming a station costs nothing extra
-// to also place it.
+// (properties.distance, in meters), so naming a station also places it for free.
 export function parseStations(json) {
   const f = json && json.features
   if (!Array.isArray(f)) return { id: '', distanceM: null }

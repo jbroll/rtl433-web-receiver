@@ -1,4 +1,5 @@
-:root { color-scheme: light dark; --line:#8883; --err:#e5484d; scrollbar-gutter: stable; }
+:root { color-scheme: light dark; --line:#8883; --err:#c9252c; scrollbar-gutter: stable; }
+@media (prefers-color-scheme: dark) { :root { --err:#ff6369; } }
 body { margin:0; font:14px/1.4 system-ui,sans-serif; }
 header { display:flex; gap:1rem; align-items:baseline; padding:.6rem 1rem; border-bottom:1px solid var(--line);
          position:sticky; top:0; z-index:10; background:Canvas; }
@@ -87,13 +88,19 @@ section[hidden] { display:none; }
   overflow:hidden;
   text-overflow:ellipsis;
 }
+.card .fn .end {
+  display:flex;
+  align-items:center;
+  gap:.3em;
+  margin-left:.5em;
+  flex:0 0 auto;
+}
 .card .fn .u {
   font-weight:inherit;
   color:inherit;
   opacity:inherit;
-  margin-left:.5em;
-  flex:0 0 auto;
 }
+.card .fn .warn { font-size:.9em; }
 .card .fv { 
   font-variant-numeric:tabular-nums; 
   overflow:hidden; 
