@@ -86,6 +86,16 @@ done.
    so a dashboard "Clear" only clears what it holds locally, not what the
    receiver has stored. Deferred by decision, not by a blocker; the
    dashboard's half of this entry is deleted on a later branch.
+9. **Device identity across sources.** A device seen through two bridges is
+   two cards today; nothing merges them, because a device is keyed on its
+   source's base URL plus topic (see `dashboard/docs/architecture.md`'s
+   Keys section). Needs a design pass on identity across sources before
+   it's an implementation goal.
+10. **Weather beyond the United States.** `feeds/nws.js` sits behind the
+    dashboard's generic feed interface, so a worldwide provider such as
+    Open-Meteo is a new file, not a refactor. NWS returns 404 outside the
+    US today, which the feed treats as terminal (see
+    `dashboard/docs/architecture.md`'s Third-party requests section).
 
 ## Sequencing
 

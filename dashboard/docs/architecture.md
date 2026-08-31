@@ -257,7 +257,16 @@ resolves the zone on its own chain — the local zone if one is set, else the
 fallback's, else the browser's — independent of whether local coordinates exist,
 so a zone chosen with no coordinates still wins. `refreshTz()` recomputes the
 offset every tick and POSTs `$tz` again only when it has changed, which keeps
-the receiver's rain-day rollover correct across a DST transition.
+the receiver's rain-day rollover correct across a DST transition. The DST flag
+`isDST()` in `zone.js` reports is inferred by comparing a date's offset against
+January's and July's, not read from any API, so it is wrong for a zone that
+changed its DST rules mid-year.
+
+`location.jsx`'s "Use my location" button only renders when `navigator.geolocation`
+exists and `isSecureContext` is true. Geolocation is refused outside a secure
+context, and the page the receiver serves over plain http on a LAN address is not
+one, so the button is absent there. The suite cannot cover that branch: `harness.js`
+serves on 127.0.0.1, which browsers treat as secure regardless of scheme.
 
 `$units` carries the same three unit fields the settings signal holds, in a
 per-source map of its own. It resolves differently from the location: rather
@@ -302,7 +311,9 @@ at `box ÷ em`, and by height, at what its box leaves under the field name
 divided by the line height. The smallest bound any value produces is the size
 they all get, with a floor of 11px. A card of two readings therefore reads at
 the same size as a card of five beside it, rather than each card sizing to its
-own boxes.
+own boxes. A reading that still doesn't fit its box at 11px ellipsizes rather
+than shrinking further — `overflow:hidden` on `.fv` clips it, and the floor is
+deliberate: there is no smaller size worth reading.
 
 A single crowded box would otherwise set that size for the whole page: one
 card with an unusually tight cell shrinks every other card's type to match it.
@@ -393,6 +404,17 @@ zero there printed "0h 0m" and put the dial's sun below the horizon on a day wit
 hours of it. An earlier version solved each event at a fixed anchor and corrected the
 answer afterwards, which mistimed the events it had to correct by up to 1,951 s and
 emitted spurious ones on short days.
+
+Moonrise and moonset use a coarser method than the sun's bisection: `moonAltitude` is
+sampled every ten minutes across the local-day window and each crossing found by
+interpolating between samples. `test/astro-sweep.js`'s sweep (44 sites, 2026-2027,
+32,120 calls, 55,963 emitted moon events) found no wrong-day or spurious events, but
+timing is only good to about 3 minutes, not seconds — worst case 194.6s at Reykjanes,
+with the next-largest errors also at high latitude (Tromsø, Murmansk, Reykjavik, Nuuk),
+where the moon crosses the horizon at a shallow angle and a ten-minute sample spacing
+resolves the crossing time poorly. The sweep also missed 2 events: grazing rise/set
+pairs minutes apart that a ten-minute sampler cannot distinguish. An accuracy bound,
+not a defect.
 
 The sun dial's `riseText` and `setText` are `''` when there is no event that day, not an
 em dash. The renderer tests the field for emptiness to decide whether to draw the label
@@ -544,6 +566,14 @@ Playwright against the built bundle, served by `startServer()`'s own outer HTTP 
 `bridge/` running over an in-process aedes broker
 (`bridge/test/helpers/dashboard-fixture.js`), so the suite exercises the real HTTP
 binding rather than a model of it.
+
+`main.jsx`'s `exposeForTests()` puts page internals on `window` — `store.js`'s
+`getCardState`/`setCardState`, `isStorageBroken()` and `window.storageBroken` exist
+only to serve it — because `test/cards.spec.js` drives the page through the globals
+the pre-Preact version had at script level: 40 of its 89 tests reach for `window.` or
+`page.evaluate`. Deliberate and endorsed rather than plain debt, since rewriting those
+tests to drive the DOM instead would destroy the evidence that the Preact rewrite lost
+nothing. Delete the hook once the suite drives the DOM instead of the globals.
 
 Five of the dashboard's own `POST` paths are intercepted by the harness itself instead of
 proxied, because they belong to the receiver's binding rather than the bridge's. MQTT
