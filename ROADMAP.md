@@ -8,8 +8,12 @@ spec, a plan, and an implementation cycle of its own; this file orders them.
 Four sub-projects, each built and tested on its own, sharing one HTTP binding
 for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
 
-- **`receiver/`** — ESP32-S3 + SX1231 firmware. Decodes 433 MHz, serves the
+- **`receiver/`** — ESP32-S3 radio firmware. Decodes the ISM band, serves the
   binding's source-only subset, SSE, and an embedded build of the dashboard.
+  Two boards build from it, one PlatformIO environment each: `rfm69-433`
+  (SX1231 at 433.92 MHz) is the deployed receiver, and `sx1276-915` (SX1276 at
+  915 MHz) runs but has decoded nothing and is parked — see
+  [`receiver/docs/backlog.md`](receiver/docs/backlog.md).
   The host suite (`receiver/test/host/run.sh`, fourteen firmware modules
   including `signal_store` and `alias_store` into fifteen test binaries)
   runs in `ci/android` on the `gpu` host, and on a developer's machine. The

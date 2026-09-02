@@ -63,6 +63,13 @@ Receiver's own pseudo-device (always id 0) gets the slot `Receiver/0`. This is w
 sensors sharing a model (two `Acurite-5n1` units) keep independent saved layouts instead of
 colliding on one shared `Acurite-5n1` slot.
 
+Every receiver publishes `Receiver/0`, so that topic names a *role*, not a device; only the
+source segment tells two receivers apart. Anything keyed on the model segment alone treats
+them as one. A bridge relaying several receivers puts all of them under one origin, which is
+where that bites: the dashboard's staleness check kept a single build id for the page, saw
+two receivers' differing firmware builds as one device updating over and over, and reloaded
+without end. `dashboard/src/reload.js` keeps the build per device key for that reason.
+
 Feed cards take a slot too, their own topic — `feed/Weather` and its three siblings, which
 no `model/id` slot collides with. A feed is computed from the location and time zone the
 receiver stores, so every browser reading that receiver derives the same four cards, and

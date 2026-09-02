@@ -6,6 +6,7 @@ Four sub-projects, each built and tested on its own:
 
 - [`receiver/`](receiver/README.md) — an ESP32-S3 with an SX1231 radio. Decodes 433 MHz
   sensors, holds their last message, and serves the dashboard and an SSE stream.
+  A second board with an SX1276 at 915 MHz builds from the same firmware.
 - [`bridge/`](bridge/README.md) — the same HTTP surface over a real MQTT broker, as a
   node service.
 - [`dashboard/`](dashboard/README.md) — the browser page, built to one self-contained
