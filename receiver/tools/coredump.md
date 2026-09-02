@@ -13,11 +13,16 @@ Connect the serial port and run:
 
     ./tools/fetch_coredump.sh /dev/ttyACM0
 
+A second argument names the PlatformIO environment the board was built from,
+defaulting to `rfm69-433`; pass `sx1276-915` for the 915 MHz board.
+
 The script reads the coredump partition (offset and size from
 `receiver/partitions.csv`) into `core.bin` and decodes it against the ELF saved
-for the currently checked-out build (`receiver/tools/elf/$BUILD_ID.elf`, written
-by the `save_elf.py` post-build hook), falling back to
-`receiver/.pio/build/esp32s3-generic/firmware.elf` if that ELF isn't there.
+for the currently checked-out build
+(`receiver/tools/elf/$BUILD_ID-$PIOENV.elf`, written by the `save_elf.py`
+post-build hook), falling back to `receiver/.pio/build/$PIOENV/firmware.elf` if
+that ELF isn't there. ELFs saved before the environment suffix existed are all
+`rfm69-433` builds and are still found under their old name.
 
 The tools used are:
 
@@ -34,6 +39,6 @@ On this machine the tools live at:
 
 To open an interactive GDB session with the core dump:
 
-    xtensa-esp32s3-elf-gdb -ex "corefile core.bin" receiver/.pio/build/esp32s3-generic/firmware.elf
+    xtensa-esp32s3-elf-gdb -ex "corefile core.bin" receiver/.pio/build/rfm69-433/firmware.elf
 
 Replace the GDB and ELF paths above as needed for your platform.

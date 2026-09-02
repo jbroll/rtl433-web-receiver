@@ -61,3 +61,23 @@ for a 32-character token. Nothing has confirmed that a board with a
 correctly once flashed with firmware built against the new one; proving it
 needs a board with that token set before the flash, not a freshly
 provisioned one.
+
+## The 915 board has no radio health, and nothing has decoded on it yet
+
+`sx1276-915` builds and the radio comes up: `RegOpMode` accepts OOK RX
+continuous, `RegIrqFlags1` reads 0xd8 (ModeReady, RxReady, PllLock, RssiOK),
+and the noise floor sits around -96 dBm. It captures bursts down to about
+-89 dBm. No burst has parsed as a known device yet, in OOK or FSK, so the
+board is not confirmed end to end.
+
+Two pieces are compiled out of that build rather than ported. `radioTemperature()`
+returns nothing, so `radio_C` is absent from its telemetry. `reinitRadio()` still
+re-runs the config path but skips the `RegIrqFlags1`, `RegOokFix` and `RegVersion`
+diagnostics, so `irq1` is absent and a refused mode change cannot be told from an
+SPI fault. Both need the SX127x's own register addresses; `RegIrqFlags1` is 0x3E
+and `RegVersion` is 0x42, and the part has no temperature register comparable to
+the SX1231's.
+
+`NOISE_FLOOR_DBM` (-120) is shared with the 433 board and has not been checked
+against the SX1276's own measurement floor, so the `pinned` signature may not
+mean the same thing there.

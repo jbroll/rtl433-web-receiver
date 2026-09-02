@@ -4,7 +4,7 @@ Build the dashboard, flash the receiver, and see a signal on the page.
 
 ```
 cd dashboard && npm install && npm run build
-cd ../receiver && pio run -e esp32s3-generic -t upload
+cd ../receiver && pio run -e rfm69-433 -t upload
 ```
 
 The receiver embeds the dashboard build, wires up over WiFi (see

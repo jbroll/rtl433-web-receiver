@@ -329,6 +329,7 @@ static bool    radioIrq1Valid = false;
 static void reinitRadio() {
   rf.disableReceiver();
   delay(5); // let an RSSI read already on the SPI bus finish
+#ifdef RF_RF69
   Module* mod = radio.getMod();
   // RegIrqFlags1: ModeReady (bit 7) and PllLock (bit 4). Bracketing the
   // reinit tells a chip that refuses the mode change apart from one that
@@ -349,9 +350,11 @@ static void reinitRadio() {
   mod->SPIsetRegValue(RADIOLIB_RF69_REG_OOK_FIX, ookFixOrig);
   uint8_t version = mod->SPIgetRegValue(RADIOLIB_RF69_REG_VERSION);
   bool spiFault = ookFixReadback != scratch || version != RADIOLIB_RF69_CHIP_VERSION;
+#endif
 
   rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
   rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
+#ifdef RF_RF69
   radioIrq1 = mod->SPIgetRegValue(RADIOLIB_RF69_REG_IRQ_FLAGS_1);
   radioIrq1Valid = true;
   Log.notice(F("radio health: irq1 before=%X after=%X "
@@ -365,6 +368,7 @@ static void reinitRadio() {
                 "%X, RegVersion=%X" CR),
                scratch, ookFixReadback, version);
   }
+#endif
   rf.enableReceiver();
 }
 
@@ -372,8 +376,15 @@ static void reinitRadio() {
 // the whole proof: the OpMode register is read back, bits 4:2 being the mode
 // setMode() wrote. RadioLib's SPIgetRegValue returns those bits in place, so
 // the compare is against RADIOLIB_RF69_RX itself, not the value right-shifted.
+// The SX1276 board has no equivalent check: its only caller is the temperature
+// path, which does not run there.
 static bool radioBackInRx(Module* mod) {
+#ifdef RF_RF69
   return mod->SPIgetRegValue(RADIOLIB_RF69_REG_OP_MODE, 4, 2) == RADIOLIB_RF69_RX;
+#else
+  (void)mod;
+  return true;
+#endif
 }
 
 // One recovery event: stamps the state and NVS, then logs. Called for both the

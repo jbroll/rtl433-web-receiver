@@ -2,7 +2,10 @@
 
 ## Requirements
 
-An ESP32-S3 and a HopeRF RFM69CW radio module, wired as below.
+An ESP32-S3 and a radio module, wired as below. Two boards are supported, one
+PlatformIO environment each: `rfm69-433` for the deployed 433 MHz receiver
+(HopeRF RFM69CW, an SX1231) and `sx1276-915` for a 915 MHz board carrying an
+SX1276-family module. They differ only in frequency, chip and pin map.
 
 The library dependency is a fork,
 [jbroll/rtl_433_ESP](https://github.com/jbroll/rtl_433_ESP) branch
@@ -12,14 +15,14 @@ The library dependency is a fork,
 the branch itself; to move the pin forward, resolve the branch's current head
 with `git ls-remote https://github.com/jbroll/rtl_433_ESP.git sx1231-support`,
 edit the sha in `platformio.ini:13`, then
-`rm -rf .pio/libdeps/esp32s3-generic/rtl_433_ESP` and rebuild to force
+`rm -rf .pio/libdeps/rfm69-433/rtl_433_ESP` and rebuild to force
 PlatformIO to re-resolve it.
 
 Node 22 or newer. `pio run` runs `dashboard/build.js` to generate the page it serves,
 so run `npm install` in `../dashboard` before the first `pio run` — its `build.js`
 imports `esbuild` from `dashboard/node_modules`.
 
-## Wiring
+## Wiring, 433 MHz board (`rfm69-433`)
 
 | Signal | GPIO | Freenove header | RFM69CW pin | Note |
 |---|---|---|---|---|
@@ -36,6 +39,29 @@ imports `esbuild` from `dashboard/node_modules`.
 
 DIO2 carries the demodulated data and is the pin the decoder reads. Change the
 `RF_MODULE_*` values in `platformio.ini` to match your board.
+
+## Wiring, 915 MHz board (`sx1276-915`)
+
+| Signal | GPIO | Note |
+|---|---|---|
+| MISO | 1 | SPI, same bus as the 433 board |
+| MOSI | 42 | SPI |
+| SCK | 41 | SPI |
+| CS (NSS) | 40 | |
+| DIO2 (data) | 38 | continuous data output |
+| RST | NC | not wired; `RADIOLIB_NC`, so the radio comes up with no reset pulse |
+| DIO0 | NC | not wired |
+| DIO1 | NC | not wired |
+
+This map was recovered from the board with `probe/`, not from a schematic:
+sweeping every free GPIO found nothing that resets the part and nothing but
+GPIO 38 that carries data. If a later board wires RESET, set `RF_MODULE_RST`
+and RadioLib will pulse it on `begin()`.
+
+The part answers `RegVersion` (0x42) 0x12, which is the SX1276/77/78/79
+family. `OOK_FIXED_THRESHOLD` differs from the 433 board's for that reason:
+`RegOokFix` on an SX127x is the peak-mode floor in dB, where the SX1231's 0x50
+leaves the part deaf.
 
 ## I2C header
 
@@ -101,8 +127,13 @@ The radio pin map and OOK settings are in `platformio.ini`.
 
 ## Build and flash
 
-    pio run -e esp32s3-generic
-    pio run -e esp32s3-generic -t upload
+    pio run -e rfm69-433
+    pio run -e rfm69-433 -t upload
+
+The 915 board is the same commands against `sx1276-915`. Each environment
+builds to its own `.pio/build/` directory, so neither overwrites the other's
+`firmware.bin`, and `tools/save_elf.py` names its saved ELF after the
+environment as well as the build id.
 
 ## Verifying WiFi provisioning on hardware
 

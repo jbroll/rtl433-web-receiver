@@ -4,7 +4,7 @@
 # the one command that runs all of them.
 #
 # `pio test` is not included: receiver/platformio.ini has no `native`
-# environment, so it tries to build and flash esp32s3-generic and errors
+# environment, so it tries to build and flash rfm69-433 and errors
 # without a connected board. receiver/test/host/run.sh covers that ground.
 set -e
 root=$(cd "$(dirname "$0")/.." && pwd)

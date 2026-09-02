@@ -30,7 +30,7 @@ echo "[ci/android] dashboard: playwright install chromium"
 npx --prefix dashboard playwright install chromium
 
 echo "[ci/android] receiver: pio run (fetches ArduinoJson into .pio/libdeps)"
-(cd receiver && pio run -e esp32s3-generic)
+(cd receiver && pio run -e rfm69-433)
 
 echo "[ci/android] receiver: host suite (test/host/run.sh)"
 (cd receiver && sh test/host/run.sh)

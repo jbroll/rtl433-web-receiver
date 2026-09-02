@@ -11,7 +11,7 @@ out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 # device_hooks.cpp compiles against the ArduinoJson headers in libdeps.
 # Run 'pio run' once so the include path exists.
-aj="$root/.pio/libdeps/esp32s3-generic/ArduinoJson/src"
+aj="$root/.pio/libdeps/rfm69-433/ArduinoJson/src"
 if [ ! -d "$aj" ]; then
   echo "ArduinoJson headers not found at $aj" >&2
   echo "Run 'pio run' in receiver/ once to fetch dependencies." >&2
@@ -105,12 +105,12 @@ g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \
 # reviews' 'pio run', because none of that code was ever compiled for the
 # target. Build the real firmware with FAKE_SIGNALS on so that gap can't
 # reopen. This uses its own platformio.ini environment
-# (esp32s3-generic-fakesignals), which builds to its own .pio/build/
+# (rfm69-433-fakesignals), which builds to its own .pio/build/
 # directory and skips post:tools/save_elf.py, so this verification build
 # can never be what flash-ota.js pushes over OTA or what fetch_coredump.sh
 # symbolicates against.
 pio_log="$out/pio_run.log"
-if ! (cd "$root" && pio run -e esp32s3-generic-fakesignals) >"$pio_log" 2>&1; then
+if ! (cd "$root" && pio run -e rfm69-433-fakesignals) >"$pio_log" 2>&1; then
   cat "$pio_log" >&2
   exit 1
 fi

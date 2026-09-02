@@ -22,7 +22,12 @@ def save_elf(source, target, env):
     try:
         elf_dir = os.path.join(env.subst("$PROJECT_DIR"), "tools", "elf")
         os.makedirs(elf_dir, exist_ok=True)
-        shutil.copy(str(target[0]), os.path.join(elf_dir, build_id() + ".elf"))
+        # The environment name is part of the file name: two boards built from
+        # the same commit would otherwise overwrite each other's ELF, and
+        # symbolicating a dump against the wrong board's build produces
+        # plausible wrong frames rather than an obvious failure.
+        name = "%s-%s.elf" % (build_id(), env.subst("$PIOENV"))
+        shutil.copy(str(target[0]), os.path.join(elf_dir, name))
     except OSError as e:
         print("save_elf.py: warning: could not save ELF copy: %s" % e)
 

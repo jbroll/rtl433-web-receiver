@@ -494,7 +494,7 @@ There is no uncompressed fallback: every browser that can run the page sends
 `Accept-Encoding: gzip`.
 
 The two PROGMEM literals it replaced were 36,819 bytes. Measured as a linked-size
-difference with `pio run -e esp32s3-generic` across the commit that made the change:
+difference with `pio run -e rfm69-433` across the commit that made the change:
 1,184,653 bytes before, 1,156,725 after, a difference of 27,928.
 
 Those percentages, and the ones this file used to quote, were of Arduino's `default.csv`
@@ -778,9 +778,35 @@ The firmware treats it as a hardware fault and stays up: the pinned signature
 keeps the board serving HTTP, soft re-initing on the backoff in case the fault
 is transient, with `radio_ok` 0 and the pinned `noise_dBm` on the receiver card.
 
+## Two boards, two environments
+
+`platformio.ini` builds the same firmware for two radios. `[common]` holds
+every flag that is not about the radio; each environment adds its own
+frequency, chip and pin map on top.
+
+| | `rfm69-433` | `sx1276-915` |
+|---|---|---|
+| Radio | HopeRF RFM69CW (SX1231) | SX1276 family, `RegVersion` 0x12 |
+| Frequency | 433.92 MHz | 915.00 MHz |
+| NSS | GPIO 39 | GPIO 40 |
+| DIO2 (data) | GPIO 40 | GPIO 38 |
+| RESET | GPIO 38 | not wired |
+| `OOK_FIXED_THRESHOLD` | 0x50 | 0x0C |
+
+The SPI bus is the same three pins on both. `OOK_FIXED_THRESHOLD` differs
+because `RegOokFix` is a different quantity on the two parts: on an SX127x it
+is the peak-mode floor in dB, and the SX1231's 0x50 leaves it deaf.
+
+The radio health work below is SX1231-specific and compiled out of the 915
+build. `reinitRadio()` still re-runs the config path there, but without the
+`RegIrqFlags1`, `RegOokFix` and `RegVersion` diagnostics, so `irq1` never
+appears in that board's telemetry; `radioTemperature()` returns nothing, so
+neither does `radio_C`. Both would need the SX127x's own register addresses,
+and neither has been written.
+
 ## Pin map
 
-The firmware is built for the Freenove ESP32-S3-WROOM CAM on the
+The 433 firmware is built for the Freenove ESP32-S3-WROOM CAM on the
 `rtl433-carrier` PCB with a HopeRF RFM69CW radio module.
 
 | Signal | GPIO | Freenove header | RFM69CW pin | Note |
@@ -810,9 +836,15 @@ socket is not usable.
 
 `load_env.py` sets `BUILD_ID` to `git describe --always --dirty --exclude "*"`
 at build time. The receiver's telemetry carries it as `build`; the page keeps
-the first value it sees and reloads when a later one differs. A rebuild with
-no new commit keeps the same id, so uncommitted work needs a manual reload —
-the page has no way to tell that binary apart from the one already running.
+the first value it sees *per device* and reloads when that device reports a
+different one. A rebuild with no new commit keeps the same id, so uncommitted
+work needs a manual reload — the page has no way to tell that binary apart
+from the one already running.
+
+Per device, not per page. Two receivers reported through one bridge are both
+model `Receiver` and arrive under one origin, so a single page-wide slot
+flipped between their two ids on every message and reloaded without end. See
+`dashboard/src/reload.js`.
 
 ## The clock
 

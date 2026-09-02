@@ -45,7 +45,7 @@ to leave it running.
 `tools/flash-ota.js` wraps it:
 
     npx flash-ota rtl433-a1b2c3.local
-    npx flash-ota rtl433-a1b2c3.local .pio/build/esp32s3-generic/firmware.bin
+    npx flash-ota rtl433-a1b2c3.local .pio/build/rfm69-433/firmware.bin
 
 Run from `receiver/`, after `pio run` has produced a firmware image. The
 token comes from `OTA_TOKEN` in the environment or `.env` (an `export

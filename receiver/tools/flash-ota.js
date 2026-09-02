@@ -4,7 +4,8 @@
 //
 // Usage: npx flash-ota <host> [firmware-path]  (run from receiver/)
 //   host           mDNS name (rtl433-xxxxxx.local) or IP of the device
-//   firmware-path  defaults to .pio/build/esp32s3-generic/firmware.bin
+//   firmware-path  defaults to .pio/build/rfm69-433/firmware.bin; pass
+//                  .pio/build/sx1276-915/firmware.bin for the 915 board
 //
 // The token comes from OTA_TOKEN in the environment, or from receiver/.env.
 
@@ -57,7 +58,7 @@ async function main() {
   }
 
   const firmwarePath =
-    firmwareArg || path.join(__dirname, "..", ".pio", "build", "esp32s3-generic", "firmware.bin");
+    firmwareArg || path.join(__dirname, "..", ".pio", "build", "rfm69-433", "firmware.bin");
   if (!fs.existsSync(firmwarePath)) {
     console.error(`firmware not found: ${firmwarePath} (run "pio run" first)`);
     process.exit(2);

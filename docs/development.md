@@ -56,7 +56,7 @@ hand after setting up the venv so the first CI run doesn't time out:
 ```bash
 export PATH="$HOME/.venv/platformio/bin:$PATH"
 npm ci --prefix dashboard   # build_dashboard.py embeds a built dashboard into the firmware
-(cd receiver && pio run -e esp32s3-generic && pio run -e esp32s3-generic-fakesignals)
+(cd receiver && pio run -e rfm69-433 && pio run -e rfm69-433-fakesignals)
 ```
 
 ## Worktrees and merges
