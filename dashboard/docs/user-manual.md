@@ -269,8 +269,14 @@ need no network at all. In polar summer or winter the dial says "up all day" or
 
 A feed card shows no age, because the values are computed fresh. Weather does
 show one: it is how old the fetched data is. If a fetch fails the card keeps its
-last good values and adds an error line you can hide like any other value.
-Results are cached, so reopening the page paints immediately without refetching.
+last good values and says nothing about the failure — read that in the Settings
+tab under Feeds, which lists each feed with its state, the last error and when
+it will try again. Results are cached, so reopening the page paints immediately
+without refetching.
+
+A feed that reports its data will never exist for your location, such as
+Weather outside the United States, still says so on the card, since that
+explains an empty card rather than reporting an outage.
 
 ## Sources
 
@@ -332,6 +338,17 @@ shows but can never be removed through it, so removing it always `404`s
 can also mean a rare NVS-persist failure after rollback, where the bridge is
 still live, so that message does not claim the URL is gone. A success is
 silent.
+
+## Feeds
+
+Below Bridges, the Settings tab lists the four feed cards and what each one is
+doing: `ok`, `waiting`, `failed`, or `not available here`. A failed feed shows
+the error the provider returned and when the next attempt is due, which climbs
+from 30 minutes to 6 hours while it keeps failing.
+
+This is the only place a feed failure appears. The card keeps its last good
+values and says nothing, so an outage at the National Weather Service does not
+put an error in front of everyone looking at the dashboard.
 
 ## Access token
 

@@ -53,16 +53,18 @@ export async function startServer(opts = {}) {
     payload.rain_today_mm = Math.round((mm - entry.baseline) * 10) / 10;
   }
 
-  function topicOf(payload) {
+  // meta.source overrides the server's own source segment, which is how a
+  // bridge relaying several receivers looks: many source segments, one origin.
+  function topicOf(payload, meta = {}) {
     const id = payload.id !== undefined ? payload.id
              : payload.channel !== undefined ? payload.channel : 0;
-    return source + "/" + payload.model + "/" + id;
+    return (meta.source || source) + "/" + payload.model + "/" + id;
   }
 
   const fixture = await startTestBridge({ authToken: opts.authToken });
 
   async function emit(payload, meta = {}) {
-    const topic = topicOf(payload);
+    const topic = topicOf(payload, meta);
     const count = meta.count !== undefined ? meta.count : (counts.get(topic) || 0) + 1;
     counts.set(topic, count);
     const stamped = Object.assign({}, payload, {

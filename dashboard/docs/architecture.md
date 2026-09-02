@@ -35,6 +35,8 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `toast.js` | the transient message signal, expired off `tick.js` |
 | `toast.jsx` | the message itself |
 | `layout_template.js` | the source-published `$layout`, and the latch that stops adopting one |
+| `reload.js` | the firmware build each device last reported, and whether it changed |
+| `feeds.jsx` | the feed status panel inside settings |
 | `feeds/` | the feed scheduler, its cache, and one module per feed |
 
 `build.js` pins `absWorkingDir` to the dashboard directory. PlatformIO runs it
@@ -505,9 +507,15 @@ cached. That cache holds 100 queries and evicts the oldest key when it overflows
 long session of searching cannot grow it without bound. Browsers send `Referer`
 automatically, which is the identification the policy asks for.
 
-A failed run keeps the last good values on the card and adds the error as a
-plain string, so it renders through the scalar path and can be hidden like any
-other value. Retries climb 30m, 1h, 2h, 4h and stop at 6h, jittered per feed
+A failed run keeps the last good values on the card and leaves the card
+otherwise alone. The failure is readable in the Settings tab instead:
+`feedStatuses()` reports every feed's status, message and retry time, and
+`feeds.jsx` renders them under `#settings-feeds`. Writing the error onto the
+card put a provider outage in front of every reader with no way to dismiss it.
+An `Unsupported` feed still writes its note to the card, because that states
+why the card is empty and never changes.
+
+Retries climb 30m, 1h, 2h, 4h and stop at 6h, jittered per feed
 (a DJB2 hash of the feed id folded into the jitter) so several feeds failing on
 one outage do not come back in lockstep. If the response carries a
 `Retry-After` header, `nws.js` reads it into `err.retryAfter`, and `feed.js`'s

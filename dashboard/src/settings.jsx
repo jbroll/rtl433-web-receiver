@@ -3,6 +3,7 @@ import { tokenFor, setToken } from './auth.js'
 import { LocationView } from './location.jsx'
 import { SourcesView } from './sources.jsx'
 import { BridgesView } from './bridges.jsx'
+import { FeedsView } from './feeds.jsx'
 
 const DECIMALS = [0, 1, 2, 3, 4, 5]
 
@@ -55,6 +56,9 @@ export function SettingsView() {
       </div>
       <div id="settings-bridges">
         <BridgesView />
+      </div>
+      <div id="settings-feeds">
+        <FeedsView />
       </div>
       <div id="settings-auth">
         <AuthView />

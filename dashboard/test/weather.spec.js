@@ -115,7 +115,14 @@ test("a server error keeps the last good forecast on the card", async ({ page })
   await page.waitForTimeout(1500);
 
   await expect(page.locator(`${CARD} .val[data-f="day0"]`)).toHaveCount(1);
-  await expect(page.locator(`${CARD} .val[data-f="feed_error"] .fv`)).toContainText("500");
+  // The failure belongs in Settings, not on the card a reader cannot dismiss.
+  await expect(page.locator(`${CARD} .val[data-f="feed_error"]`)).toHaveCount(0);
+
+  await page.locator("#tab-devices").click();
+  await page.locator("#subtab-settings").click();
+  const row = page.locator('#settings-feeds .feed[data-feed="weather"]');
+  await expect(row).toHaveAttribute("data-status", "error");
+  await expect(row.locator(".feed-err")).toContainText("500");
 });
 
 test("moving the location refetches against the new point", async ({ page }) => {

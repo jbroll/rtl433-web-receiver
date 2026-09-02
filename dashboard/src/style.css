@@ -295,3 +295,16 @@ section[hidden] { display:none; }
               font-variant-numeric:tabular-nums; }
 .cval .hi { font-size:.8em; }
 .cval .lo { font-size:.55em; opacity:.6; }
+
+#settings-feeds { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);
+                   min-width:18rem; }
+#settings-feeds h3 { font-size:.8rem; font-weight:600; margin:0 0 .35rem; }
+#settings-feeds .feed { display:flex; align-items:baseline; gap:.5rem; padding:.15rem 0;
+                        font-size:.8rem; }
+#settings-feeds .feed-name { flex:0 0 5rem; }
+#settings-feeds .feed-status { flex:0 0 auto; opacity:.75; }
+#settings-feeds .feed[data-status=error] .feed-status { color:#c44; opacity:1; }
+#settings-feeds .feed[data-status=unsupported] .feed-status { color:#c82; opacity:1; }
+#settings-feeds .feed-err { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis;
+                            white-space:nowrap; opacity:.75; }
+#settings-feeds .feed-retry { flex:0 0 auto; opacity:.6; }

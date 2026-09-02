@@ -121,6 +121,27 @@ test("the page reloads when the device reports a different build", async ({ page
   await page.waitForFunction(() => window.marker === undefined);
 });
 
+test("two receivers on one origin reporting different builds do not reload", async ({ page }) => {
+  await open(page, [RECEIVER]);
+  let navigations = 0;
+  page.on("framenavigated", f => { if (f === page.mainFrame()) navigations++; });
+  await page.evaluate(() => { window.marker = 1; });
+
+  // A bridge relays each receiver under its own source segment. Both are model
+  // Receiver, and their firmware builds differ, which is what made a page-wide
+  // build slot flip on every message and reload without end.
+  for (let i = 0; i < 4; i++) {
+    server.emit(RECEIVER, { source: "rtl433-aaaaaa", build: "950a8ed" });
+    server.emit(RECEIVER, { source: "rtl433-bbbbbb", build: "ca427af-dirty" });
+  }
+  // Asserting that nothing happened needs a window to not happen in; there is
+  // no event to wait for. One reload is enough to fail this.
+  await page.waitForTimeout(1500);
+
+  expect(navigations).toBe(0);
+  expect(await page.evaluate(() => window.marker)).toBe(1);
+});
+
 test("a newly seen device gets no card until its box is checked", async ({ page }) => {
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);

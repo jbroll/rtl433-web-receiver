@@ -9,7 +9,7 @@ import { cardHidden, cardState, loadCardState, setHideNewCards } from '../src/st
 import { loadSettings, setLocation, onLocationFrame } from '../src/settings.js'
 import { sources } from '../src/sources.js'
 import { loadFeedCache, cacheGet, cacheSet } from '../src/feeds/cache.js'
-import { registerFeed, resetFeeds, feedState, pump, primeFeeds, feedKey, Unsupported } from '../src/feeds/feed.js'
+import { registerFeed, resetFeeds, feedState, pump, primeFeeds, feedKey, feedStatuses, Unsupported } from '../src/feeds/feed.js'
 
 function fakeStorage() {
   const map = new Map()
@@ -155,8 +155,12 @@ test('a failure keeps the last good values and adds the error', async () => {
 
   const merged = devices.value.get(KEY).merged.value
   assert.equal(merged.value, 7, 'the last good value was dropped')
-  assert.equal(merged.feed_error, 'boom')
+  assert.equal(merged.feed_error, undefined, 'the failure was written onto the card')
   assert.equal(feedState.value.get('test').status, 'error')
+  assert.equal(feedState.value.get('test').err, 'boom')
+  const row = feedStatuses().find(r => r.id === 'test')
+  assert.equal(row.status, 'error')
+  assert.equal(row.err, 'boom')
 })
 
 test('repeated failures climb the backoff ladder and stop at six hours', async () => {

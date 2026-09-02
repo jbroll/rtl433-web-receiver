@@ -15,5 +15,11 @@ test("a spec that forgets routeWeather() gets an error card, not a live answer",
 
   await page.evaluate(() => setLocation({ lat: 40.015, lon: -105.2705, zone: "America/Denver" }));
 
-  await expect(page.locator(`${CARD} .val[data-f="feed_error"] .fv`)).toBeVisible();
+  // The failure is reported in Settings rather than on the card, so that is
+  // where a spec missing routeWeather() shows up.
+  await page.locator("#tab-devices").click();
+  await page.locator("#subtab-settings").click();
+  const row = page.locator('#settings-feeds .feed[data-feed="weather"]');
+  await expect(row).toHaveAttribute("data-status", "error");
+  await expect(row.locator(".feed-err")).not.toBeEmpty();
 });

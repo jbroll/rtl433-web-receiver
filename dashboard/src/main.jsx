@@ -17,6 +17,7 @@ import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dr
          measureGridCallCount, fitValuesCallCount, fittingSize, textWidthEm, trackFit } from './grid.js'
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
+import { buildChanged } from './reload.js'
 import { loadSort } from './devicesort.js'
 import './renderers.jsx'
 import { registerFeed, primeFeeds, pump, expireFeeds } from './feeds/feed.js'
@@ -25,7 +26,6 @@ import sun from './feeds/sun.js'
 import moon from './feeds/moon.js'
 import weather from './feeds/nws.js'
 
-let build = null
 const flashTimers = new Map()
 
 // Off tick's one-second grain, which would leave the class on for up to twice
@@ -54,9 +54,9 @@ function onMessage(base, topic, obj) {
   const key = makeKey(base, topic)
   const stamped = obj.time ? Date.parse(obj.time) : NaN
   const at = Number.isFinite(stamped) ? stamped : Date.now()
-  if (isSelf(key) && typeof obj.build === 'string' && base === location.origin) {
-    if (build === null) build = obj.build
-    else if (obj.build !== build) { location.reload(); return }
+  if (isSelf(key) && base === location.origin && buildChanged(key, obj.build)) {
+    location.reload()
+    return
   }
   const prev = devices.value.get(key)
   const merged = mergeReadings(prev && prev.merged.value, obj)

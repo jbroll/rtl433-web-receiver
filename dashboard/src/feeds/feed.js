@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { upsert, devices } from '../devices.js'
+import { upsert } from '../devices.js'
 import { makeKey, FEED_BASE } from '../alias.js'
 import { ensureCard, saveCardState } from '../store.js'
 import { hasLocation, resolvedLocation, activeZone } from '../settings.js'
@@ -66,13 +66,19 @@ function publish(feed, fields, at) {
   if (changed) saveCardState()
 }
 
-// The last good fields stay on the card; the error joins them as a plain
-// string, so it renders through the scalar path and can be hidden like any
-// other value.
-function publishError(feed, message) {
-  const rec = devices.value.get(feedKey(feed))
-  const prev = rec ? rec.merged.value : {}
-  publish(feed, { ...prev, feed_error: message }, stateOf(feed.id).at)
+// A failing feed leaves its card alone: the last good fields stay, and the
+// card ages as it would if nothing had been asked. The failure is readable in
+// the Settings tab instead, through feedStatuses() below. Writing it onto the
+// card put a provider outage in front of every reader with no way to dismiss
+// it.
+export function feedStatuses() {
+  return FEEDS.map(feed => {
+    const s = stateOf(feed.id)
+    return {
+      id: feed.id, topic: feed.topic,
+      status: s.status, err: s.err, at: s.at, nextAt: s.nextAt,
+    }
+  })
 }
 
 async function runFeed(feed, ctx) {
@@ -114,7 +120,6 @@ async function runFeed(feed, ctx) {
       // A provider naming its own retry window overrides the ladder's guess.
       const delay = Math.max(e && e.retryAfter || 0, jittered)
       setState(feed.id, { status: 'error', err: message, fails, nextAt: Date.now() + delay })
-      publishError(feed, message)
     }
   } finally {
     running.delete(feed.id)
