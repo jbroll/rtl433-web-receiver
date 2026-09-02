@@ -17,11 +17,44 @@ wifi_store.cpp/.h          WiFi credential storage
 provisioning.cpp/.h        SoftAP captive portal
 monitor.py                 headless serial monitor
 tools/flash-ota.js         push a firmware image over OTA (`npx flash-ota`)
-tools/save_elf.py          post-build hook: saves firmware.elf to tools/elf/$BUILD_ID.elf
+tools/save_elf.py          post-build hook: saves firmware.elf to tools/elf/$BUILD_ID-$PIOENV.elf
 tools/fetch_coredump.sh    read and decode a crash dump (tools/coredump.md)
+probe/                     radio bring-up diagnostic, its own project
+probe915/                  915 MHz scans, one project, one env per hypothesis
 test/                      host topic tests, binding spec, fixtures
 docs/                      these pages
 ```
+
+## Radio diagnostics
+
+`probe/` and `probe915/` are separate PlatformIO projects, excluded from the
+firmware by `src_filter`. Neither is part of any test suite; both are run by
+hand against a board on USB.
+
+`probe/` talks to the radio over bit-banged SPI with no RadioLib and no mode
+changes, which is what separates a chip that is not answering from one the
+firmware has not configured. It sweeps candidate MISO, CS and RESET pins,
+reads the chip identity register, and reports which pins carry data. This is
+how the 915 board's pin map was recovered when no record of it existed.
+
+`probe915/` runs `rtl_433_ESP` alone, with no WiFi and no web UI, so a decode
+failure is the radio's rather than the firmware's. One radio hears one
+frequency, modulation, bitrate and pulse length at a time, so each guess about
+what is on the air is its own environment rather than a setting:
+
+```
+pio run -e scan915 -t upload --upload-port /dev/ttyACM1
+(cd .. && python3 monitor.py --port /dev/ttyACM1 --baud 115200 -d 300)
+```
+
+`RTL_ANALYZER` is on in all of them, so every burst no decoder claimed gets a
+pulse-width histogram, an estimated bitrate and a guessed modulation. Read
+that rather than the raw pulse train: a burst whose histogram is one tight
+cluster at the capture floor is the sampler talking to itself, and a real
+packet shows two or three tight clusters instead.
+
+`probe915/lib/` is gitignored — see `docs/backlog.md` for what it holds and
+how to recreate it.
 
 ## Serial monitor
 

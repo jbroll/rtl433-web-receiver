@@ -18,6 +18,11 @@ void setup() {
   delay(1500);
   Log.begin(LOG_LEVEL, &Serial0);
   Serial0.println("\n=== 915 MHz scan ===");
+  // Printed, not assumed: the library defines this unconditionally upstream,
+  // so a build flag silently loses unless lib/ carries the #ifndef patch.
+  Serial0.printf("freq=%.2f ook=%d min_pulse=%dus min_signal=%dus\n",
+                 (double)RF_MODULE_FREQUENCY, (int)OOK_MODULATION,
+                 MINIMUM_PULSE_LENGTH, MINIMUM_SIGNAL_DURATION);
   rf.initReceiver(RF_MODULE_RECEIVER_GPIO, RF_MODULE_FREQUENCY);
   rf.setCallback(rtl_433_Callback, messageBuffer, JSON_MSG_BUFFER);
   rf.enableReceiver();
