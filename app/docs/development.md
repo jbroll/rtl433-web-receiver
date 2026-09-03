@@ -70,11 +70,17 @@ that dies with the job.
 
 A `distribution` input picks where the build goes. `testflight`, the default, exports with
 `app-store-connect` and uploads. `adhoc` exports with `release-testing` against the
-`rtl433 Ad Hoc` profile and only attaches the `.ipa` to the run; install it over USB with
-`ideviceinstaller -i App.ipa`, which works from Linux. Ad hoc is the route for a device too
-old for the current TestFlight app, which needs iOS 16. Only devices listed in the ad-hoc
-profile can run that build, so a new device means regenerating the profile and updating
-`IOS_ADHOC_PROFILE`.
+`rtl433 Ad Hoc` profile and only attaches the `.ipa` to the run.
+
+**Ad hoc over USB is how the test iPad gets a build.** TestFlight is configured and its
+uploads succeed, but the tablet cannot use it: Apple's TestFlight client needs iOS 16 and
+the iPad is older, so a build sitting in TestFlight never reaches it. Dispatch with
+`adhoc` when the goal is installing on the device, and treat a `testflight` build as
+something that reaches App Store Connect and stops there. The app's own deployment target
+is 15.0, so the iPad runs the build fine once it is installed by another route.
+
+Only devices listed in the ad-hoc profile can run that build, so a new device means
+regenerating the profile and updating `IOS_ADHOC_PROFILE`.
 
 The archive itself always signs with the App Store profile; `xcodebuild -exportArchive`
 re-signs with whichever profile the export options name.
@@ -99,6 +105,28 @@ and `openssl req -new`, upload the `.csr` at Certificates, IDs & Profiles → Ce
 Apple Distribution, then pack the downloaded `.cer` with the key and Apple's WWDR
 intermediate using `openssl pkcs12 -export -legacy`. The profile references the certificate
 by name, so replacing one means regenerating the other.
+
+## iOS Installation
+
+The test iPad updates over USB from an ad-hoc build. There is no route from TestFlight to
+that device.
+
+```sh
+gh workflow run ios-release.yml -R jbroll/rtl433-web-receiver -r main -F distribution=adhoc
+gh run download <run-id> -R jbroll/rtl433-web-receiver -n rtl433-ios-adhoc -D .
+ideviceinstaller -i App.ipa
+```
+
+`gh workflow run` prints the run URL; the id is its last path segment. Wait for the run to
+finish before downloading, with `gh run watch <run-id> -R jbroll/rtl433-web-receiver`.
+
+`ideviceinstaller`, `idevice_id` and `ideviceinfo` come from libimobiledevice and run on
+Linux. Confirm the iPad is attached and trusted with `idevice_id -l`; an empty list means
+the cable, the lock screen, or an untapped Trust prompt. `ideviceinfo -k ProductVersion`
+reports the iOS version.
+
+Installing over an existing copy replaces it and keeps its data. A build signed by a
+different certificate will not replace one already there — delete the app first.
 
 ## Settings the app cannot publish
 

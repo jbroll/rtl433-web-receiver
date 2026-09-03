@@ -33,9 +33,11 @@ for MQTT ([`bridge/docs/binding.md`](bridge/docs/binding.md)).
   `bridge/test/helpers/dashboard-fixture.js`), not a fake one.
 - **`app/`** — Capacitor 8 shell. Android debug APK builds on the `gpu` CI
   host, unsigned. iOS builds unsigned on macOS via GitHub Actions on every
-  push (`ios.yml`), and a signed TestFlight build via `ios-release.yml` on a
-  tag push or manual dispatch. Android still needs a keystore for a signed
-  release APK; nothing Android is in a store.
+  push (`ios.yml`), and signed via `ios-release.yml` on a tag push or manual
+  dispatch. That workflow uploads to TestFlight, but the test iPad predates the
+  iOS 16 TestFlight client, so device installs go over USB from its `adhoc`
+  build. Android still needs a keystore for a signed release APK; nothing
+  Android is in a store.
 
 `preact-ui-migration` and `capacitor-app` landed on main. The receiver's
 last-hour message-type replay is implemented (commit `dece06e` and
