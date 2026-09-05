@@ -13,7 +13,7 @@ status becomes a badge that appears only when something is wrong.
   lower-right corner (`right:1rem`, the spot the pencil holds today).
   Clicking it toggles `tab` between `devices` and `cards`. It carries
   `aria-selected={tab.value === 'devices'}` for the highlight. Its id stays
-  `tab-devices` unless a clearer id costs nothing in test churn.
+  `tab-devices`.
 - The gear is hidden while layout editing is active (`editing.value`), so it
   cannot collide with the wrapped edit-control row under 400px and the view
   cannot change mid-drag.
