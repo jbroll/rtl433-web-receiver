@@ -18,9 +18,10 @@ status becomes a badge that appears only when something is wrong.
   cannot collide with the wrapped edit-control row under 400px and the view
   cannot change mid-drag.
 - The settings section keeps its Settings/Devices/Log subnav unchanged.
-- `Status` renders nothing when every source is live and there is at least
-  one source. Otherwise it renders a small fixed badge in the lower left
-  with the existing text (`no sources`, `reconnecting`, `n/m live`).
+- `Status` stays in the DOM with its existing text (`no sources`, `live`,
+  `reconnecting`, `n/m live`) so tests can keep waiting on it, but is
+  CSS-hidden when every source is live and there is at least one source.
+  Otherwise it shows as a small fixed badge in the lower left.
 
 ## style.css
 
