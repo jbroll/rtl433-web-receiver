@@ -13,7 +13,6 @@ import { layouts, postLayout, applyTemplate, disableAutoApply, layoutForSources 
 export const tab = signal('cards')
 export const settingsTab = signal('devices')
 
-const TABS = ['cards']
 const SETTINGS_TABS = ['settings', 'devices', 'log']
 
 function Status() {
@@ -23,37 +22,25 @@ function Status() {
              : live === states.length ? 'live'
              : live === 0 ? 'reconnecting'
              : `${live}/${states.length} live`
-  return <span id="status">{text}</span>
+  const ok = states.length > 0 && live === states.length
+  return <span id="status" class={ok ? 'ok' : ''}>{text}</span>
 }
 
 export function App() {
   return (
     <>
-      <header>
-        <h1>rtl_433</h1>
-        <nav>
-          {TABS.map((n) => (
-            <button
-              key={n}
-              id={`tab-${n}`}
-              aria-selected={tab.value === n}
-              onClick={() => { tab.value = n }}
-            >
-              {n[0].toUpperCase() + n.slice(1)}
-            </button>
-          ))}
-        </nav>
-        <Status />
+      <Status />
+      {!editing.value && (
         <button
           id="tab-devices"
           class="gear"
           title="Devices &amp; settings"
           aria-selected={tab.value === 'devices'}
-          onClick={() => { tab.value = 'devices' }}
+          onClick={() => { tab.value = tab.value === 'devices' ? 'cards' : 'devices' }}
         >
           &#9881;
         </button>
-      </header>
+      )}
       <Toast />
       <section id="view-cards" class={editing.value ? 'editing' : ''} hidden={tab.value !== 'cards'}>
         <div id="edit-controls">
