@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, routeTiles } from "./harness.js";
+import { startServer, routeTiles, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, topicOf } from "./fixtures.js";
 
 let servers = [];
@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 function base(server) { return server.url.replace(/\/$/, ""); }
 
 async function openSettings(page) {
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-settings");
 }
 
@@ -37,7 +37,7 @@ test("a rename against a token-protected bridge is rejected and surfaced as a to
   const key = `${base(server)} ${topic}`;
 
   await page.goto(server.url);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await rename(page, key, "Back fence");
 
   await expect(page.locator("#toast")).toBeVisible();
@@ -76,7 +76,7 @@ test("a token seeded in localStorage before boot survives a fresh page load", as
     localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [origin]: "secret" }));
   }, base(server));
   await page.goto(server.url);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await rename(page, key, "Back fence");
 
   const posted = await server.get(topic + "/$alias");
@@ -121,7 +121,7 @@ test("setting the access token in Settings lets a default-layout save go through
   await page.fill("#settings-token", "secret");
   await page.click("#settings-token-save");
   await page.click("#subtab-devices");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.click("#edit-cards");
   const posted = page.waitForResponse((r) => r.url().includes("$layout"));
   await page.click("#save-layout");
@@ -154,7 +154,7 @@ test("a token stored for a different bridge's origin is not sent to this one", a
     route.continue();
   });
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await rename(page, keyA, "Back fence");
   await expect(page.locator("#toast")).toBeVisible();
 

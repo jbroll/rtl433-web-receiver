@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer } from "./harness.js";
+import { startServer, closeSettings } from "./harness.js";
 import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -24,7 +24,7 @@ async function open(page, devices) {
 }
 
 async function edit(page) {
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.click("#edit-cards");
   await expect(page.locator("#view-cards")).toHaveClass(/editing/);
 }

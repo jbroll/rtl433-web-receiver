@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, routeWeather } from "./harness.js";
+import { startServer, routeWeather, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -14,7 +14,7 @@ async function open(page) {
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
   await page.evaluate(() => setLocation({ lat: 40.015, lon: -105.2705, zone: "America/Denver" }));
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await expect(page.locator('#devices tr[data-key="local feed/Sun"]').first()).toBeVisible();
   await page.waitForTimeout(300);
 }
@@ -73,16 +73,16 @@ test("the table survives a packet arriving while a select has focus", async ({ p
 
 test("the change reaches the card it was made for", async ({ page }) => {
   await open(page);
-  await page.locator("#tab-cards").click();
+  await closeSettings(page);
   await page.evaluate(() => { setHideNewCards(false); cardState = { ...cardState, hidden: [] }; saveCardState(); });
   const sun = '.card:not(.ghostcard)[data-key="local feed/Sun"]';
   await expect(page.locator(`${sun} .val[data-f="solar_noon"]`)).toHaveCount(1);
 
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator('#devices tr.vrow[data-key="local feed/Sun"][data-f="solar_noon"] select')
     .selectOption("hidden");
 
-  await page.locator("#tab-cards").click();
+  await closeSettings(page);
   await expect(page.locator(`${sun} .val[data-f="solar_noon"]`)).toHaveCount(0);
 });
 
@@ -90,9 +90,9 @@ test("the table fills in on the first render after switching to it", async ({ pa
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.locator("#tab-cards").click();
+  await closeSettings(page);
   await expect(page.locator("#devices tr")).toHaveCount(0);
 
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await expect(page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"]`)).toHaveCount(1);
 });

@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer } from "./harness.js";
+import { startServer, openSettings } from "./harness.js";
 
 let server;
 
@@ -13,7 +13,7 @@ async function openBridges(page, list) {
   server = await startServer({});
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-settings");
   await expect(page.locator("#bridge-form")).toBeVisible();
 }

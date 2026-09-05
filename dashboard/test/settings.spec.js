@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, routeTiles } from "./harness.js";
+import { startServer, routeTiles, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, OREGON, LONGNAME, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -23,12 +23,12 @@ async function open(page, devices) {
     cardState = { ...cardState, hidden: [] };
     saveCardState();
   });
-  await page.click("#tab-devices");
+  await openSettings(page);
   return server;
 }
 
 async function showCards(page) {
-  await page.click("#tab-cards");
+  await closeSettings(page);
 }
 
 async function openSettings(page) {
@@ -50,7 +50,7 @@ test("changing decimals re-renders the card and the devices table", async ({ pag
   const card = page.locator(`.card:not(.ghostcard)[data-key$="${LONG_KEY}"]`);
   await showCards(page);
   await expect(card.locator('.val[data-f="temperature_F"] .fv')).toHaveText("21.8");
-  await page.click("#tab-devices");
+  await openSettings(page);
   await openSettings(page);
   await page.locator("#settings-decimals").selectOption("3");
   await page.click("#subtab-devices");
@@ -68,7 +68,7 @@ test("switching to Imperial shows °F, in, and mi/h", async ({ page }) => {
   const card = page.locator(`.card:not(.ghostcard)[data-key$="${LONG_KEY}"]`);
   await showCards(page);
   await expect(card.locator('.val[data-f="temperature_F"] .fn .u')).toHaveText("°C");
-  await page.click("#tab-devices");
+  await openSettings(page);
   await openSettings(page);
   await page.locator("#settings-units").selectOption("imperial");
   await showCards(page);
@@ -84,7 +84,7 @@ test("Imperial converts a Celsius reading to Fahrenheit", async ({ page }) => {
   const card = page.locator(`.card:not(.ghostcard)[data-key$="${OREGON_KEY}"]`);
   await showCards(page);
   await expect(card.locator('.val[data-f="temperature_C"] .fv')).toHaveText("19.4");
-  await page.click("#tab-devices");
+  await openSettings(page);
   await openSettings(page);
   await page.locator("#settings-units").selectOption("imperial");
   await showCards(page);
@@ -95,7 +95,7 @@ test("Imperial converts a Celsius reading to Fahrenheit", async ({ page }) => {
 test("Custom mode exposes the four selects and applies them", async ({ page }) => {
   await open(page, [LONGNAME]);
   const card = page.locator(`.card:not(.ghostcard)[data-key$="${LONG_KEY}"]`);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await openSettings(page);
   await expect(page.locator("#settings-custom")).toHaveCount(0);
   await page.locator("#settings-units").selectOption("custom");
@@ -106,7 +106,7 @@ test("Custom mode exposes the four selects and applies them", async ({ page }) =
   await expect(page.locator("#settings-temp")).toHaveValue("C");
   await showCards(page);
   await expect(card.locator('.val[data-f="temperature_F"] .fn .u')).toHaveText("°C");
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator("#settings-temp").selectOption("F");
   await showCards(page);
   await expect(card.locator('.val[data-f="temperature_F"] .fn .u')).toHaveText("°F");
@@ -124,7 +124,7 @@ test("settings changes are saved and survive a reload", async ({ page }) => {
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await openSettings(page);
   await expect(page.locator("#settings-units")).toHaveValue("imperial");
   await expect(page.locator("#settings-decimals")).toHaveValue("3");

@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, routeTiles } from "./harness.js";
+import { startServer, routeTiles, openSettings } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 
 const NOMINATIM = "**/nominatim.openstreetmap.org/**";
@@ -25,7 +25,7 @@ async function open(page, route = BOULDER) {
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   await expect(page.locator("#settings-location")).toBeVisible();
 }
@@ -79,7 +79,7 @@ test("Enter in the place box searches, and no request goes out before that", asy
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
 
   await page.locator("#settings-place").pressSequentially("boulder");
@@ -114,7 +114,7 @@ test("a location survives a reload", async ({ page }) => {
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   await expect(page.locator("#settings-lat")).toHaveValue("40.0149856");
   await expect(page.locator("#settings-location-status"))
@@ -161,7 +161,7 @@ test("the map is drawn from OpenStreetMap tiles and credits them", async ({ page
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
 
   await expect(page.locator("#settings-map")).toBeVisible();
@@ -217,7 +217,7 @@ test("a newer pick wins over a reverse geocode still in flight", async ({ page, 
   server = await startServer({ devices: [ACURITE] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
 
   await page.locator("#settings-place").fill("boulder");

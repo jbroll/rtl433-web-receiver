@@ -322,3 +322,13 @@ export function startPage(opts = {}) {
     });
   });
 }
+
+// The gear (#tab-devices) toggles settings mode, so a bare click in the wrong
+// state would navigate away instead of toward. These check first.
+export async function openSettings(page) {
+  if (await page.locator("#view-devices").isHidden()) await page.click("#tab-devices");
+}
+
+export async function closeSettings(page) {
+  if (await page.locator("#view-devices").isVisible()) await page.click("#tab-devices");
+}

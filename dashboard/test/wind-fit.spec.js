@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer } from "./harness.js";
+import { startServer, closeSettings } from "./harness.js";
 
 const WIND = {
   model: "Acurite-5n1", id: 396, channel: "A", protocol: 40,
@@ -18,7 +18,7 @@ test("a 3-digit wind direction fits its value box", async ({ page }) => {
     cardState = { ...cardState, hidden: [] };
     saveCardState();
   });
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator('.val[data-f="wind_dir_deg"] .fv')).toHaveText("337.5");
 
   const fv = page.locator('.val[data-f="wind_dir_deg"] .fv');

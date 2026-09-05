@@ -1,5 +1,5 @@
 import { test, expect, guardContext } from "./pw.js";
-import { startServer, startPage, routeTiles } from "./harness.js";
+import { startServer, startPage, routeTiles, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 let servers = [];
@@ -28,7 +28,7 @@ test("two sources both stream into one device table", async ({ page }) => {
   const b = await startServer({ devices: [OREGON], source: "srcB" });
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(2);
   await expect(page.locator(`#devices tr[data-key="${base(a)} ${topicOf(ACURITE, "srcA")}"]:not(.vrow)`))
     .toHaveCount(1);
@@ -42,13 +42,13 @@ test("the same topic on two sources stays two devices with two cards", async ({ 
   const b = await startServer({ devices: [ACURITE], source: "shared" });
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(2);
   for (const s of [a, b]) {
     await page.locator(`#devices tr[data-key="${base(s)} ${topicOf(ACURITE, "shared")}"] input[type=checkbox]`)
       .check();
   }
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator("#cards .card")).toHaveCount(2);
 });
 
@@ -58,7 +58,7 @@ test("one source down does not stop another", async ({ page }) => {
   servers.push(host, a);
   const dead = "http://127.0.0.1:1";
   await withSources(page, host, [base(a), dead]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(1);
   await page.click("#subtab-settings");
   await expect(page.locator(`#source-list li .dot[data-state="live"]`)).toHaveCount(1);
@@ -71,7 +71,7 @@ test("removing a source drops its devices and its cards", async ({ page }) => {
   const b = await startServer({ devices: [OREGON], source: "srcB" });
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#devices tr[data-key]:not(.vrow)")).toHaveCount(2);
   await page.click("#subtab-settings");
   await page.locator(`#source-list li:has-text("${base(b)}") button.rm`).click();
@@ -88,7 +88,7 @@ test("removing a source updates the status line to match what remains", async ({
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
   await expect(page.locator("#status")).toHaveText(/live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-settings");
   await page.locator(`#source-list li:has-text("${base(b)}") button.rm`).click();
   await expect(page.locator("#status")).toHaveText(/live/);
@@ -100,7 +100,7 @@ test("a rename on a broker-served page keeps the alias local and does not post t
   const b = await startServer({ devices: [OREGON], source: "srcB" });
   servers.push(host, a, b);
   await withSources(page, host, [base(a), base(b)]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   const row = `#devices tr[data-key="${base(b)} ${topicOf(OREGON, "srcB")}"]`;
   await page.locator(`${row} input[type=text]`).fill("Shed");
   await page.locator(`${row} input[type=text]`).press("Enter");
@@ -111,7 +111,7 @@ test("a rename on a broker-served page keeps the alias local and does not post t
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator(`${row} input[type=text]`)).toHaveValue("Shed");
 });
 
@@ -160,7 +160,7 @@ test("same-origin alias written in one browser replays in a fresh browser", asyn
   const pageA = await contextA.newPage();
   try {
     await pageA.goto(server.url);
-    await pageA.click("#tab-devices");
+    await openSettings(pageA);
     await pageA.locator(`#devices tr[data-key="${key}"] input[type=text]`).fill("Back fence");
     // The route guard adds enough latency to the POST that the unawaited fetch
     // in postAlias() can lose the race against the check below.
@@ -180,7 +180,7 @@ test("same-origin alias written in one browser replays in a fresh browser", asyn
     const pageB = await contextB.newPage();
     try {
       await pageB.goto(server.url);
-      await pageB.click("#tab-devices");
+      await openSettings(pageB);
       await expect(pageB.locator(`#devices tr[data-key="${key}"] input[type=text]`)).toHaveValue("Back fence");
     } finally {
       await contextB.close();

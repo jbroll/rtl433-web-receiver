@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer } from "./harness.js";
+import { startServer, closeSettings } from "./harness.js";
 import { ACURITE, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -169,7 +169,7 @@ test("a short window gets more columns than a tall one at the same width", async
 });
 
 async function edit(page) {
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.click("#edit-cards");
   await expect(page.locator("#view-cards")).toHaveClass(/editing/);
 }

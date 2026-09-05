@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, startPage, routeWeather, routeTiles } from "./harness.js";
+import { startServer, startPage, routeWeather, routeTiles, openSettings, closeSettings } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 
 let servers = [];
@@ -32,7 +32,7 @@ test("a $location retained before connect makes feed cards appear with no local 
   servers.push(host, src);
   await src.emitLocation(BOULDER);
   await withSources(page, host, [base(src)]);
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(CLOCK_CARD)).toBeVisible();
   await expect(page.locator(SUN_CARD)).toBeVisible();
 });
@@ -46,7 +46,7 @@ test("a $location arriving mid-session makes feed cards appear without a reload"
   // A live stream makes the missing Clock card a real absence rather than a
   // page that has not connected yet.
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(CLOCK_CARD)).toHaveCount(0);
   await src.emitLocation(BOULDER);
   await expect(page.locator(CLOCK_CARD)).toBeVisible();
@@ -67,7 +67,7 @@ test("a local location always wins over a source's network location", async ({ p
     }));
   }, [base(src)]);
   await page.goto(host.url);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   await expect(page.locator("#settings-lat")).toHaveValue("0");
 });
@@ -79,7 +79,7 @@ test("Save posts both $tz and $location when the serving origin is a configured 
   servers.push(server);
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   // setLocation is location.jsx's own commit path -- what a map click, a
   // geocode pick, or "Use my location" all funnel through to move lat/lon

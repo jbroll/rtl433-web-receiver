@@ -30,7 +30,7 @@ try {
   await page.reload();
 
   // The app should land on the Devices/Settings tab with no sources configured.
-  await page.waitForSelector("#tab-devices[aria-selected='true']", { timeout: 15000 });
+  await page.waitForSelector("#view-devices:not([hidden])", { timeout: 15000 });
   await page.waitForSelector("#source-list li", { state: "detached", timeout: 5000 });
 
   // Add the mock source.

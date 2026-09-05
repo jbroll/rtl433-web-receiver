@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer } from "./harness.js";
+import { startServer, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, ACURITE_WIND, ACURITE_RAIN, LONGNAME, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -67,7 +67,7 @@ test("a rich value emits no .fv and keeps .val with its field name", async ({ pa
 test("a rich value shows its brief in the devices table, not its object", async ({ page }) => {
   await open(page);
   await addRichCard(page);
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
 
   const cell = page.locator(`tr[data-key="${RICH_KEY}"] td`).nth(2);
   await expect(cell).toHaveText("note: long");
@@ -97,7 +97,7 @@ test("a value fills most of the width it is given, at any grid size", async ({ p
     cardState = { ...cardState, hidden: [] };
     saveCardState();
   });
-  await page.click("#tab-cards");
+  await closeSettings(page);
 
   for (const [cols, rows] of [[1, 1], [2, 1], [1, 2], [2, 2], [3, 3]]) {
     await page.evaluate(([c, r]) => { setGrid("cols", c); setGrid("rows", r); }, [cols, rows]);

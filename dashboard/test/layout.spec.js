@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, startPage, routeTiles } from "./harness.js";
+import { startServer, startPage, routeTiles, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -105,6 +105,7 @@ test("a $layout frame does not auto-apply after an explicit Forget layouts, even
   // block the auto-apply that would otherwise silently undo their reset.
   const server = await open(page, [ACURITE]);
   await page.click("#edit-cards");
+  await expect(page.locator("#tab-devices")).toHaveCount(0);
   page.once("dialog", d => d.accept());
   await page.click("#forget-cards");
   server.emitLayout(TEMPLATE);
@@ -162,11 +163,11 @@ test("multiple sensors of the same model each keep their own saved size", async 
   const server = await open(page, [ACURITE, ACURITE2]);
   const base = server.url.replace(/\/$/, "");
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   for (const k of [ACURITE_KEY, KEY2]) {
     await page.locator(`#devices tr[data-key$="${k}"] input[type=checkbox]`).check();
   }
-  await page.click("#tab-cards");
+  await closeSettings(page);
 
   await page.evaluate(([k1, k2]) => {
     window.setCardSize(k1, 3, 1);
@@ -193,11 +194,11 @@ test("same-model slots key on the reading's own id, not connection order", async
 
   const server1 = await open(page, [ACURITE, ACURITE2]);
   const base1 = server1.url.replace(/\/$/, "");
-  await page.click("#tab-devices");
+  await openSettings(page);
   for (const k of [ACURITE_KEY, KEY2]) {
     await page.locator(`#devices tr[data-key$="${k}"] input[type=checkbox]`).check();
   }
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.evaluate(([k1, k2]) => {
     window.setCardSize(k1, 3, 1);
     window.setCardSize(k2, 1, 2);
@@ -214,11 +215,11 @@ test("same-model slots key on the reading's own id, not connection order", async
   await page.goto(server2.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
   server2.emitLayout(posted);
-  await page.click("#tab-devices");
+  await openSettings(page);
   for (const k of [ACURITE_KEY, KEY2]) {
     await page.locator(`#devices tr[data-key$="${k}"] input[type=checkbox]`).check();
   }
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.click("#edit-cards");
   page.once("dialog", d => d.accept());
   await page.click("#load-layout");
@@ -238,12 +239,12 @@ test("Save as default layout is absent when the serving origin isn't a connected
   const src = await startServer({ devices: [ACURITE] });
   servers.push(host, src);
   await page.goto(host.url);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-settings");
   await page.fill("#source-url", src.url.replace(/\/$/, ""));
   await page.click("#source-add");
   await expect(page.locator("#source-list li .dot")).toHaveAttribute("data-state", "live");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.click("#edit-cards");
   await expect(page.locator("#save-layout")).toHaveCount(0);
 });

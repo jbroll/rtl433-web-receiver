@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, startPage, routeTiles } from "./harness.js";
+import { startServer, startPage, routeTiles, openSettings } from "./harness.js";
 import { ACURITE, OREGON, topicOf } from "./fixtures.js";
 
 let servers = [];
@@ -23,7 +23,7 @@ function storedSources(page) {
 // button (#tab-devices), not its own tab.
 async function open(page, url) {
   await page.goto(url);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-settings");
 }
 
@@ -85,13 +85,14 @@ test("the status line reports no sources rather than live when none are configur
   servers.push(host);
   await page.goto(host.url);
   await expect(page.locator("#status")).toHaveText("no sources");
+  await expect(page.locator("#status")).toBeVisible();
 });
 
 test("an empty configuration lands on Devices/Settings and stores nothing", async ({ page }) => {
   const host = await startPage();
   servers.push(host);
   await page.goto(host.url);
-  await expect(page.locator("#tab-devices")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-devices")).toBeVisible();
   await expect(page.locator("#source-list li")).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("rtl433.sources.v1"))).toBeNull();
   await expect(page.locator("#devices tr[data-key]")).toHaveCount(0);
@@ -101,9 +102,10 @@ test("a binding origin is adopted, listed, and removable", async ({ page }) => {
   const src = await startServer({ devices: [ACURITE] });
   servers.push(src);
   await page.goto(src.url);
-  await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-cards")).toBeVisible();
+  await expect(page.locator("#status")).toBeHidden();
   expect(await storedSources(page)).toEqual([base(src)]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator(`#devices tr[data-key="${base(src)} ${topicOf(ACURITE)}"]:not(.vrow)`))
     .toHaveCount(1);
   await page.click("#subtab-settings");
@@ -119,20 +121,20 @@ test("removing the last source and reloading stays on Devices", async ({ page })
   const src = await startServer({ devices: [ACURITE] });
   servers.push(src);
   await page.goto(src.url);
-  await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
-  await page.click("#tab-devices");
+  await expect(page.locator("#view-cards")).toBeVisible();
+  await openSettings(page);
   await page.click("#subtab-settings");
   await page.click("#source-list li button.rm");
   await expect(page.locator("#source-list li")).toHaveCount(0);
   expect(await storedSources(page)).toEqual([]);
   await page.reload();
-  await expect(page.locator("#tab-devices")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-devices")).toBeVisible();
   await expect(page.locator("#source-list li")).toHaveCount(0);
   // Outlast the 1500 ms probe window: no probe runs for a stored empty list,
   // so nothing re-adopts the serving origin.
   await page.waitForTimeout(2000);
   expect(await storedSources(page)).toEqual([]);
-  await expect(page.locator("#tab-devices")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-devices")).toBeVisible();
 });
 
 test("a source whose SSE endpoint stays down backs off, not on a flat 5s timer", async ({ page }) => {
@@ -166,8 +168,8 @@ test("a second source added from a device-served page keeps both", async ({ page
   const b = await startServer({ devices: [OREGON], source: "srcB" });
   servers.push(a, b);
   await page.goto(a.url);
-  await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
-  await page.click("#tab-devices");
+  await expect(page.locator("#view-cards")).toBeVisible();
+  await openSettings(page);
   await page.click("#subtab-settings");
   await page.fill("#source-url", base(b));
   await page.click("#source-add");

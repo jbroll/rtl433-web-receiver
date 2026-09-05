@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, routeWeather, routeTiles, nwsJson } from "./harness.js";
+import { startServer, routeWeather, routeTiles, nwsJson, openSettings, closeSettings } from "./harness.js";
 import { ACURITE } from "./fixtures.js";
 import { OUTSIDE_US } from "./fixtures-nws.js";
 
@@ -42,10 +42,10 @@ test("the observation station's identifier and distance show on the current-cond
   const station = page.locator(`${CARD} .val[data-f="now"] .csub.station`);
   await expect(station).toHaveText("KBDU · 6 km");
 
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   await page.locator("#settings-units").selectOption("imperial");
-  await page.locator("#tab-cards").click();
+  await closeSettings(page);
 
   await expect(station).toHaveText("KBDU · 4 mi");
 });
@@ -83,10 +83,10 @@ test("observations arrive as readings the unit setting converts", async ({ page 
   await expect(c.locator(".fv")).toHaveText("20");
   await expect(c.locator(".fn .u")).toHaveText("°C");
 
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   await page.locator("#settings-units").selectOption("imperial");
-  await page.locator("#tab-cards").click();
+  await closeSettings(page);
 
   await expect(c.locator(".fv")).toHaveText("68");
   await expect(c.locator(".fn .u")).toHaveText("°F");
@@ -118,7 +118,7 @@ test("a server error keeps the last good forecast on the card", async ({ page })
   // The failure belongs in Settings, not on the card a reader cannot dismiss.
   await expect(page.locator(`${CARD} .val[data-f="feed_error"]`)).toHaveCount(0);
 
-  await page.locator("#tab-devices").click();
+  await openSettings(page);
   await page.locator("#subtab-settings").click();
   const row = page.locator('#settings-feeds .feed[data-feed="weather"]');
   await expect(row).toHaveAttribute("data-status", "error");

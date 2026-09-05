@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer } from "./harness.js";
+import { startServer, openSettings } from "./harness.js";
 import { ACURITE, OREGON, THERMO } from "./fixtures.js";
 
 let server;
@@ -12,7 +12,7 @@ async function open(page, devices) {
   server = await startServer({ devices });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator(ROWS)).toHaveCount(devices.length);
 }
 
@@ -65,7 +65,7 @@ test("the sort survives a reload", async ({ page }) => {
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator(ROWS)).toHaveCount(3);
   await expect(page.locator('th[data-sort="count"]')).toHaveAttribute("aria-sort", "ascending");
   expect(await models(page)).toEqual(before);

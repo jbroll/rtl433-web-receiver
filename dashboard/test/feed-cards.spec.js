@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startPage } from "./harness.js";
+import { startPage, openSettings, closeSettings } from "./harness.js";
 
 const SUN_KEY = "local feed/Sun";
 const SUN_CARD = `.card:not(.ghostcard)[data-key="${SUN_KEY}"]`;
@@ -14,8 +14,8 @@ test.afterEach(async () => { if (server) await server.close(); server = null; })
 // on the Devices/Settings tab. Wait that out before switching to cards, or
 // the abort lands after the click and puts the tab back.
 async function openCards(page) {
-  await expect(page.locator("#tab-devices")).toHaveAttribute("aria-selected", "true");
-  await page.locator("#tab-cards").click();
+  await expect(page.locator("#view-devices")).toBeVisible();
+  await closeSettings(page);
   await expect(page.locator("#cards")).toBeVisible();
 }
 
@@ -71,6 +71,6 @@ test("the main bar reads just Cards, with Devices/Settings/Log behind the header
   await page.goto(server.url);
   await expect(page.locator("header nav button")).toHaveText(["Cards"]);
   await expect(page.locator("#tab-devices")).toBeVisible();
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#view-devices nav.subnav button")).toHaveText(["Settings", "Devices", "Log"]);
 });

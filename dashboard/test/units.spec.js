@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, startPage, routeTiles } from "./harness.js";
+import { startServer, startPage, routeTiles, openSettings, closeSettings } from "./harness.js";
 import { OREGON, topicOf } from "./fixtures.js";
 
 const OREGON_KEY = topicOf(OREGON, "srcA");
@@ -30,7 +30,7 @@ async function showAllCards(page) {
     cardState = { ...cardState, hidden: [] };
     saveCardState();
   });
-  await page.click("#tab-cards");
+  await closeSettings(page);
 }
 
 test("a receiver's imperial units reach a visitor with nothing stored", async ({ page }) => {
@@ -71,7 +71,7 @@ test("changing units POSTs $units when the serving origin is a configured source
   servers.push(server);
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/^live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-settings");
   await page.locator("#settings-units").selectOption("imperial");
   await page.locator("#settings-decimals").selectOption("2");

@@ -1,5 +1,5 @@
 import { test, expect } from "./pw.js";
-import { startServer, startPage } from "./harness.js";
+import { startServer, startPage, openSettings, closeSettings } from "./harness.js";
 import { ACURITE, OREGON, THERMO, LONGNAME, FREEZER, RECEIVER, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
@@ -49,7 +49,7 @@ async function showEveryCard(page) {
 
 test("the served page lists devices and streams live signals", async ({ page }) => {
   await open(page, [ACURITE]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#devices tr:not(.vrow)")).toHaveCount(1);
   await expect(page.locator("#devices tr:not(.vrow)").first()).toContainText("Acurite-5n1");
 
@@ -59,7 +59,7 @@ test("the served page lists devices and streams live signals", async ({ page }) 
 
 test("the devices table shows readings converted and formatted", async ({ page }) => {
   await open(page, [ACURITE]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   const reading = page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"] td`).nth(2);
   await expect(reading).toContainText("temperature: 21.8°C");
   await expect(reading).toContainText("wind avg: 7.4km/h");
@@ -70,17 +70,17 @@ test("a message with no time still renders, ages from arrival, and reaches the l
   await open(page, [ACURITE]);
   server.emit(OREGON, { time: null });
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   const ageCell = page.locator(`#devices tr[data-key$="${OREGON_KEY}"] td`).nth(5);
   await expect(ageCell).not.toContainText("NaN");
   await expect(ageCell).not.toContainText("Invalid");
 
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await showEveryCard(page);
   const cardAge = page.locator(`.card[data-key$="${OREGON_KEY}"] .age`);
   await expect(cardAge).toHaveText(/^\d+[hms]/);
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-log");
   const logTime = page.locator("#logrows tr").first().locator("td").first();
   await expect(logTime).not.toContainText("NaN");
@@ -99,13 +99,13 @@ test("the page opens on Cards and switches views", async ({ page }) => {
   await open(page, [ACURITE]);
   await expect(page.locator("#view-cards")).toBeVisible();
   await expect(page.locator("#view-devices")).toBeHidden();
-  await expect(page.locator("#tab-cards")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-cards")).toBeVisible();
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#view-cards")).toBeHidden();
   await expect(page.locator("#view-devices")).toBeVisible();
 
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator("#view-cards")).toBeVisible();
 });
 
@@ -148,13 +148,13 @@ test("a newly seen device gets no card until its box is checked", async ({ page 
   await expect(page.locator("#status")).toHaveText(/live/);
   await expect(page.locator("#cards .card")).toHaveCount(0);
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator("#devices tr:not(.vrow)")).toHaveCount(1);
   const box = page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`);
   await expect(box).not.toBeChecked();
   await box.check();
 
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(CARD)).toHaveCount(1);
 });
 
@@ -162,19 +162,19 @@ test("the device table's checkbox shows and hides that device's card", async ({ 
   await open(page, [ACURITE, OREGON]);
   await expect(page.locator("#cards .card")).toHaveCount(2);
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   const box = page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`);
   await expect(box).toBeChecked();
   await box.uncheck();
 
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator("#cards .card")).toHaveCount(1);
   await expect(page.locator(CARD)).toHaveCount(0);
   expect((await cardState(page)).hidden).toContain(storeKey(server, ACURITE_KEY));
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await box.check();
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(CARD)).toHaveCount(1);
 });
 
@@ -194,7 +194,7 @@ test("the receiver's own card is shown without checking a box", async ({ page })
   await expect(card.locator('.val[data-f="noise_dBm"]')).not.toHaveClass(/\berr\b/);
   await expect(card.locator('.val[data-f="noise_dBm"] .warn')).toHaveCount(0);
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.click("#subtab-log");
   await expect(page.locator("#logrows tr")).toHaveCount(1);
   await expect(page.locator("#logrows")).not.toContainText("Receiver");
@@ -223,7 +223,7 @@ test("a device the user never showed is dropped once it is gone", async ({ page 
   // Show one of them, then drop the one nobody showed and save. The shown one
   // stays: a source has to still be delivering something before a save will
   // conclude any of its devices are gone.
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`).check();
   const stored = await page.evaluate((gone) => {
     const kept = [...devices.entries()].filter(([k]) => k !== gone);
@@ -242,12 +242,12 @@ test("an alias published on the stream names the card and the device table's box
   server.emitAlias(ACURITE_KEY, "Back yard");
   await expect(page.locator(`${CARD} .nm`)).toHaveText("Back yard");
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=text]`))
     .toHaveValue("Back yard");
 
   server.emitAlias(ACURITE_KEY, "");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(`${CARD} .nm`)).toHaveText("Acurite-5n1/396");
 });
 
@@ -284,7 +284,7 @@ test("renaming a card posts an alias", async ({ page }) => {
 test("clearing the device table's alias field removes the alias", async ({ page }) => {
   await open(page, [ACURITE]);
   server.emitAlias(topicOf(ACURITE), "Back fence");
-  await page.click("#tab-devices");
+  await openSettings(page);
   const field = page.locator('#devices tr[data-key$="' + topicOf(ACURITE) + '"] input[type=text]');
   await expect(field).toHaveValue("Back fence");
 
@@ -299,7 +299,7 @@ test("hiding a card in edit mode unchecks it in the device table", async ({ page
   await page.click("#edit-cards");
   await page.click(`${CARD} .cx`);
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`))
     .not.toBeChecked();
 });
@@ -506,7 +506,7 @@ test("an entry with no stored size is sized from its value count", async ({ page
     order: [k], hidden: [], cards: { [k]: { valueOrder: [], hiddenValues: [] } },
   })), storeKey(server, LONG_KEY));
   await page.reload();
-  await page.click("#tab-cards");
+  await closeSettings(page);
 
   // Eight readings, battery_ok hidden as a status field, leaves seven visible.
   const c = (await page.evaluate(() => cardState)).cards[storeKey(server, LONG_KEY)];
@@ -563,7 +563,7 @@ test("a card wider than its shown values sizes columns to what's visible", async
 
 test("the page's tightest reading fills its box, except one outlier that floors and ellipsizes", async ({ page }) => {
   await open(page, [ACURITE, LONGNAME]);
-  await page.click("#tab-cards");
+  await closeSettings(page);
   const fills = await page.evaluate(() =>
     [...document.querySelectorAll("#cards .fv")].map(fv => {
       const val = fv.parentNode;
@@ -642,7 +642,7 @@ test("evicting a card grows the survivors back to fill their box", async ({ page
 });
 
 async function edit(page) {
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await page.click("#edit-cards");
   await expect(page.locator("#view-cards")).toHaveClass(/editing/);
 }
@@ -660,33 +660,33 @@ test("the devices tab sets a value's display mode", async ({ page }) => {
   const body = page.locator(CARD + ' .val[data-f="humidity"]');
   const strip = page.locator(CARD + ' .btm');
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await mode(page, ACURITE_KEY, "humidity").selectOption("bottom");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(body).toHaveCount(0);
   await expect(strip).toContainText("humidity");
   expect((await stored()).bottomValues).toContain("humidity");
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await mode(page, ACURITE_KEY, "humidity").selectOption("hidden");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(strip).not.toContainText("humidity");
   expect((await stored()).hiddenValues).toEqual(["humidity"]);
 
   await page.reload();
   await expect(page.locator("#status")).toHaveText(/live/);
   await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveCount(0);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await expect(mode(page, ACURITE_KEY, "humidity")).toHaveValue("hidden");
 
   await mode(page, ACURITE_KEY, "humidity").selectOption("shown");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(CARD + ' .val[data-f="humidity"]')).toHaveCount(1);
 });
 
 test("the mode a card shows a value in matches its row in the devices tab", async ({ page }) => {
   await open(page, [ACURITE]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   expect(await mode(page, ACURITE_KEY, "battery_ok").inputValue()).toBe("bottom");
   expect(await mode(page, ACURITE_KEY, "temperature_F").inputValue()).toBe("shown");
   await expect(page.locator(`#devices tr.vrow[data-key$="${ACURITE_KEY}"]`)).toHaveCount(4);
@@ -703,9 +703,9 @@ test("hiding a value in a card smaller than its value count grows the rest", asy
   await setSize(page, LONG_KEY, 2, 1);
   // Seven values in two columns need four rows; hiding one drops it to three.
   const before = await waitForFitSettled(font);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await mode(page, LONG_KEY, "rain_mm").selectOption("hidden");
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect.poll(font).toBeGreaterThan(before);
 });
 
@@ -729,10 +729,10 @@ test("the devices tab is what re-enables a hidden card", async ({ page }) => {
   await page.click(CARD + " .cx");
   await expect(page.locator(CARD)).toHaveCount(0);
 
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"] input[type=checkbox]`)
     .check();
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator(CARD)).toHaveCount(1);
   expect((await cardState(page)).hidden).toEqual([]);
 });
@@ -794,9 +794,9 @@ test("Forget layouts leaves the devices it can see on the dashboard", async ({ p
   server = await startServer({ devices: [ACURITE, OREGON] });
   await page.goto(server.url);
   await expect(page.locator("#status")).toHaveText(/live/);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`).check();
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await expect(page.locator("#cards .card")).toHaveCount(1);
 
   await page.click("#edit-cards");
@@ -867,7 +867,7 @@ test("Escape out of a rename leaves the alias unchanged and posts nothing", asyn
 
 test("the device table keeps up after a checkbox takes focus", async ({ page }) => {
   await open(page, [ACURITE]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`).uncheck();
 
   server.emit(OREGON);
@@ -895,9 +895,9 @@ test("a card renders the same in edit mode as out of it", async ({ page }) => {
 
 test("a bottom value carries its label, reading and unit", async ({ page }) => {
   await open(page, [ACURITE]);
-  await page.click("#tab-devices");
+  await openSettings(page);
   await mode(page, ACURITE_KEY, "temperature_F").selectOption("bottom");
-  await page.click("#tab-cards");
+  await closeSettings(page);
 
   const strip = page.locator(CARD + " .btm");
   await expect(strip.locator(".bn").last()).toHaveText("temperature");
@@ -942,7 +942,7 @@ test("dragging a card reorders the grid and persists", async ({ page }) => {
   expect(await keys()).toEqual(fullKeys(OREGON_KEY, THERMO_KEY, ACURITE_KEY));
 
   await page.reload();
-  await page.click("#tab-cards");
+  await closeSettings(page);
   expect(await keys()).toEqual(fullKeys(OREGON_KEY, THERMO_KEY, ACURITE_KEY));
 });
 
@@ -1277,7 +1277,7 @@ test("values spread across the card without overflowing it", async ({ page }) =>
 // and bottom edges, and doesn't duplicate the value-level overflow case.
 test("no card's content extends past its right or bottom edge", async ({ page }) => {
   await open(page, [LONGNAME, ACURITE, OREGON]);
-  await page.click("#tab-cards");
+  await closeSettings(page);
   await setGrid(page, 6, 4);
 
   const overflow = sel => page.locator(sel).evaluate(n => ({
@@ -1469,7 +1469,7 @@ test("dragging the corner snaps to whole cells and persists", async ({ page }) =
   expect([c.w, c.h]).toEqual([3, 3]);
 
   await page.reload();
-  await page.click("#tab-cards");
+  await closeSettings(page);
   expect(await spans(page, CARD)).toEqual({ col: "span 3 auto", row: "span 3 auto" });
 });
 
@@ -1525,7 +1525,7 @@ test("a card resized larger renders larger type", async ({ page }) => {
 
 test("a value shrinks to fit its box instead of ellipsizing", async ({ page }) => {
   await open(page, [ACURITE, OREGON, LONGNAME]);
-  await page.click("#tab-cards");
+  await closeSettings(page);
 
   // .fv is a shrink-to-fit flex item, so its own scrollWidth/clientWidth is
   // always equal. Measure against the box fitValues() actually sized it for:
@@ -1560,7 +1560,7 @@ test("every value in a card shares the size its widest reading needs", async ({ 
 
 test("every card on the page shares one type size", async ({ page }) => {
   await open(page, [ACURITE, LONGNAME]);
-  await page.click("#tab-cards");
+  await closeSettings(page);
   // Clear first: a stale carryover could coincidentally match the new font
   // size and fool the settle poll.
   await page.evaluate(() => document.querySelectorAll("#cards .fv").forEach(n => n.style.fontSize = ""));
