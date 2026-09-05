@@ -116,8 +116,23 @@ message the store is about to drop is never handed to one. A device slot is
 claimed (or, for an existing device, looked up), then the sub for the
 record's `message_type` is resolved; if the sub table is full and the slot
 has no sub of its own to evict, the claim is undone before any hook runs, so
-a record the store is about to refuse is never handed to one either. Up to
-`SIGNAL_MAX_HOOKS` (2) record hooks can be registered with `addRecordHook()`,
+a record the store is about to refuse is never handed to one either.
+
+`mergeSiblingSubs()` then folds the device's other `message_type` subs into
+the doc, newest sub first, taking only fields the arriving message does not
+already carry and skipping the meta it owns (`time`, `rssi`, `count`,
+`message_type`, `mic`, `duration`, `sequence_num`). A splitter's readings
+otherwise reach a subscriber only in halves: an SSE subscriber replays the
+whole sub table and can reassemble them, but MQTT retains one payload per
+topic and a device is one topic, so what a reconnecting dashboard gets back is
+whichever half arrived last. Each sibling parses into a document sharing
+`record()`'s own arena, which is not reclaimed until the next call, so an
+exhausted arena fails that sibling's parse and it contributes nothing. A field
+that would carry the doc past `SIGNAL_PAYLOAD_MAX` is taken back out and the
+merge stops there, since `record()` drops an oversized payload rather than
+truncating it and the whole message would go with it.
+
+Up to `SIGNAL_MAX_HOOKS` (2) record hooks can be registered with `addRecordHook()`,
 run in registration order once the size check and the sub claim have both
 succeeded — `device_hooks::dispatch` and `mqtt_publish::onRecord` are the two
 the firmware wires up. `SIGNAL_PAYLOAD_MAX` is 600 bytes against the

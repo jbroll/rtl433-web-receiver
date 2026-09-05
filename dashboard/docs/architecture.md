@@ -336,6 +336,24 @@ has no crowding problem the floor exists to solve in the first place.
 the JSX as well would let a re-render put the unfitted size back, which is what
 made a card snap to small type after a grid resize.
 
+`CardsView`'s fit effect covers the grid, the card layout and the settings, but
+not a device's own readings: `upsert()` writes an existing record's signals in
+place, so `devices.value` keeps its identity, and `ensureCard()` only bumps
+`cardState` when a field is new to the card's `valueOrder`. A value that grows
+wider, and a field a device reports for the first time under a layout that
+already lists it, both re-render the card without either dependency changing.
+Each `.fv` therefore asks for its own fit from `Value`'s layout effect: a box
+with no inline size has never been fitted, and one whose number now measures
+wider than the box `fitValues()` sized it for has outgrown its fit. `.fv` is a
+shrink-to-fit flex item, so its own `scrollWidth`/`clientWidth` is always 1 and
+the width check has to be against the `.val` parent. The common case costs one
+`canvas.measureText()` call and a `clientWidth` read.
+
+Those requests go through `requestFit()`, which coalesces to one pass per
+microtask. Every box of a fresh card mounts unfitted, and a pass reads
+`clientWidth` on all of them, so one pass per box would be quadratic in forced
+layouts. The microtask still runs before paint, so nothing is drawn unfit.
+
 A value box on a hidden tab measures zero, so `fitValues()` skips a node it
 cannot measure rather than fitting it to the floor. `CardsView` watches the grid
 with a `ResizeObserver`, which fires when the tab comes back and the boxes get

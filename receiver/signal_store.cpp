@@ -307,6 +307,61 @@ static int claimSub(int slotIdx, const char* msgType) {
   return oldest;
 }
 
+// Meta the arriving message owns. Inheriting a sibling's copy would date the
+// merged payload to whenever that message type last spoke.
+static const char* const SUB_MERGE_SKIP[] = {"time",         "rssi", "count",
+                                             "message_type", "mic",  "duration",
+                                             "sequence_num"};
+
+static bool ownedByArrival(const char* field) {
+  for (size_t i = 0; i < sizeof(SUB_MERGE_SKIP) / sizeof(*SUB_MERGE_SKIP); i++) {
+    if (strcmp(SUB_MERGE_SKIP[i], field) == 0) return true;
+  }
+  return false;
+}
+
+// A device's message types each carry part of its readings -- the Acurite 5n1
+// alternates wind with temperature and with rain. A subscriber that replays
+// the sub table sees all of them, but one retained MQTT topic per device keeps
+// only the newest, so a payload has to stand alone. Fold in what this message
+// type does not carry.
+static void mergeSiblingSubs(int slotIdx, int subIdx, JsonDocument& doc) {
+  int order[SIGNAL_SUB_TABLE];
+  int n = 0;
+  for (int i = 0; i < SIGNAL_SUB_TABLE; i++) {
+    if (_subs[i].used && i != subIdx && _subs[i].slotIdx == (uint8_t)slotIdx) {
+      order[n++] = i;
+    }
+  }
+  // Newest first, so the freshest sub wins a field two of them carry.
+  for (int a = 1; a < n; a++) {
+    int v = order[a], b = a - 1;
+    while (b >= 0 && _subs[order[b]].seq < _subs[v].seq) {
+      order[b + 1] = order[b];
+      b--;
+    }
+    order[b + 1] = v;
+  }
+  for (int i = 0; i < n; i++) {
+    // Shares doc's arena, which record() reset on entry and does not reclaim.
+    // Exhaustion fails the parse, and this sibling contributes nothing.
+    JsonDocument other(&_jsonPool);
+    if (deserializeJson(other, _subs[order[i]].payload) != DeserializationError::Ok) {
+      continue;
+    }
+    for (JsonPairConst kv : other.as<JsonObjectConst>()) {
+      if (ownedByArrival(kv.key().c_str()) || !doc[kv.key()].isNull()) continue;
+      doc[kv.key()] = kv.value();
+      // record() drops an oversized payload rather than truncating it, so a
+      // merged field that crosses the ceiling would cost the whole message.
+      if (doc.overflowed() || measureJson(doc) > SIGNAL_PAYLOAD_MAX) {
+        doc.remove(kv.key());
+        return;
+      }
+    }
+  }
+}
+
 // An age has to be computable from a retained replay, which the binding's frame
 // does not otherwise carry. Empty until SNTP has set the clock.
 static bool isoTime(char* out, size_t size) {
@@ -416,6 +471,8 @@ bool record(const char* payload, int rssi, bool isDecode) {
       return false;
     }
   }
+
+  mergeSiblingSubs(idx, subIdx, doc);
 
   DeviceSub& sub = _subs[subIdx];
   // Captured before any hook runs, only when a hook is registered: with no
@@ -884,10 +941,43 @@ bool selfTest() {
   ok &= check("two message_types create two subs", deviceCount() == 1);
   ok &= check("latest payload is the most recent message_type",
               strstr(latestPayload(device(0)), "\"rain_mm\"") != NULL);
+  // One retained MQTT topic per device keeps only this payload, so it has to
+  // carry the other message type's readings too.
+  ok &= check("a payload carries the sibling message_type's readings",
+              strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":4.6") != NULL);
+  ok &= check("the merge leaves the arriving message's own rssi in place",
+              strstr(latestPayload(device(0)), "\"rssi\":-71") != NULL &&
+                  strstr(latestPayload(device(0)), "\"rssi\":-70") == NULL);
+  ok &= check("the merge leaves the arriving message's own message_type in place",
+              strstr(latestPayload(device(0)), "\"message_type\":1") != NULL &&
+                  strstr(latestPayload(device(0)), "\"message_type\":0") == NULL);
 
   record("{\"model\":\"Acurite-5n1\",\"id\":396,\"message_type\":0,\"wind_avg_mi_h\":5.0}", -72);
   ok &= check("re-recording message_type 0 updates its sub",
               strstr(latestPayload(device(0)), "\"wind_avg_mi_h\":5") != NULL);
+  ok &= check("a re-recorded message_type merges the sibling too",
+              strstr(latestPayload(device(0)), "\"rain_mm\":0.5") != NULL);
+
+  {
+    // A sibling field that would cross SIGNAL_PAYLOAD_MAX is dropped, not the
+    // message: record() has no truncation, so an oversized merge costs both.
+    reset();
+    char filler[301];
+    memset(filler, 'A', sizeof(filler) - 1);
+    filler[sizeof(filler) - 1] = '\0';
+    char wind[SIGNAL_PAYLOAD_MAX + 64], rain[SIGNAL_PAYLOAD_MAX + 64];
+    snprintf(wind, sizeof(wind),
+             "{\"model\":\"Wide\",\"id\":7,\"message_type\":0,\"note\":\"%s\"}", filler);
+    snprintf(rain, sizeof(rain),
+             "{\"model\":\"Wide\",\"id\":7,\"message_type\":1,\"other\":\"%s\"}", filler);
+    record(wind, -70);  // pending
+    record(wind, -70);  // promotes: a sub half the ceiling wide
+    bool        accepted = record(rain, -71);  // fits alone; the two together do not
+    const char* merged = latestPayload(device(0));
+    ok &= check("a sibling field too wide to merge does not cost the message",
+                accepted && merged != NULL && strstr(merged, "\"other\"") != NULL &&
+                    strstr(merged, "\"note\"") == NULL);
+  }
 
   reset();
   record("{\"model\":\"Acurite-Tower\",\"id\":1234,\"temperature_C\":21.5}", -70);

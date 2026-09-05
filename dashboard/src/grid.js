@@ -175,6 +175,20 @@ export function fitValues() {
   for (const node of boxes) node.style.fontSize = size
 }
 
+let fitQueued = false
+
+// Every value box mounting in one commit asks for a fit, and each pass reads
+// clientWidth on all of them; running one per box is quadratic in forced
+// layouts. The microtask still lands before paint, so nothing is drawn unfit.
+export function requestFit() {
+  if (fitQueued) return
+  fitQueued = true
+  queueMicrotask(() => {
+    fitQueued = false
+    fitValues()
+  })
+}
+
 export const editing = signal(false)
 export const renaming = signal(false)
 export const dragging = signal(null)

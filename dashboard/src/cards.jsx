@@ -6,7 +6,7 @@ import { aliasOf, displayName, postAlias } from './alias.js'
 import { ageText, displayValue, isBadReading } from './units.js'
 import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
-         measureGrid, fitValues, cellSignal, viewCols, viewColsSignal,
+         measureGrid, fitValues, requestFit, cellSignal, viewCols, viewColsSignal,
          trackFit, textWidthEm, beginDrag, beginResize, setRenaming, currentDrag, currentResize,
          dragOrResizeInFlight } from './grid.js'
 import { tick } from './tick.js'
@@ -240,19 +240,24 @@ function Value({ raw, field }) {
   // fitValues is the only writer of .fv font size, so a re-render cannot undo it.
   // upsert() mutates an existing device's signals in place, leaving
   // devices.value's identity untouched -- CardsView's fitValues() effect
-  // never reruns for a reading that only got wider. .fv is a shrink-to-fit
-  // flex item (its own scrollWidth/clientWidth is always 1), so overflow is
-  // checked against the .val parent fitValues() sized: the current font size
-  // times this value's own em width. A full fitValues() pass only runs when
-  // that check trips -- the common case costs one canvas.measureText() call
+  // never reruns for a reading that only got wider, nor for a field the device
+  // reports for the first time (ensureCard only bumps cardState when the field
+  // is new to valueOrder, and a published layout already lists it).
+  //
+  // No inline font size means no pass has ever sized this box. Otherwise .fv
+  // is a shrink-to-fit flex item (its own scrollWidth/clientWidth is always
+  // 1), so overflow is checked against the .val parent fitValues() sized: the
+  // current font size times this value's own em width. A fit only runs when
+  // one of those trips -- the common case costs one canvas.measureText() call
   // and a clientWidth read, not a page-wide refit.
   useLayoutEffect(() => {
     const node = valRef.current
     if (!node) return
     trackFit(node, d.num)
     const parent = node.parentNode
-    const fontPx = parseFloat(node.style.fontSize) || parseFloat(getComputedStyle(node).fontSize)
-    if (parent && fontPx && textWidthEm(d.num) * fontPx > parent.clientWidth) fitValues()
+    if (!parent) return
+    const fontPx = parseFloat(node.style.fontSize)
+    if (!fontPx || textWidthEm(d.num) * fontPx > parent.clientWidth) requestFit()
   }, [d.num, d.unit])
 
   return (

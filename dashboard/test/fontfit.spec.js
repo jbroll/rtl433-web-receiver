@@ -1,6 +1,6 @@
 import { test, expect } from "./pw.js";
 import { startServer } from "./harness.js";
-import { ACURITE, LONGNAME, topicOf } from "./fixtures.js";
+import { ACURITE, ACURITE_WIND, ACURITE_RAIN, LONGNAME, topicOf } from "./fixtures.js";
 
 const ACURITE_KEY = topicOf(ACURITE);
 const CARD = `.card:not(.ghostcard)[data-key$="${ACURITE_KEY}"]`;
@@ -221,4 +221,54 @@ test("a live reading that grows wider gets refit", async ({ page }) => {
   // Stale would show up as autoRatio still reflecting the old, narrower fit --
   // a mismatch against what a fresh manual pass computes for the same content.
   expect(autoRatio).toBeCloseTo(manualRatio, 5);
+});
+
+// The Acurite 5n1 splits its readings across alternating message types, so the
+// second half arrives as fields the card has never drawn. ensureCard() only
+// bumps cardState when a field is new to valueOrder, and a published layout
+// already lists every one, so CardsView's fit effect does not rerun either --
+// the boxes that just mounted have to ask for the fit themselves.
+test("a value box that appears on a later message is fitted like the rest", async ({ page }) => {
+  server = await startServer({ devices: [ACURITE_WIND] });
+  await page.goto(server.url);
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await page.evaluate(() => {
+    setHideNewCards(false);
+    cardState = { ...cardState, hidden: [] };
+    saveCardState();
+  });
+  await expect(page.locator(CARD)).toBeVisible();
+
+  // Big enough that the inherited font size does not overflow the new boxes.
+  // On a card small enough that it does, the overflow check hides the bug.
+  await page.evaluate((topic) => {
+    const key = Object.keys(cardState.cards).find(k => k.endsWith(topic));
+    setGrid("cols", 4);
+    setGrid("rows", 3);
+    setCardSize(key, 4, 3);
+    cardState.cards[key].valueOrder.push("rain_mm", "rain_today_mm");
+    saveCardState();
+  }, topicOf(ACURITE_WIND));
+
+  const sizes = () => page.locator(`${CARD} .fv`)
+    .evaluateAll(els => els.map(e => e.style.fontSize));
+
+  // The load's own fits have to be done before the emit. One still in flight
+  // sizes the new boxes for reasons that have nothing to do with them, which
+  // is how this reproduces on a real dashboard but not on every page load.
+  for (let calls = -1, seen = 0; calls !== seen; ) {
+    calls = await page.evaluate(() => fitValuesCalls);
+    await page.waitForTimeout(250);
+    seen = await page.evaluate(() => fitValuesCalls);
+  }
+
+  await server.emit(ACURITE_RAIN);
+  // An unfitted box has no inline size at all and draws at the inherited one.
+  await expect.poll(() => sizes())
+    .toEqual(Array(4).fill(expect.stringMatching(/^\d+(\.\d+)?px$/)));
+  const auto = await sizes();
+  expect(new Set(auto).size).toBe(1);
+
+  await page.evaluate(() => fitValues());
+  expect(await sizes()).toEqual(auto);
 });
