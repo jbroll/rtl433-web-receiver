@@ -37,7 +37,7 @@ test("a rename against a token-protected bridge is rejected and surfaced as a to
   const key = `${base(server)} ${topic}`;
 
   await page.goto(server.url);
-  await openSettingsPane(page);
+  await openSettings(page);
   await rename(page, key, "Back fence");
 
   await expect(page.locator("#toast")).toBeVisible();
@@ -76,7 +76,7 @@ test("a token seeded in localStorage before boot survives a fresh page load", as
     localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [origin]: "secret" }));
   }, base(server));
   await page.goto(server.url);
-  await openSettingsPane(page);
+  await openSettings(page);
   await rename(page, key, "Back fence");
 
   const posted = await server.get(topic + "/$alias");
@@ -154,7 +154,7 @@ test("a token stored for a different bridge's origin is not sent to this one", a
     route.continue();
   });
 
-  await openSettingsPane(page);
+  await openSettings(page);
   await rename(page, keyA, "Back fence");
   await expect(page.locator("#toast")).toBeVisible();
 
