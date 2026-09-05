@@ -134,10 +134,10 @@ test("#grid-size stays on screen at 320px wide in edit mode", async ({ page }) =
   await page.click("#edit-cards");
   await expect(page.locator("#grid-size")).toBeVisible();
 
-  // Un-media-queried, #grid-size is `position:fixed; right:12rem`, which at
-  // 320px puts its left edge around x=-19 — off the left edge of the
-  // viewport. The media query switches it (and its siblings) to a wrapping
-  // flex row with `position:static`.
+  // Un-media-queried, #grid-size is `position:fixed; right:15.2rem`, which at
+  // 320px puts its left edge well off the left edge of the viewport. The
+  // media query switches it (and its siblings) to a wrapping flex row with
+  // `position:static`.
   const gridSizeBox = await page.locator("#grid-size").boundingBox();
   expect(gridSizeBox.x).toBeGreaterThanOrEqual(0);
   expect(gridSizeBox.x + gridSizeBox.width).toBeLessThanOrEqual(320);

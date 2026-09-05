@@ -19,7 +19,7 @@ function storedSources(page) {
   return page.evaluate(() => JSON.parse(localStorage.getItem("rtl433.sources.v1")));
 }
 
-// Sources now lives inside the Settings disclosure behind the header's gear
+// Sources now lives inside the Settings disclosure behind the gear
 // button (#tab-devices), not its own tab.
 async function open(page, url) {
   await page.goto(url);

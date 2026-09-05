@@ -1,5 +1,11 @@
 # Backlog
 
+- In edit mode between 400px and about 640px wide, the fixed edit controls'
+  `right:` offsets (`#load-layout` at 36.2rem) run the leftmost buttons toward
+  or past the left edge; the wrapping flex row only takes over below 400px.
+  Widen the media-query cutoff or switch the controls to a flex row at all
+  widths.
+
 Work blocked on hardware being attached.
 
 - `test/android-smoke.js` was updated for the gear-panel split (dropped the dead
