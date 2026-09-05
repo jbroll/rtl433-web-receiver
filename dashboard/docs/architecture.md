@@ -39,6 +39,12 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `feeds.jsx` | the feed status panel inside settings |
 | `feeds/` | the feed scheduler, its cache, and one module per feed |
 
+There is no header: the gear is a fixed corner button that toggles settings
+mode, and it unmounts while the layout is being edited so it never collides
+with the edit controls' wrapped row on narrow screens. `#status` stays mounted
+with its text at all times and is only CSS-hidden when every source is live,
+so tests can wait on its text without caring whether it is shown.
+
 `build.js` pins `absWorkingDir` to the dashboard directory. PlatformIO runs it
 from `receiver/`, where there is no `node_modules`, and esbuild resolves alias
 targets against the working directory.
