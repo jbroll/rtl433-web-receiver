@@ -15,6 +15,7 @@
     "test": "node --test test/*.test.js && playwright test"
   },
   "dependencies": {
+    "@capacitor-community/keep-awake": "^8.0.1",
     "@capacitor/core": "^8.0.0",
     "@devioarts/capacitor-mdns": "^0.1.0",
     "@preact/signals": "^1.3.4",

@@ -18,6 +18,7 @@ import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dr
 import { addLog } from './log.jsx'
 import { openSource } from './stream.js'
 import { buildChanged } from './reload.js'
+import { holdScreenAwake } from './keepawake.js'
 import { loadSort } from './devicesort.js'
 import './renderers.jsx'
 import { registerFeed, primeFeeds, pump, expireFeeds } from './feeds/feed.js'
@@ -234,6 +235,7 @@ loadSources()
 loadBridges()
 loadSettings()
 installGestures()
+holdScreenAwake()
 
 for (const feed of [weather, sun, moon, clock]) registerFeed(feed)
 primeFeeds()

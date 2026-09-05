@@ -174,6 +174,22 @@ Playwright against a plain browser page. Check it manually: with a receiver
 on the same LAN as the device, open the Sources tab, tap Scan, and confirm
 the receiver appears and adds correctly.
 
+## Screen Sleep
+
+`dashboard/src/keepawake.js` calls `@capacitor-community/keep-awake` at boot, so
+the screen stays lit for as long as the app is foreground. It runs only under
+`Capacitor.isNativePlatform()`; in a browser the function returns before
+touching the plugin. This is what makes the tablet usable as a wall display,
+and it does not depend on the device's Auto-Lock setting, which anyone can
+change and which Low Power Mode overrides to 30 seconds.
+
+It keeps the screen on, not the app in front. Locking the device into the app
+is a separate, device-side setting with no code behind it: on iOS that is
+Guided Access under Settings → Accessibility, started by triple-clicking the
+Home button. Real single-app kiosk mode needs a supervised device, which needs
+Apple Configurator or MDM, so Guided Access is the practical ceiling here. It
+does not survive a reboot.
+
 ## Unsigned Versus Signed
 
 The Android CI job and local commands above produce an **unsigned debug APK**. It can be installed directly through adb but cannot be published; a release build needs a keystore. iOS is signed, through `ios-release.yml` above.
