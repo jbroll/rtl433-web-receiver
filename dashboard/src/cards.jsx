@@ -8,7 +8,7 @@ import { settings } from './settings.js'
 import { editing, renaming, dragging, resizing, gestureInFlight,
          measureGrid, fitValues, requestFit, cellSignal, viewCols, viewColsSignal,
          trackFit, textWidthEm, beginDrag, beginResize, setRenaming, currentDrag, currentResize,
-         dragOrResizeInFlight } from './grid.js'
+         dragOrResizeInFlight, observeCval } from './grid.js'
 import { tick } from './tick.js'
 import { isRich, rendererFor, briefOf, labelOf } from './render-values.js'
 
@@ -216,9 +216,13 @@ function Body({ rec, merged, vis, h, w }) {
 
 function RichValue({ rec, raw, field }) {
   const R = rendererFor(raw)
+  const cellRef = useRef(null)
+
+  useLayoutEffect(() => observeCval(cellRef.current), [])
 
   return (
     <div
+      ref={cellRef}
       class="val cval"
       data-f={field}
       onPointerDown={(ev) => {

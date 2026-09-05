@@ -272,3 +272,54 @@ test("a value box that appears on a later message is fitted like the rest", asyn
   await page.evaluate(() => fitValues());
   expect(await sizes()).toEqual(auto);
 });
+
+// iOS 15 has no container query units. An unknown unit voids the whole
+// font-size declaration, so a rich cell's type silently drops to the inherited
+// size instead of filling the cell.
+test("rich value type uses no container query units", async ({ page }) => {
+  await open(page);
+  await addRichCard(page);
+
+  const offenders = await page.evaluate(() => {
+    const CQ = /\d\s*cq[hwib]\b/;
+    const found = [];
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try { rules = sheet.cssRules; } catch { continue; }
+      for (const r of rules) {
+        if (r.cssText && CQ.test(r.cssText)) found.push(r.cssText.slice(0, 90));
+      }
+    }
+    for (const el of document.querySelectorAll("[style]")) {
+      const s = el.getAttribute("style");
+      if (CQ.test(s)) found.push(s.slice(0, 90));
+    }
+    return found;
+  });
+
+  expect(offenders).toEqual([]);
+});
+
+test("a rich cell's type grows with the cell", async ({ page }) => {
+  await open(page);
+  await addRichCard(page);
+
+  const text = page.locator(`.card[data-key="${RICH_KEY}"] .ctext`);
+  await expect(text).toBeVisible();
+  const sizeOf = async () =>
+    parseFloat(await text.evaluate(e => getComputedStyle(e).fontSize));
+
+  await expect.poll(sizeOf).toBeGreaterThan(9);
+  const small = await sizeOf();
+
+  await page.evaluate(() => {
+    const key = "local feed/Rich";
+    cardState = {
+      ...cardState,
+      cards: { ...cardState.cards, [key]: { ...cardState.cards[key], w: 3, h: 3 } },
+    };
+    saveCardState();
+  });
+
+  await expect.poll(sizeOf).toBeGreaterThan(small);
+});

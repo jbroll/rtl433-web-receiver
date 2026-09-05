@@ -462,16 +462,27 @@ structural rather than a flag because the failure is silent — the same text
 rendered as a scalar takes its whole card from 47px to 11px.
 `test/fontfit.spec.js` pins it.
 
-Type inside a rich cell scales by container query against the cell itself, in
-two terms: how much of the cell height the slot has, and what the string costs
-in cell width at that size. The smaller of the two is the size, so the type
-grows until whichever dimension runs out first, the way the dials fill their
-cell. The width term needs the string, which only a measurement gives, so the
-renderer computes it with `textWidthEm()` and sets `font-size` on the element;
-the stylesheet holds the parts that share a row at fractions of it. Nothing
-joins the page-wide fit. Fixed pixel ceilings used to cap these, which left a
-large card mostly empty. An engine without container queries drops the `min()`
-and falls back to inherited body type, which is legible.
+Type inside a rich cell scales against the cell itself, in two terms: how much
+of the cell height the slot has, and what the string costs in cell width at
+that size. The smaller of the two is the size, so the type grows until
+whichever dimension runs out first, the way the dials fill their cell. The
+width term needs the string, which only a measurement gives, so the renderer
+computes it with `textWidthEm()` and sets `font-size` on the element; the
+stylesheet holds the parts that share a row at fractions of it. Nothing joins
+the page-wide fit. Fixed pixel ceilings used to cap these, which left a large
+card mostly empty.
+
+The cell's own size reaches CSS as two custom properties rather than as
+container query units. `observeCval()` in `grid.js` keeps one `ResizeObserver`
+over every `.cval` and writes its measured box to `--cvh` and `--cvw`, which
+`fitFont()` and the `.cfn`/`.ctext`/`.csub` rules multiply. Container query
+units would be the natural spelling, but Safari 15 has none, and an unknown
+unit voids the whole `font-size` declaration: the text drops to the inherited
+14px instead of filling the cell, which on the iPad Air 2 the project targets
+is a tenfold difference. Custom properties resolve on every engine, so one
+code path serves both. `.cval` seeds `--cvh`/`--cvw` at `0px` so the clamp
+floors hold for the frame before the observer first fires.
+`test/fontfit.spec.js` fails the build if a `cq` unit reappears.
 
 `textWidthEm()`'s probe font is a tracked `.fv` node's computed style, not
 `.cval .big`'s own — the two elements happen to share the body font today, so

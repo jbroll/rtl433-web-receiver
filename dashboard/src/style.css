@@ -248,19 +248,20 @@ section[hidden] { display:none; }
 #settings { padding:.6rem 1rem; }
 #settings label { margin-right:1rem; white-space:nowrap; }
 #settings select { font:inherit; background:Canvas; color:inherit; border:1px solid var(--line); }
-/* A rich value draws its own cell. container-type:size makes the cell the
-   sizing reference, so type scales with the card instead of joining the
-   page-wide font fit that .fv values share. */
-.card .val.cval { container-type:size; align-items:stretch; justify-content:flex-start;
+/* A rich value draws its own cell. grid.js's observeCval publishes the cell's
+   measured box as --cvh/--cvw, and type scales against those instead of
+   joining the page-wide font fit that .fv values share. The 0px seed holds the
+   clamp floors until the first measurement lands. */
+.card .val.cval { --cvh:0px; --cvw:0px; align-items:stretch; justify-content:flex-start;
                   padding:.1rem 0; }
-.cval .cfn { font-size:clamp(8px,13cqh,12px); text-transform:uppercase; letter-spacing:.05em;
+.cval .cfn { font-size:clamp(8px,calc(var(--cvh) * .13),12px); text-transform:uppercase; letter-spacing:.05em;
              opacity:.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
              display:flex; justify-content:space-between; align-items:center; }
 /* The renderer sets the size these carry: it has the string to measure, which
    is what a width term needs. A flat px ceiling here left a large card mostly
    empty. */
 .cval .big { font-variant-numeric:tabular-nums; line-height:1.05; }
-.cval .ctext { font-size:clamp(9px,16cqh,22px); overflow:hidden; }
+.cval .ctext { font-size:clamp(9px,calc(var(--cvh) * .16),22px); overflow:hidden; }
 /* The clock's .cfn + .big have no flex:1 1 auto wrapper, so they sit at the
    top of the cell under .cval's flex-start. Center them like a plain .val. */
 .card .val.cval[data-f="local_time_12"],
@@ -277,7 +278,7 @@ section[hidden] { display:none; }
 #settings-place-results { list-style:none; margin:.2rem 0 .5rem; padding:0; max-width:34rem; }
 #settings-place-results button { display:block; width:100%; text-align:left; margin:0 0 .15rem; }
 #settings-location-status { font-size:.8rem; opacity:.7; }
-.cval .csub { font-size:clamp(8px,12cqh,14px); opacity:.6; font-variant-numeric:tabular-nums; }
+.cval .csub { font-size:clamp(8px,calc(var(--cvh) * .12),14px); opacity:.6; font-variant-numeric:tabular-nums; }
 .cval .dialbox { flex:1 1 auto; min-height:0; display:flex; justify-content:center; }
 .cval .dial { width:100%; height:100%; }
 #settings-map { max-width:34rem; margin:.4rem 0; border:1px solid var(--line);

@@ -189,6 +189,26 @@ export function requestFit() {
   })
 }
 
+// A rich cell sizes its own type against --cvh/--cvw rather than cqh/cqw:
+// Safari 15 has no container query units, and an unknown unit voids the whole
+// font-size declaration, dropping the text to the inherited size. The observer
+// is built on first use so importing this module needs no DOM.
+let cvalObserver = null
+
+export function observeCval(el) {
+  if (!cvalObserver) {
+    cvalObserver = new ResizeObserver(entries => {
+      for (const e of entries) {
+        const r = e.contentRect
+        e.target.style.setProperty('--cvh', r.height + 'px')
+        e.target.style.setProperty('--cvw', r.width + 'px')
+      }
+    })
+  }
+  cvalObserver.observe(el)
+  return () => cvalObserver.unobserve(el)
+}
+
 export const editing = signal(false)
 export const renaming = signal(false)
 export const dragging = signal(null)

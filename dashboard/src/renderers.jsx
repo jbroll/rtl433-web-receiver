@@ -14,8 +14,10 @@ import { zoneFormatter } from './zone.js'
 // fills its cell the way the dials do. The height term is the slot's share of
 // the cell; the width term is what the measured string costs at that size.
 // Whichever runs out first sets the size.
-function fitFont(heightCqh, widthEm) {
-  return `max(11px,min(${heightCqh}cqh,${(96 / widthEm).toFixed(1)}cqw))`
+function fitFont(heightPct, widthEm) {
+  const h = (heightPct / 100).toFixed(4)
+  const w = (96 / widthEm / 100).toFixed(4)
+  return `max(11px,min(calc(var(--cvh) * ${h}),calc(var(--cvw) * ${w})))`
 }
 
 // Emoji come from a fallback font the probe cannot measure reliably, so hold
