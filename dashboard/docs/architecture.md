@@ -537,7 +537,7 @@ long session of searching cannot grow it without bound. Browsers send `Referer`
 automatically, which is the identification the policy asks for.
 
 A failed run keeps the last good values on the card and leaves the card
-otherwise alone. The failure is readable in the Settings tab instead:
+otherwise alone. The failure is readable in the Settings section instead:
 `feedStatuses()` reports every feed's status, message and retry time, and
 `feeds.jsx` renders them under `#settings-feeds`. Writing the error onto the
 card put a provider outage in front of every reader with no way to dismiss it.
