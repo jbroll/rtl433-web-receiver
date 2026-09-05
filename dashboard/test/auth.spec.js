@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
 
 function base(server) { return server.url.replace(/\/$/, ""); }
 
-async function openSettings(page) {
+async function openSettingsPane(page) {
   await openSettings(page);
   await page.click("#subtab-settings");
 }
@@ -37,7 +37,7 @@ test("a rename against a token-protected bridge is rejected and surfaced as a to
   const key = `${base(server)} ${topic}`;
 
   await page.goto(server.url);
-  await openSettings(page);
+  await openSettingsPane(page);
   await rename(page, key, "Back fence");
 
   await expect(page.locator("#toast")).toBeVisible();
@@ -52,7 +52,7 @@ test("setting the access token in Settings lets the write go through", async ({ 
   const key = `${base(server)} ${topic}`;
 
   await page.goto(server.url);
-  await openSettings(page);
+  await openSettingsPane(page);
   await page.fill("#settings-token", "secret");
   await page.click("#settings-token-save");
   await page.click("#subtab-devices");
@@ -76,7 +76,7 @@ test("a token seeded in localStorage before boot survives a fresh page load", as
     localStorage.setItem("rtl433.tokens.v1", JSON.stringify({ [origin]: "secret" }));
   }, base(server));
   await page.goto(server.url);
-  await openSettings(page);
+  await openSettingsPane(page);
   await rename(page, key, "Back fence");
 
   const posted = await server.get(topic + "/$alias");
@@ -89,7 +89,7 @@ test("the token field never plays the stored secret back into the page", async (
   servers.push(server);
 
   await page.goto(server.url);
-  await openSettings(page);
+  await openSettingsPane(page);
   await page.fill("#settings-token", "secret");
   await page.click("#settings-token-save");
 
@@ -117,7 +117,7 @@ test("setting the access token in Settings lets a default-layout save go through
   servers.push(server);
 
   await page.goto(server.url);
-  await openSettings(page);
+  await openSettingsPane(page);
   await page.fill("#settings-token", "secret");
   await page.click("#settings-token-save");
   await page.click("#subtab-devices");
@@ -154,7 +154,7 @@ test("a token stored for a different bridge's origin is not sent to this one", a
     route.continue();
   });
 
-  await openSettings(page);
+  await openSettingsPane(page);
   await rename(page, keyA, "Back fence");
   await expect(page.locator("#toast")).toBeVisible();
 
