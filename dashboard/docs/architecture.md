@@ -7,7 +7,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | Module | Holds |
 |---|---|
 | `main.jsx` | wiring: boot order, the SSE sources, the feed scheduler, the test hooks |
-| `app.jsx` | the tab shell and the cards toolbar |
+| `app.jsx` | the shell — cards view, settings mode, gear and status badge — and the cards toolbar |
 | `units.js` | the meta and status field sets, `splitUnit()`, `fmtValue()`, `displayValue()`, `ageText()`, reading extraction |
 | `alias.js` | keys, the alias map, name resolution, the alias POST, `isFeed()` |
 | `auth.js` | the bridge access token, in `localStorage` keyed by origin |

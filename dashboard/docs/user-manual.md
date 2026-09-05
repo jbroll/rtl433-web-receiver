@@ -1,8 +1,11 @@
 # User manual
 
-Three tabs — Devices, Log, Cards — and the page opens on Cards. The status
-indicator in the header reads `no sources` when none is configured, `live` when every
-source is up, `reconnecting` when none is, and `N/M live` when some are.
+The page is a card grid. A gear button fixed in the lower-right corner opens
+settings mode, which has three sections: Settings, Devices, and Log; clicking the
+gear again returns to the cards. The gear is hidden while the card layout is being
+edited. A status badge appears fixed in the lower-left corner only when something is
+wrong — `no sources`, `reconnecting`, or `n/m live` — and disappears when every
+source is live.
 
 ## Drag-and-drop in edit mode
 
@@ -49,14 +52,14 @@ posts on blur or Enter, not on every keystroke, so a trailing or leading space
 can be typed while editing.
 
 A new device gets no card. The Card checkbox is how it gets one, and it reads
-the same setting the ✕ on a card writes, so a device hidden from the Cards tab
+the same setting the ✕ on a card writes, so a device hidden from the cards view
 shows unchecked here. The ✕ only hides; since a hidden card is not drawn at all,
 this checkbox is the only way to bring one back. This is what keeps decodes from
 protocols nobody owns, which arrive on any 433 MHz receiver, off the dashboard
 by default.
 
 The table rebuilds every second but holds still while a text box or a select
-in it has focus, so an entry in progress is never interrupted. Only the tab on
+in it has focus, so an entry in progress is never interrupted. Only the section on
 screen is rebuilt; switching to one draws it.
 
 Under each device is one row per reading, carrying that reading's current
@@ -77,11 +80,11 @@ load — nothing before the page connected can be replayed into it.
 
 ## Cards
 
-Cards is the tab the page opens on. It lays every device whose card is checked
-in the device table on a grid of square cells. Two number inputs in edit mode
-set the columns and rows, 6 × 4 by default and 1–24 each; the cell side is
-whichever of width ÷ columns and height ÷ rows is smaller, so the grid fits on
-screen with margin on the other axis.
+The cards view lays every device whose card is checked in the device table on a
+grid of square cells. Two number inputs in edit mode set the columns and rows,
+6 × 4 by default and 1–24 each; the cell side is whichever of width ÷ columns
+and height ÷ rows is smaller, so the grid fits on screen with margin on the
+other axis.
 
 A narrow window draws fewer columns than the setting asks for. Below 110px a
 cell stops being legible, so the page divides the width it has by 110 and draws
@@ -156,14 +159,14 @@ cards drag to reorder, values drag to reorder within their card, the corner
 handle resizes, ✕ hides the card, and double-clicking the label renames it (and
 posts the alias). A card shows the same values in edit mode as out of it; what
 appears is the card's own controls. A hidden card is not drawn in either mode,
-so the Devices tab's checkbox is what brings one back. A long
+so the Devices section's checkbox is what brings one back. A long
 device name in the label ellipsizes rather than overflowing the card; readings
 round to one or two decimal places for display, without changing the stored
 values.
 
 ## Settings
 
-The Devices tab opens with the Settings section collapsed. A collapsed Settings
+The Devices section opens with the Settings section collapsed. A collapsed Settings
 shows only its summary line; expanding it reveals the controls.
 
 **Decimals** selects how many decimal places a card displays, from 0 to 5.
@@ -234,7 +237,7 @@ appear with no location of your own, if one of your sources has published one �
 a dashboard loaded from the bridge gets the receiver's location and time zone
 that way. Your own location always wins once you set it. They are ordinary
 cards: drag them, resize them, rename them, and show, hide or move individual
-values from the Devices tab exactly as with a radio device.
+values from the Devices section exactly as with a radio device.
 
 **Weather** shows current conditions and seven forecast days, each day its own
 value so you can keep the three you care about and hide the rest. Readings from
@@ -258,7 +261,7 @@ ordinary values.
 moonset beside it, and the phase and how much is lit underneath.
 
 Because each dial already carries its rise and set times, those two values start
-hidden on the card. They are still listed on the Devices tab, so set either back
+hidden on the card. They are still listed on the Devices section, so set either back
 to shown if you would rather read them as numbers.
 
 Both cards are computed here from your latitude, longitude and the date, so they
@@ -270,7 +273,7 @@ need no network at all. In polar summer or winter the dial says "up all day" or
 A feed card shows no age, because the values are computed fresh. Weather does
 show one: it is how old the fetched data is. If a fetch fails the card keeps its
 last good values and says nothing about the failure — read that in the Settings
-tab under Feeds, which lists each feed with its state, the last error and when
+section under Feeds, which lists each feed with its state, the last error and when
 it will try again. Results are cached, so reopening the page paints immediately
 without refetching.
 
@@ -317,7 +320,7 @@ find.
 
 ## Bridges
 
-The Settings tab also shows the receiver's own MQTT push targets — where
+The Settings section also shows the receiver's own MQTT push targets — where
 *this* receiver sends its readings, the reverse of Sources' list of places
 it reads from. Add a broker URL (`mqtt://host:port` or
 `mqtts://host:port`) and an optional token, up to three at a time; a dot
@@ -341,7 +344,7 @@ silent.
 
 ## Feeds
 
-Below Bridges, the Settings tab lists the four feed cards and what each one is
+Below Bridges, the Settings section lists the four feed cards and what each one is
 doing: `ok`, `waiting`, `failed`, or `not available here`. A failed feed shows
 the error the provider returned and when the next attempt is due, which climbs
 from 30 minutes to 6 hours while it keeps failing.
@@ -353,7 +356,7 @@ put an error in front of everyone looking at the dashboard.
 ## Access token
 
 A bridge started with `AUTH_TOKEN` rejects a `POST` with no matching
-`Authorization: Bearer` header, `401`. The Settings tab has a Write access
+`Authorization: Bearer` header, `401`. The Settings section has a Write access
 token field for the origin serving the dashboard; saving it there is what
 lets a rename, a location save, and a units save reach that bridge. The
 field is `type=password` and clears itself after Save, so the value never
