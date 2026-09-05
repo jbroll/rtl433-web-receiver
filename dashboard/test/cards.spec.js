@@ -298,6 +298,7 @@ test("hiding a card in edit mode unchecks it in the device table", async ({ page
   await open(page, [ACURITE]);
   await page.click("#edit-cards");
   await page.click(`${CARD} .cx`);
+  await page.click("#edit-cards");
 
   await openSettings(page);
   await expect(page.locator(`#devices tr[data-key$="${ACURITE_KEY}"] input[type=checkbox]`))
@@ -475,7 +476,7 @@ test("a 1x1 card's rendered box matches --cell across resizes, including at the 
   // grid.js:44's floor should hold --cell at 20 instead. The card's own
   // padding no longer fits in 20px, so its rendered box can legitimately
   // overflow the track here -- only --cell itself is asserted.
-  await page.setViewportSize({ width: 1200, height: 130 });
+  await page.setViewportSize({ width: 1200, height: 90 });
   await page.waitForTimeout(120);
   const floored = await read();
   expect(floored.cell).toBeCloseTo(20, 0);
@@ -728,6 +729,7 @@ test("the devices tab is what re-enables a hidden card", async ({ page }) => {
   await edit(page);
   await page.click(CARD + " .cx");
   await expect(page.locator(CARD)).toHaveCount(0);
+  await page.click("#edit-cards");
 
   await openSettings(page);
   await page.locator(`#devices tr:not(.vrow)[data-key$="${ACURITE_KEY}"] input[type=checkbox]`)

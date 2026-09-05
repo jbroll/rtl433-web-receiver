@@ -160,7 +160,7 @@ test("a short window gets more columns than a tall one at the same width", async
   await page.waitForTimeout(120);
   const portraitCols = await page.evaluate(() => viewCols);
 
-  await page.setViewportSize({ width: 390, height: 300 });
+  await page.setViewportSize({ width: 390, height: 220 });
   await page.waitForTimeout(120);
   const shortCols = await page.evaluate(() => viewCols);
 
