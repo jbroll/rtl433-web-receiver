@@ -17,6 +17,7 @@
 #include <freertos/queue.h>
 #include <rtl_433_ESP.h>
 
+#include <Adafruit_AHTX0.h>
 #include <Adafruit_BMP280.h>
 
 #include "alias_store.h"
@@ -115,6 +116,9 @@ static bool                      bootUtcStamped = false;
 static bool                      bmp280_ok = false;
 static uint8_t                   bmp280_addr = 0;
 static Adafruit_BMP280           bmp280;
+#define AHT20_ADDR 0x38
+static bool                      aht20_ok = false;
+static Adafruit_AHTX0            aht20;
 
 bool wifiReady() {
   return WiFi.status() == WL_CONNECTED;
@@ -415,24 +419,50 @@ static size_t appendf(char* buf, size_t size, size_t at, const char* fmt, ...) {
 
 // The receiver's own readings, recorded as a device so the page renders them
 // with everything it already does for a sensor. rssi is the WiFi link, which is
-// what the card's corner reading means for this one.
-static void recordBMP280() {
-  if (!bmp280_ok) {
+// what the card's corner reading means for this one. The AHT20's humidity rides
+// on the BMP280 record so the existing card keeps its alias and layout.
+static void recordWiredSensors() {
+  if (!bmp280_ok && !aht20_ok) {
     return;
   }
-  float t = bmp280.readTemperature();
-  float p = bmp280.readPressure() / 100.0F;
-  if (isnan(t) || isnan(p)) {
-    Log.warning(F("BMP280 read failed" CR));
+  float t = NAN, p = NAN, h = NAN;
+  if (bmp280_ok) {
+    t = bmp280.readTemperature();
+    p = bmp280.readPressure() / 100.0F;
+    if (isnan(t) || isnan(p)) {
+      Log.warning(F("BMP280 read failed" CR));
+      t = p = NAN;
+    }
+  }
+  if (aht20_ok) {
+    sensors_event_t humidity, temp;
+    if (aht20.getEvent(&humidity, &temp)) {
+      h = humidity.relative_humidity;
+      if (isnan(t)) {
+        t = temp.temperature;
+      }
+    } else {
+      Log.warning(F("AHT20 read failed" CR));
+    }
+  }
+  if (isnan(t)) {
     return;
   }
 
-  char buf[JSON_MSG_BUFFER];
-  snprintf(buf, sizeof(buf),
-           "{\"model\":\"BMP280\",\"id\":\"%#04x\",\"channel\":1,"
-           "\"temperature_C\":%.2f,\"pressure_hPa\":%.2f}",
-           bmp280_addr, t, p);
-  Log.notice(F("BMP280: %s" CR), buf);
+  char   buf[JSON_MSG_BUFFER];
+  size_t at = appendf(buf, sizeof(buf), 0,
+                      "{\"model\":\"%s\",\"id\":\"%#04x\",\"channel\":1,"
+                      "\"temperature_C\":%.2f",
+                      bmp280_ok ? "BMP280" : "AHT20",
+                      bmp280_ok ? bmp280_addr : AHT20_ADDR, t);
+  if (!isnan(p)) {
+    at = appendf(buf, sizeof(buf), at, ",\"pressure_hPa\":%.2f", p);
+  }
+  if (!isnan(h)) {
+    at = appendf(buf, sizeof(buf), at, ",\"humidity\":%.1f", h);
+  }
+  appendf(buf, sizeof(buf), at, "}");
+  Log.notice(F("wired sensors: %s" CR), buf);
 
   if (signal_store::record(buf, wifiReady() ? WiFi.RSSI() : 0)) {
     web_ui::broadcast(*signal_store::lastRecorded());
@@ -589,6 +619,12 @@ void setup() {
   } else {
     Log.warning(F("BMP280 not found on I2C" CR));
   }
+  aht20_ok = aht20.begin(&Wire, 0, AHT20_ADDR);
+  if (aht20_ok) {
+    Log.notice(F("AHT20 initialized at %X" CR), AHT20_ADDR);
+  } else {
+    Log.warning(F("AHT20 not found on I2C" CR));
+  }
 
   health_store::begin();
   bootCoredumpPending = esp_core_dump_image_check() == ESP_OK;
@@ -658,10 +694,10 @@ void loop() {
     recordReceiver();
   }
 
-  static unsigned long lastBMP280 = 0;
-  if (millis() - lastBMP280 >= 30000) {
-    lastBMP280 = millis();
-    recordBMP280();
+  static unsigned long lastWiredSensors = 0;
+  if (millis() - lastWiredSensors >= 30000) {
+    lastWiredSensors = millis();
+    recordWiredSensors();
   }
 
   // The clock comes up via SNTP after WiFi connects; stamp this boot's UTC once.

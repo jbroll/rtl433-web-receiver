@@ -76,9 +76,9 @@ keys of about three characters or less, so short-but-not-inline keys cost
 more per byte — a 595-byte object of 54 four-character keys with float
 values needs 5,632 bytes and returns `NoMemory` at 4,096. Realistic rtl_433
 field names parse to 758 bytes, well under the cap. Every `record()` call
-site is internal (the decoder queue, the two BMP280 paths, and fake
-signals), so that worst-case shape does not come off the radio; the arena
-is not sized to it on that basis. `RecordAllocator::allocate` returns
+site is internal (the decoder queue, the wired-sensor record, the receiver's
+own telemetry record, and fake signals), so that worst-case shape does not
+come off the radio; the arena is not sized to it on that basis. `RecordAllocator::allocate` returns
 `nullptr` on exhaustion rather than falling back to the heap, which ArduinoJson
 already treats as an ordinary out-of-memory parse error (`DeserializationError::
 NoMemory`) rather than a crash; `reallocate` keeps a block's size in a header
@@ -160,17 +160,22 @@ confirmed decode resets the module's state. A constant `RECOVERY_BACKOFF_MS`
 must re-confirm before the next attempt. The window lengths and thresholds are
 build flags.
 
-**The BMP280 sensor** (in `WebReceiver.ino`, no module of its own) — a wired
-temperature and pressure sensor on the I2C bus at GPIO 21 (SDA) and GPIO 47
-(SCL), read through the Adafruit BMP280 library, probed at 0x76 then 0x77 at
-boot, and read every 30 s from `loop()`. It has no separate path into the page:
-`recordBMP280()` builds the same rtl_433-shaped JSON a decoder would
-(`model`, `id`, `channel`, `temperature_C`, `pressure_hPa`) and hands it to
-`signal_store::record()`, so it becomes a device the dashboard already knows
-how to draw, alias and lay out. It reports raw absolute station pressure, not
-sea-level-corrected, which is why `device_hooks::validate()`'s pressure range
-reaches down to 300 hPa. A board with no sensor on the bus logs the failed
-probe once and records nothing.
+**The wired sensors** (in `WebReceiver.ino`, no module of their own) — a
+BMP280 (temperature, pressure) and an AHT20 (humidity) on the I2C bus at GPIO
+21 (SDA) and GPIO 47 (SCL). The BMP280 is read through the Adafruit BMP280
+library and probed at 0x76 then 0x77 at boot; the AHT20 through Adafruit AHTX0
+at its fixed 0x38. Both are read every 30 s from `loop()`. They have no separate
+path into the page: `recordWiredSensors()` builds the same rtl_433-shaped JSON a
+decoder would (`model`, `id`, `channel`, `temperature_C`, `pressure_hPa`,
+`humidity`) and hands it to `signal_store::record()`, so the readings become a
+device the dashboard already knows how to draw, alias and lay out. The record
+keeps model `BMP280` with humidity added, so a card set up before the AHT20
+existed keeps its alias and layout. Temperature comes from the BMP280, or from
+the AHT20 when the BMP280 read fails. A board with only an AHT20 records as
+model `AHT20` with id 0x38. The BMP280 reports raw absolute station pressure,
+not sea-level-corrected, which is why `device_hooks::validate()`'s pressure
+range reaches down to 300 hPa. A sensor missing at boot logs its failed probe
+once; a board with neither records nothing.
 
 **`health_store.h` / `health_store.cpp`** — persists the radio health state
 to `Preferences` namespace `"health"`. Writes are bounded: once at boot

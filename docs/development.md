@@ -50,7 +50,7 @@ python3 -m venv ~/.venv/platformio
 
 The job fails loudly if `~/.venv/platformio/bin/pio` is missing. The first `pio run`
 on a host downloads the ESP32 toolchain and every `lib_deps` entry (ArduinoJson,
-ArduinoLog, PubSubClient, rtl_433_ESP, Adafruit BMP280 Library); warm that cache by
+ArduinoLog, PubSubClient, rtl_433_ESP, Adafruit BMP280 Library, Adafruit AHTX0); warm that cache by
 hand after setting up the venv so the first CI run doesn't time out:
 
 ```bash
