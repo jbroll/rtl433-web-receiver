@@ -206,6 +206,17 @@ static void serviceWiFi() {
 
 #define BOOT_BUTTON_GPIO 0
 #define BOOT_HOLD_MS     3000
+// Three blinks of the blue LED mark a boot. After that rtl_433_ESP owns the
+// pin (ONBOARD_LED) and lights it while a signal is present.
+static void blinkBoot() {
+  pinMode(ONBOARD_LED, OUTPUT);
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(ONBOARD_LED, HIGH);
+    delay(150);
+    digitalWrite(ONBOARD_LED, LOW);
+    delay(150);
+  }
+}
 
 // GPIO0 is the Freenove ESP32-S3 board's BOOT button, pulled up on-board.
 // Held low continuously for BOOT_HOLD_MS at boot clears stored WiFi
@@ -581,6 +592,7 @@ void setup() {
 #endif
   Log.notice(F(" " CR));
   Log.notice(F("****** setup ******" CR));
+  blinkBoot();
 
   wifi_store::begin();
   ota_token_store::begin();

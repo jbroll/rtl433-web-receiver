@@ -855,6 +855,12 @@ I2C is on GPIO 21/47 for a BMP280/AHT20 sensor bus:
 The SDMMC pins (38–40) are repurposed for the radio, so the Freenove microSD
 socket is not usable.
 
+The board has two LEDs. The green one labeled `ON` is wired to power and
+cannot be switched from firmware. The blue one is GPIO 2, lit when the pin is
+high: `blinkBoot()` flashes it three times at the start of `setup()`, and from
+then on rtl_433_ESP drives it through `ONBOARD_LED`, lighting it while a signal
+is present.
+
 ## The build id
 
 `load_env.py` sets `BUILD_ID` to `git describe --always --dirty --exclude "*"`
