@@ -76,7 +76,7 @@ keys of about three characters or less, so short-but-not-inline keys cost
 more per byte — a 595-byte object of 54 four-character keys with float
 values needs 5,632 bytes and returns `NoMemory` at 4,096. Realistic rtl_433
 field names parse to 758 bytes, well under the cap. Every `record()` call
-site is internal (the decoder queue, the wired-sensor record, the receiver's
+site is internal (the decoder queue, the local-i2c record, the receiver's
 own telemetry record, and fake signals), so that worst-case shape does not
 come off the radio; the arena is not sized to it on that basis. `RecordAllocator::allocate` returns
 `nullptr` on exhaustion rather than falling back to the heap, which ArduinoJson
@@ -160,19 +160,23 @@ confirmed decode resets the module's state. A constant `RECOVERY_BACKOFF_MS`
 must re-confirm before the next attempt. The window lengths and thresholds are
 build flags.
 
-**The wired sensors** (in `WebReceiver.ino`, no module of their own) — a
-BMP280 (temperature, pressure) and an AHT20 (humidity) on the I2C bus at GPIO
-21 (SDA) and GPIO 47 (SCL). The BMP280 is read through the Adafruit BMP280
-library and probed at 0x76 then 0x77 at boot; the AHT20 through Adafruit AHTX0
-at its fixed 0x38. Both are read every 30 s from `loop()`. They have no separate
-path into the page: `recordWiredSensors()` builds the same rtl_433-shaped JSON a
-decoder would (`model`, `id`, `channel`, `temperature_C`, `pressure_hPa`,
-`humidity`) and hands it to `signal_store::record()`, so the readings become a
-device the dashboard already knows how to draw, alias and lay out. The record
-keeps model `BMP280` with humidity added, so a card set up before the AHT20
-existed keeps its alias and layout. Temperature comes from the BMP280, or from
-the AHT20 when the BMP280 read fails. A board with only an AHT20 records as
-model `AHT20` with id 0x38. The BMP280 reports raw absolute station pressure,
+**The local I2C sensors** (`aht20.cpp`, the rest in `WebReceiver.ino`) — a
+BMP280 (temperature, pressure) and an AHT20 (humidity, temperature) on the I2C
+bus at GPIO 21 (SDA) and GPIO 47 (SCL), both read every 30 s from `loop()`. The
+BMP280 goes through the Adafruit BMP280 library, probed at 0x76 then 0x77 at
+boot. The AHT20 at its fixed 0x38 has its own driver because Adafruit AHTX0
+sends the AHT10's calibrate command (0xE1), which the AHT20 NACKs, leaving an
+`i2cRead` error in every boot log. The driver sends the AHT20's init (0xBE) only
+when the status byte's calibrated bit is clear, and rejects a frame whose CRC
+fails. `recordLocalI2C()` builds one rtl_433-shaped record, model and id
+`local-i2c`, and hands it to `signal_store::record()`, so both sensors share a
+card the dashboard already knows how to draw, alias and lay out. Each field has
+one source: `temperature_C` and `pressure_hPa` from the BMP280, `humidity` and
+`aht20_temperature_C` from the AHT20. Only the duplicate temperature carries a
+prefix, because the dashboard's `%` unit and `device_hooks::validate()`'s range
+check key on the exact name `humidity`. A failed read leaves that sensor's
+fields out; no other sensor fills them. Which temperature shows is the card's
+per-value setting on the devices tab. The BMP280 reports raw absolute station pressure,
 not sea-level-corrected, which is why `device_hooks::validate()`'s pressure
 range reaches down to 300 hPa. A sensor missing at boot logs its failed probe
 once; a board with neither records nothing.

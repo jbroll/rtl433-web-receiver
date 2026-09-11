@@ -99,6 +99,10 @@ g++ -std=c++17 -Wall -Wextra -Werror -DFAKE_SIGNALS -DARDUINOJSON_ENABLE_ARDUINO
 g++ -std=c++17 -Wall -Wextra -Werror -I"$shim" -I"$root" \
     -o "$out/frame_test" "$root/test/host/frame_test.cpp"
 "$out/frame_test"
+# aht20.h's frame decode and CRC are header-only; aht20.cpp is the Wire half.
+g++ -std=c++17 -Wall -Wextra -Werror -I"$root" \
+    -o "$out/aht20_test" "$root/test/host/aht20_test.cpp"
+"$out/aht20_test"
 # The default 'pio run' compiles every selfTest() out entirely, since they
 # only exist under #ifdef FAKE_SIGNALS. That let af16f45 add calls to
 # host-shim-only Preferences methods inside a selfTest() and pass three
