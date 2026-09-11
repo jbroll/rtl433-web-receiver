@@ -67,7 +67,9 @@ leaves the part deaf.
 
 The BMP280/AHT20 bus is on GPIO 47 (SCL) and GPIO 21 (SDA). Add 10k pull-ups
 to 3V3 on both lines at the sensor header unless the breakout board already
-provides them.
+provides them. The boot log confirms each sensor with `BMP280 initialized at 0x77`
+(or `0x76`) and `AHT20 initialized at 0x38`; both then report on the `local-i2c`
+card.
 
 ## Configure
 

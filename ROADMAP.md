@@ -74,7 +74,7 @@ done.
 6. **Ingest path for non-433 sensors.** The receiver's own card already proves
    the shape: anything recorded through `signal_store::record()` becomes a
    device the dashboard already knows how to draw, alias, and lay out (see
-   the BMP280 in `receiver/docs/architecture.md`). Needs a design pass first —
+   the local I2C sensors in `receiver/docs/architecture.md`). Needs a design pass first —
    whether an ingested record authenticates with the OTA token or a second
    credential, what rate limit it carries, and whether it counts toward
    `totalRecorded()` — before it's an implementation goal.

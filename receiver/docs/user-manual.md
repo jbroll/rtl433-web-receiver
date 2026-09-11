@@ -282,7 +282,10 @@ A topic is `<source>/<model>/<id>`. `source` is this receiver's mDNS name,
 `rtl433-a1b2c3`. `id` is the decode's `id` field when it has one, its `channel`
 when it does not, and `0` when it has neither — the binding requires an id
 segment, and a device with one instance uses `0`. The receiver's own telemetry
-keys as `rtl433-a1b2c3/Receiver/0`.
+keys as `rtl433-a1b2c3/Receiver/0`, and its I2C sensors as
+`rtl433-a1b2c3/local-i2c/local-i2c`: `temperature_C` and `pressure_hPa` from the
+BMP280, `humidity` and `aht20_temperature_C` from the AHT20, every 30 s. A
+sensor that is missing or fails a read leaves its fields out.
 
 A weather station reporting `rain_mm` (cumulative bucket tips since power-up)
 also carries `rain_today_mm`, the rainfall since the start of the current local
