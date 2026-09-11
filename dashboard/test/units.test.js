@@ -10,6 +10,7 @@ test('a unit suffix comes off the field name', () => {
   assert.deepEqual(splitUnit('temperature_F'), { name: 'temperature', unit: '°F' })
   assert.deepEqual(splitUnit('wind_avg_mi_h'), { name: 'wind avg', unit: 'mi/h' })
   assert.deepEqual(splitUnit('humidity'), { name: 'humidity', unit: '%' })
+  assert.deepEqual(splitUnit('aht20_humidity'), { name: 'aht20 humidity', unit: '%' })
   assert.deepEqual(splitUnit('battery_ok'), { name: 'battery ok', unit: '' })
 })
 

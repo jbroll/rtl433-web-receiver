@@ -99,6 +99,16 @@ int main() {
   }
   {
     JsonDocument doc;
+    doc["aht20_humidity"] = 41.3;
+    check("a humidity-suffixed field in range passes", device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
+    doc["aht20_humidity"] = 154;
+    check("a humidity-suffixed field out of range fails", !device_hooks::validate(doc));
+  }
+  {
+    JsonDocument doc;
     doc["wind_dir_deg"] = 180;
     check("wind_dir_deg in range passes", device_hooks::validate(doc));
   }

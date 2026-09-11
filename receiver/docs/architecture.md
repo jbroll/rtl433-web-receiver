@@ -172,9 +172,7 @@ fails. `recordLocalI2C()` builds one rtl_433-shaped record, model and id
 `local-i2c`, and hands it to `signal_store::record()`, so both sensors share a
 card the dashboard already knows how to draw, alias and lay out. Each field has
 one source: `temperature_C` and `pressure_hPa` from the BMP280, `humidity` and
-`aht20_temperature_C` from the AHT20. Only the duplicate temperature carries a
-prefix, because the dashboard's `%` unit and `device_hooks::validate()`'s range
-check key on the exact name `humidity`. A failed read leaves that sensor's
+`aht20_temperature_C` from the AHT20. A failed read leaves that sensor's
 fields out; no other sensor fills them. Which temperature shows is the card's
 per-value setting on the devices tab. The BMP280 reports raw absolute station pressure,
 not sea-level-corrected, which is why `device_hooks::validate()`'s pressure
@@ -702,8 +700,9 @@ All decoders in `rtl_433_devices.h` stay compiled in; two firmware-side
 checks in `signal_store.cpp` and `device_hooks.cpp` filter the noise weak
 decoders produce instead.
 
-`device_hooks::validate()` range-checks `humidity` (0–100), `wind_dir_deg`
-(0–360), and `pressure_hPa` (300–1100) when present, called from
+`device_hooks::validate()` range-checks any field ending in `humidity` (0–100,
+the same suffix the dashboard shows as `%`), `wind_dir_deg` (0–360), and
+`pressure_hPa` (300–1100) when present, called from
 `signal_store::record()` right after the device key is built. The pressure
 range has to cover both sea-level-corrected readings from RF decoders and the
 receiver's own wired BMP280, which reports raw absolute station pressure and

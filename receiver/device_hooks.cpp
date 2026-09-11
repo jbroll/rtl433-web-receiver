@@ -80,14 +80,27 @@ static int claimRain() {
   return oldest;
 }
 
-static bool checkRange(JsonDocument& doc, const char* field, float lo, float hi) {
-  if (doc[field].isNull()) return true;
-  float v = doc[field].as<float>();
+static bool inRange(JsonVariantConst value, float lo, float hi) {
+  if (value.isNull()) return true;
+  float v = value.as<float>();
   return v >= lo && v <= hi;
 }
 
+static bool checkRange(JsonDocument& doc, const char* field, float lo, float hi) {
+  return inRange(doc[field], lo, hi);
+}
+
+static bool endsWith(const char* s, const char* suffix) {
+  size_t n = strlen(s), m = strlen(suffix);
+  return n >= m && strcmp(s + n - m, suffix) == 0;
+}
+
+// Any field ending in "humidity" is a relative humidity, matching the
+// dashboard's splitUnit(), so a sensor-prefixed name gets the same check.
 bool validate(JsonDocument& doc) {
-  if (!checkRange(doc, "humidity", 0, 100)) return false;
+  for (JsonPairConst kv : doc.as<JsonObjectConst>()) {
+    if (endsWith(kv.key().c_str(), "humidity") && !inRange(kv.value(), 0, 100)) return false;
+  }
   if (!checkRange(doc, "wind_dir_deg", 0, 360)) return false;
   if (!checkRange(doc, "pressure_hPa", 300, 1100)) return false;
   return true;

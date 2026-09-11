@@ -33,7 +33,7 @@ export default {
         moonset: hhmm(t.set, z),
         phase: p.name,
         moon_age: `${p.age.toFixed(1)} d`,
-        // splitUnit only knows the % sign for `humidity`, so carry it in the string.
+        // splitUnit only knows the % sign for fields ending in `humidity`, so carry it in the string.
         illumination: `${pct}%`,
       },
     }

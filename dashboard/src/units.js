@@ -46,7 +46,7 @@ export function splitUnit(field) {
       return { name: field.slice(0, -suffix.length).replace(/_/g, " "), unit: unit };
     }
   }
-  if (field === "humidity") return { name: "humidity", unit: "%" };
+  if (field.endsWith("humidity")) return { name: field.replace(/_/g, " "), unit: "%" };
   return { name: field.replace(/_/g, " "), unit: "" };
 }
 
