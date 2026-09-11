@@ -6,6 +6,10 @@ The mDNS name is `MDNS_PREFIX` plus the low three bytes of the MAC, so two
 boards on one network do not collide. It is printed at startup along with the
 IP address: `mDNS started: rtl433-a1b2c3.local`.
 
+The blue LED blinks three times as the firmware starts, then lights while a
+radio signal is being received. The green `ON` LED is the power indicator and
+stays lit whenever the board has power.
+
 At boot the device tries to connect WiFi (stored credentials, or the `.env`
 macros if there are none), up to 5 attempts of 20 seconds each, so a router
 that is still booting after a power outage has time to come up. If every
