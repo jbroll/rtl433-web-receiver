@@ -194,6 +194,22 @@ default. The first unit change made in that browser ends that, and the stored
 choice stands from then on. Setting a location is not a unit choice and leaves
 the receiver's units in force.
 
+**Theme** chooses between System, Auto, Light, and Dark. Auto is the default on
+a browser that has never held dashboard settings; a browser upgrading from a
+version without this setting stays on System, so a dashboard already in use
+does not change appearance on its own.
+
+System follows the operating system's light or dark preference, which is what
+the dashboard did before this setting existed. Light and Dark are fixed. Auto
+follows the sun at the dashboard's location: dark once the sun is more than 6°
+below the horizon, light otherwise. That is the civil twilight boundary, the
+same one the sun card reports as `civil_dawn` and `civil_dusk`, so the screen
+stays light through the usable twilight after sunset rather than darkening the
+moment the sun touches the horizon.
+
+Auto needs a location. With none set and none published by a source, it behaves
+as System. The theme is per browser and is never published to the receiver.
+
 Two things follow for a page the receiver does not serve, which is every load of
 the mobile app and any dashboard opened from a file or a different host. Its
 units are local to that client and are never published, because the POST is gated

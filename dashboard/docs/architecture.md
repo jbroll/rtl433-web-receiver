@@ -13,7 +13,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `auth.js` | the bridge access token, in `localStorage` keyed by origin |
 | `devices.js` | the live device map, capped at `DEVICE_MAX` per source |
 | `store.js` | card layout in `localStorage`, and `forgetLayouts()` |
-| `settings.js` | units, decimals, and the location, in `localStorage`, with a source-published location and units as fallback |
+| `settings.js` | units, decimals, the theme, and the location, in `localStorage`, with a source-published location and units as fallback |
 | `sources.js` | the source list and its storage |
 | `bridges.js` | the receiver's MQTT push-bridge list, fetched from `/$mqtt`, and its mutations |
 | `stream.js` | one source's SSE connection and its reconnect |
@@ -29,6 +29,7 @@ Preact with `@preact/signals`, bundled by `esbuild` into one `<script>`.
 | `astro.js` | solar and lunar arithmetic, no I/O |
 | `zone.js` | zone-local date arithmetic over a cache of `Intl.DateTimeFormat` instances |
 | `tick.js` | the one-second signal that is the app's only timer |
+| `theme.js` | `darkNow`, the light/dark/no-override signal behind the theme setting |
 | `settings.jsx` | the settings pane, and the panels below it |
 | `sources.jsx` | the source list controls and the mDNS scan |
 | `bridges.jsx` | the push-bridge panel and its add and remove forms |
@@ -649,6 +650,23 @@ only copy. Adding or removing a bridge `POST`s to `/$mqtt` or
 bridge, or a dashboard opened before the receiver's boot finished), the
 panel renders nothing, the same as `LocationView`'s `$tz`/`$location` POSTs
 being silently origin-gated today.
+
+## Theme
+
+`color-scheme` on `:root` carries the whole theme. Every colour in the
+stylesheet is a system colour, a grey with alpha that composites against
+whatever is behind it, or a saturated status colour that reads under both
+themes, so flipping `color-scheme` flips the dashboard. `--err` is the only
+value with a distinct light and dark form, and it is set in three places: the
+`prefers-color-scheme` media query for the System setting, and the
+`[data-theme=light]` and `[data-theme=dark]` rules for the rest.
+
+The Auto setting tests the sun's altitude against −6° at the moment of render
+rather than comparing the clock against the day's `civilDusk` and `civilDawn`.
+The event form has to answer what to do on a day where a crossing does not
+exist, which side of local midnight the current time is on, and when to
+invalidate the cached day. The altitude test has none of those cases and is
+correct at every latitude, including where the sun never crosses −6° at all.
 
 ## Tests
 
