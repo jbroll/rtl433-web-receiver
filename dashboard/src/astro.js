@@ -81,7 +81,7 @@ export function solarPosition (date) {
 }
 
 // Altitude of the sun's centre above the horizon, in degrees.
-function solarAltitude (t, lat, lon) {
+export function solarAltitude (t, lat, lon) {
   const { declination, eqOfTime } = solarPosition(new Date(t))
   const minutes = ((t / 60000) % 1440 + 1440) % 1440
   const h = (minutes + 4 * lon + eqOfTime) / 4 - 180

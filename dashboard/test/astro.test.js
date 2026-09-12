@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { julianDay, solarPosition, sunEvents, moonPhase, moonTimes, localMidnight } from '../src/astro.js'
+import { julianDay, solarPosition, solarAltitude, sunEvents, moonPhase, moonTimes, localMidnight } from '../src/astro.js'
 import { offsetMinutes } from '../src/zone.js'
 
 const utc = (y, mo, d, h = 0, mi = 0) => new Date(Date.UTC(y, mo - 1, d, h, mi))
@@ -500,5 +500,28 @@ test('no returned Date is invalid', () => {
         if (v !== null) assert.ok(Number.isFinite(v.getTime()), `moon ${lat},${lon} ${d.toISOString()}`)
       }
     }
+  }
+})
+
+test('solar altitude crosses -6 degrees at civil dusk and civil dawn', () => {
+  const lat = 40.7128, lon = -74.0060, zone = 'America/New_York'
+  const e = sunEvents(utc(2026, 9, 12, 16, 0), lat, lon, zone)
+  const dusk = e.civilDusk.getTime()
+  const dawn = e.civilDawn.getTime()
+  assert.ok(Math.abs(solarAltitude(dusk, lat, lon) + 6) < 0.01, 'dusk is the -6 crossing')
+  assert.ok(Math.abs(solarAltitude(dawn, lat, lon) + 6) < 0.01, 'dawn is the -6 crossing')
+  assert.ok(solarAltitude(dusk - 2 * MIN, lat, lon) > -6, 'light two minutes before dusk')
+  assert.ok(solarAltitude(dusk + 2 * MIN, lat, lon) < -6, 'dark two minutes after dusk')
+  assert.ok(solarAltitude(dawn - 2 * MIN, lat, lon) < -6, 'dark two minutes before dawn')
+  assert.ok(solarAltitude(dawn + 2 * MIN, lat, lon) > -6, 'light two minutes after dawn')
+})
+
+test('solar altitude stays one side of -6 through a polar summer and winter day', () => {
+  const lat = 78.22, lon = 15.65
+  const june = Date.UTC(2026, 5, 21)
+  const december = Date.UTC(2026, 11, 21)
+  for (let h = 0; h < 24; h++) {
+    assert.ok(solarAltitude(june + h * 3600000, lat, lon) > -6, `light at ${h}h in June`)
+    assert.ok(solarAltitude(december + h * 3600000, lat, lon) < -6, `dark at ${h}h in December`)
   }
 })
