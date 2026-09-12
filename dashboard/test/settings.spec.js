@@ -148,3 +148,14 @@ test("the theme attribute follows the theme setting", async ({ page }) => {
   await page.evaluate(() => setTheme("system"));
   await expect(page.locator("html")).not.toHaveAttribute("data-theme");
 });
+
+test("the theme select shows and changes the theme", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await openSettingsPane(page);
+  await expect(page.locator("#settings-theme")).toHaveValue("auto");
+  await page.selectOption("#settings-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("#status")).toHaveText(/^live/);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});

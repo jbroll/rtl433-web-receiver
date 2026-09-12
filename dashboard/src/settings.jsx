@@ -1,4 +1,4 @@
-import { settings, setUnits, setDecimals, setCustomField } from './settings.js'
+import { settings, setUnits, setDecimals, setCustomField, setTheme } from './settings.js'
 import { tokenFor, setToken } from './auth.js'
 import { LocationView } from './location.jsx'
 import { SourcesView } from './sources.jsx'
@@ -34,6 +34,16 @@ export function SettingsView() {
             <option value="metric">Metric</option>
             <option value="imperial">Imperial</option>
             <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label>
+          Theme
+          <select id="settings-theme" value={s.theme}
+                  onChange={(e) => setTheme(e.target.value)}>
+            <option value="system">System</option>
+            <option value="auto">Auto</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
           </select>
         </label>
       </div>
