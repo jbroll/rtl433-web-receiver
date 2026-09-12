@@ -1,6 +1,28 @@
 # Backlog
 
-Work blocked on a board being on the bench. Nothing here breaks the receiver
+## A core dump can only be collected or cleared over USB
+
+`WebReceiver.ino:626` sets `coredump_pending` from
+`esp_core_dump_image_check()` at boot, and nothing erases the partition, so
+the field stays true for the life of the dump. It means a dump is in flash,
+not that one arrived recently. Both halves of dealing with it —
+`tools/fetch_coredump.sh` reading the partition and `esptool erase_region`
+wiping it — need a serial port, so the deployed board's dump can be neither
+read nor cleared. The flag has been on across at least boots 92 and 93.
+
+A `$coredump` route beside `$update` closes it: `esp_core_dump_image_get()`
+to return the dump, `esp_core_dump_image_erase()` on a successful read, so
+collecting it is what clears the flag rather than a separate destructive
+step. Both are in the S3 headers (`esp_core_dump.h:115` and `:124`). It needs
+`$update`'s token check, because a core dump carries stack memory and
+whatever was in it.
+
+This one is not blocked on hardware: the route can be written and pushed over
+OTA. What it cannot do is recover a dump already lost. Erasing without reading
+throws the crash away, and `tools/elf/` keeps ELFs per build, so a dump older
+than the saved ELFs may be undecodable anyway.
+
+Work blocked on a board being on the bench. Nothing below breaks the receiver
 as it stands; each item needs hardware in hand to verify or land safely.
 
 ## The provisioning portal is an open AP that hands out an OTA token

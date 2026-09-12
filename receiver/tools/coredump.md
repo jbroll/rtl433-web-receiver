@@ -4,8 +4,13 @@ When the ESP32-S3 crashes it writes a core dump to flash before resetting. The
 coredump partition is 64 KiB at address `0xFF0000` (`receiver/partitions.csv`).
 
 On the USB console the boot log prints `Found core dump N bytes in flash` if a
-coredump is present. The `coredump_pending` telemetry field is set to `true`
-while a dump is waiting to be collected.
+coredump is present. `WebReceiver.ino` reads
+`esp_core_dump_image_check()` once at boot and reports the result as the
+`coredump_pending` telemetry field.
+
+Nothing in the firmware erases the partition, so once that field is true it
+stays true through every reboot and every OTA push. It means a dump is in
+flash, not that one arrived recently.
 
 ## Fetch and decode
 
@@ -34,6 +39,20 @@ On this machine the tools live at:
 - `$HOME/.platformio/packages/tool-esptoolpy/esptool.py`
 - `$HOME/.platformio/penv/bin/esp-coredump`
 - `$HOME/.platformio/packages/toolchain-xtensa-esp32s3/bin/xtensa-esp32s3-elf-gdb`
+
+## Clearing the flag
+
+Erasing the coredump partition is what clears `coredump_pending`, and it takes
+the same serial port the fetch does:
+
+    esptool.py --port /dev/ttyACM0 erase_region 0xFF0000 0x10000
+
+Fetch and decode the dump first. The erase is the only copy's end.
+
+A deployed board reachable only over OTA can do neither: `read_flash` and
+`erase_region` both need the cable. `esp_core_dump_image_erase()` is in the
+S3 headers and would give the firmware a remote path, but nothing calls it —
+see `docs/backlog.md`.
 
 ## Interactive debugging
 
