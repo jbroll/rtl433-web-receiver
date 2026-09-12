@@ -111,6 +111,17 @@ by name, so replacing one means regenerating the other.
 The test iPad updates over USB from an ad-hoc build. There is no route from TestFlight to
 that device.
 
+An `adhoc` dispatch is part of this procedure, not a release. It signs on the runner and
+leaves the `.ipa` as a run artifact; nothing reaches App Store Connect and nothing becomes
+visible outside the repository. Run it whenever the device needs the current `main`. The
+`testflight` distribution and a `v*` tag are the ones that publish under the Apple
+identity.
+
+The `.ipa` carries a copy of `dashboard/dist` taken at build time, so a dashboard change
+reaches the iPad only through a new build and install. Check `CFBundleVersion` against the
+`run_number` of the newest ad-hoc run to see what the device is running:
+`ideviceinstaller -l` prints the installed build.
+
 ```sh
 gh workflow run ios-release.yml -R jbroll/rtl433-web-receiver -r main -F distribution=adhoc
 gh run download <run-id> -R jbroll/rtl433-web-receiver -n rtl433-ios-adhoc -D .
