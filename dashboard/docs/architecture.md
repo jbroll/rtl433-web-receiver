@@ -132,6 +132,13 @@ suppressed in edit mode so a grab cannot start a text selection instead. A drop
 on a card's own slot is a no-op in `store.js`, so dragging a card back where it
 was cannot move it.
 
+The resize handle is 1.2rem for a mouse and grows to 44px under `(pointer:
+coarse)`, Apple's minimum touch target. A finger that misses it lands on the
+card and starts a drag instead, which is how it read as a dead corner on the
+iPad. The touch size is capped at half a cell so the handle cannot swallow a
+1x1 card and leave nothing to grab. Only the hit area changes; the chevron is
+drawn by `.rz::after` and stays in the corner at both sizes.
+
 The grid flows sparsely (`grid-auto-flow: row`). Dense packing would backfill a
 dropped card into an earlier hole left by mixed card sizes, so a drop into an
 empty cell would reorder the DOM without moving the card on screen.

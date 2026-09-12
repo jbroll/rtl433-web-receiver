@@ -157,6 +157,12 @@ section[hidden] { display:none; }
 .card .rz::after { content:""; position:absolute; right:.25rem; bottom:.25rem;
                    width:.5rem; height:.5rem; opacity:.55;
                    border-right:2px solid currentColor; border-bottom:2px solid currentColor; }
+/* A finger needs Apple's 44px minimum, but the handle sits inside the card, so
+   half a cell caps it to leave the rest of a 1x1 card draggable. */
+@media (pointer: coarse) {
+  .card .rz { width:min(44px, calc(var(--cell,150px) / 2));
+              height:min(44px, calc(var(--cell,150px) / 2)); }
+}
 #view-cards.editing .card .rz { display:block; }
 #view-cards.editing .card .age { right:1.4rem; }
 .card .lbl input { font-size:.75rem; width:9rem; }

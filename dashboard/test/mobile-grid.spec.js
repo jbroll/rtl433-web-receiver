@@ -199,3 +199,31 @@ test("a vertical-only resize on a capped view does not narrow the stored width",
   expect(c.w).toBe(5);
   expect(c.h).toBeGreaterThan(2);
 });
+
+test.describe("touch pointer", () => {
+  test.use({ hasTouch: true });
+
+  test("the resize handle is at least 44px on a coarse pointer", async ({ page }) => {
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await open(page);
+    await edit(page);
+
+    const box = await page.locator(CARD + " .rz").boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  });
+
+  test("the handle never covers more than half a card", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await open(page);
+    const key = await page.evaluate(() =>
+      Object.keys(cardState.cards).find(k => k.includes("Acurite")));
+    await page.evaluate(k => setCardSize(k, 1, 1), key);
+    await page.waitForTimeout(120);
+    await edit(page);
+
+    const cell = await page.evaluate(() => cellSide);
+    const box = await page.locator(CARD + " .rz").boundingBox();
+    expect(box.width).toBeLessThanOrEqual(cell / 2 + 1);
+  });
+});
