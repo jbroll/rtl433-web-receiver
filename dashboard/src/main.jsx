@@ -2,6 +2,7 @@ import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { App, tab, settingsTab } from './app.jsx'
 import { tick } from './tick.js'
+import { darkNow } from './theme.js'
 import { devices, upsert, clearSource, setEvictHook } from './devices.js'
 import { makeKey, applyAliasFrame, isSelf, aliases, loadAliases } from './alias.js'
 import { loadTokens } from './auth.js'
@@ -12,7 +13,7 @@ import { sources, sourceState, loadSources, setSourcesChanged, storageState, add
          setSourceState } from './sources.js'
 import { loadBridges } from './bridges.js'
 import { loadSettings, settings, setLocation, clearLocation, onLocationFrame, onTzFrame,
-         onUnitsFrame, refreshTz } from './settings.js'
+         onUnitsFrame, refreshTz, setTheme } from './settings.js'
 import { measureGrid, installGestures, cellSignal, viewColsSignal, fitValues, dragging, resizing, gestureInFlight,
          measureGridCallCount, fitValuesCallCount, fittingSize, textWidthEm, trackFit } from './grid.js'
 import { addLog } from './log.jsx'
@@ -206,7 +207,7 @@ function exposeForTests() {
     ensureCard: store.ensureCard, visibleValues: store.visibleValues,
     saveCardState: store.saveCardState, defaultSize: store.defaultSize,
     setGrid: store.setGrid, setCardSize: store.setCardSize, setHideNewCards: store.setHideNewCards,
-    setLocation, clearLocation, expireFeeds, setValueMode: store.setValueMode,
+    setLocation, clearLocation, expireFeeds, setValueMode: store.setValueMode, setTheme,
   })
   Object.defineProperties(window, {
     cardState: { get: store.getCardState, set: store.setCardState },
@@ -245,6 +246,11 @@ effect(() => { tick.value; settings.value; pump(); refreshTz() })
 // A bridge's connected state only settles after loop() reconnects it, so
 // refetch whenever the Settings tab is switched to rather than only at boot.
 effect(() => { if (settingsTab.value === 'settings') loadBridges() })
+effect(() => {
+  const dark = darkNow.value
+  if (dark === null) delete document.documentElement.dataset.theme
+  else document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+})
 
 const stored = storageState()
 if (stored === 'absent') probeOrigin()

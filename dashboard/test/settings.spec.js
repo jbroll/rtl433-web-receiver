@@ -137,3 +137,14 @@ test("settings changes are saved and survive a reload", async ({ page }) => {
   const card = page.locator(`.card:not(.ghostcard)[data-key$="${OREGON_KEY}"]`);
   await expect(card.locator('.val[data-f="temperature_C"] .fn .u')).toHaveText("°F");
 });
+
+test("the theme attribute follows the theme setting", async ({ page }) => {
+  await open(page, [ACURITE]);
+  await openSettingsPane(page);
+  await page.evaluate(() => setTheme("dark"));
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.evaluate(() => setTheme("light"));
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.evaluate(() => setTheme("system"));
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme");
+});

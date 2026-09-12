@@ -1,5 +1,10 @@
 :root { color-scheme: light dark; --line:#8883; --err:#c9252c; scrollbar-gutter: stable; }
 @media (prefers-color-scheme: dark) { :root { --err:#ff6369; } }
+/* Everything else in this file draws in system colours, which color-scheme
+   already flips. A colour with distinct light and dark values needs a line in
+   both rules below as well as in the media query above. */
+:root[data-theme=light] { color-scheme: light; --err:#c9252c; }
+:root[data-theme=dark] { color-scheme: dark; --err:#ff6369; }
 body { margin:0; font:14px/1.4 system-ui,sans-serif; }
 nav button { font:inherit; padding:.3rem .8rem; border:1px solid var(--line); background:none; color:inherit; cursor:pointer; }
 nav button[aria-selected=true] { background:#8882; font-weight:600; }
