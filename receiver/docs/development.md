@@ -74,6 +74,30 @@ to leave it running.
 
 ## OTA flash
 
+### Finding the targets
+
+A receiver advertises itself over mDNS as an `_http._tcp` service. Listing
+them is how you learn what is on the network and which address each answers
+at, rather than keeping a note of it:
+
+    avahi-browse -rtp _http._tcp | grep rtl433
+
+Each line carries the service name, the hostname, and the address:
+
+    =;wlo1;IPv4;rtl433-4354c8;Web Site;local;rtl433-4354c8.local;192.168.1.240;80;
+
+The name is `rtl433-` plus the last three bytes of the device's MAC, six hex
+characters. That same string is the topic base, so the hostname decides the
+status path: `rtl433-4354c8.local` serves its own health at
+`/rtl433-4354c8/Receiver/0`.
+
+`-r` resolves each service to a host and address, `-t` exits once the cache is
+walked instead of watching, and `-p` gives the parseable output the example
+above shows. On a network where mDNS is filtered, the address column is what
+to fall back on; every command below takes an address in place of a hostname.
+
+### Pushing an image
+
 `POST /$update` (see `docs/user-manual.md`) takes a raw `curl -F`, but
 `tools/flash-ota.js` wraps it:
 
