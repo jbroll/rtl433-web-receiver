@@ -1,8 +1,7 @@
 :root { color-scheme: light dark; --line:#8883; --err:#c9252c; scrollbar-gutter: stable; }
 @media (prefers-color-scheme: dark) { :root { --err:#ff6369; } }
-/* Everything else in this file draws in system colours, which color-scheme
-   already flips. A colour with distinct light and dark values needs a line in
-   both rules below as well as in the media query above. */
+/* A colour with distinct light and dark values, like --err, needs a line in
+   all four places: this rule, the media query above, and both rules below. */
 :root[data-theme=light] { color-scheme: light; --err:#c9252c; }
 :root[data-theme=dark] { color-scheme: dark; --err:#ff6369; }
 body { margin:0; font:14px/1.4 system-ui,sans-serif; }

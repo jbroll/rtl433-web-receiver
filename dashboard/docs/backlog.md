@@ -1,5 +1,12 @@
 # Backlog
 
+- The `data-theme` attribute is only applied after the inline bundle parses
+  and boots, so the initial empty body paints in the operating system's
+  colour scheme. On a light-OS device loading a Dark dashboard this shows as
+  a white flash before the page appears. Fix with an inline `<head>` script
+  that reads the theme from localStorage and sets `data-theme` before the
+  bundle runs.
+
 - In edit mode between 400px and about 640px wide, the fixed edit controls'
   `right:` offsets (`#load-layout` at 36.2rem) run the leftmost buttons toward
   or past the left edge; the wrapping flex row only takes over below 400px.

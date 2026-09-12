@@ -657,9 +657,10 @@ being silently origin-gated today.
 stylesheet is a system colour, a grey with alpha that composites against
 whatever is behind it, or a saturated status colour that reads under both
 themes, so flipping `color-scheme` flips the dashboard. `--err` is the only
-value with a distinct light and dark form, and it is set in three places: the
-`prefers-color-scheme` media query for the System setting, and the
-`[data-theme=light]` and `[data-theme=dark]` rules for the rest.
+value with a distinct light and dark form, and it is set in four places: the
+base `:root` rule, the `prefers-color-scheme` media query for the System
+setting, and the `[data-theme=light]` and `[data-theme=dark]` rules for the
+rest.
 
 The Auto setting tests the sun's altitude against −6° at the moment of render
 rather than comparing the clock against the day's `civilDusk` and `civilDawn`.

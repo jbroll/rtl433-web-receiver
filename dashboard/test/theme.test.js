@@ -2,7 +2,7 @@ import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { darkNow, CIVIL } from '../src/theme.js'
-import { loadSettings, setTheme, setLocation } from '../src/settings.js'
+import { loadSettings, setTheme, setLocation, clearLocation, onLocationFrame } from '../src/settings.js'
 import { sources } from '../src/sources.js'
 import { tick } from '../src/tick.js'
 import { sunEvents } from '../src/astro.js'
@@ -63,6 +63,24 @@ test('auto follows the sun at the location', (t) => {
   // the cached answer. In the app the one-second tick is what invalidates it.
   tick.value++
   assert.equal(darkNow.value, true)
+})
+
+test('auto follows a location published by a connected source', (t) => {
+  setTheme('auto')
+  sources.value = ['http://receiver.test']
+  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 12, 5, 0) })
+  assert.equal(darkNow.value, null)
+  onLocationFrame('http://receiver.test', NYC)
+  assert.equal(darkNow.value, true)
+})
+
+test('auto stops overriding once its location is cleared', (t) => {
+  setTheme('auto')
+  setLocation(NYC)
+  t.mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 8, 12, 5, 0) })
+  assert.equal(darkNow.value, true)
+  clearLocation()
+  assert.equal(darkNow.value, null)
 })
 
 test('auto stays light between sunset and civil dusk', (t) => {
