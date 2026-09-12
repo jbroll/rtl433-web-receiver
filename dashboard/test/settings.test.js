@@ -2,6 +2,7 @@ import { test, mock, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { settings, SETTINGS_KEY, loadSettings, saveSettings, setUnits, setDecimals, setCustomField,
+         setTheme,
          setLocation, clearLocation, hasLocation, activeZone, localZone, refreshTz,
          locations, tzOffsets, onLocationFrame, onTzFrame, locationForSources,
          unitsBySource, onUnitsFrame, unitsForSources, publishUnits,
@@ -40,7 +41,7 @@ const NO_PLACE = { lat: null, lon: null, label: '', zone: '', zoom: 11 }
 test('first-load defaults are metric with one decimal', () => {
   assert.deepEqual(settings.value,
     { units: 'metric', decimals: 1, custom: { temp: 'C', rain: 'mm', wind: 'km/h', pressure: 'hPa' },
-      location: NO_PLACE })
+      location: NO_PLACE, theme: 'auto' })
 })
 
 test('setUnits presets set all four groups at once', () => {
@@ -94,7 +95,7 @@ test('changes persist to localStorage and reload', () => {
   loadSettings()
   assert.deepEqual(settings.value,
     { units: 'custom', decimals: 3, custom: { temp: 'C', rain: 'mm', wind: 'm/s', pressure: 'hPa' },
-      location: NO_PLACE })
+      location: NO_PLACE, theme: 'auto' })
 })
 
 test('a stored preset keeps its custom fields aligned', () => {
@@ -102,7 +103,7 @@ test('a stored preset keeps its custom fields aligned', () => {
   loadSettings()
   assert.deepEqual(settings.value,
     { units: 'imperial', decimals: 2, custom: { temp: 'F', rain: 'in', wind: 'mi/h', pressure: 'hPa' },
-      location: NO_PLACE })
+      location: NO_PLACE, theme: 'system' })
 })
 
 test('malformed storage falls back to the defaults', () => {
@@ -702,4 +703,34 @@ test('a user-initiated $tz save toasts on 401 even right after a timer-driven on
     mock.timers.reset()
     globalThis.fetch = async () => ({})
   }
+})
+
+test('a fresh install defaults to the sun-following theme', () => {
+  assert.equal(settings.value.theme, 'auto')
+})
+
+test('a stored blob with no theme key stays on the system theme', () => {
+  const map = fakeStorage()
+  map.set(SETTINGS_KEY, JSON.stringify({ units: 'metric', decimals: 1 }))
+  loadSettings()
+  assert.equal(settings.value.theme, 'system')
+})
+
+test('a stored theme is loaded and a garbage one falls back to auto', () => {
+  const map = fakeStorage()
+  map.set(SETTINGS_KEY, JSON.stringify({ theme: 'dark' }))
+  loadSettings()
+  assert.equal(settings.value.theme, 'dark')
+  map.set(SETTINGS_KEY, JSON.stringify({ theme: 'chartreuse' }))
+  loadSettings()
+  assert.equal(settings.value.theme, 'auto')
+})
+
+test('setTheme stores the choice and ignores an unknown one', () => {
+  setTheme('light')
+  assert.equal(settings.value.theme, 'light')
+  loadSettings()
+  assert.equal(settings.value.theme, 'light')
+  setTheme('chartreuse')
+  assert.equal(settings.value.theme, 'light')
 })

@@ -18,13 +18,15 @@ const CUSTOM_VALUES = {
   pressure: new Set(['hPa', 'kPa']),
 }
 
+const THEMES = new Set(['system', 'auto', 'light', 'dark'])
+
 function blankLocation() {
   return { lat: null, lon: null, label: '', zone: '', zoom: 11 }
 }
 
 function fresh() {
   return { units: 'metric', decimals: 1, custom: { ...PRESETS.metric },
-           location: blankLocation() }
+           location: blankLocation(), theme: 'auto' }
 }
 
 function coord(v, limit) {
@@ -65,6 +67,10 @@ function cleanUnits(u) {
     }
   }
   return { units, decimals, custom }
+}
+
+function cleanTheme(t) {
+  return THEMES.has(t) ? t : 'auto'
 }
 
 export const settings = signal(fresh())
@@ -222,7 +228,10 @@ export function loadSettings() {
   // choice: an upgrade must not override units someone already picked. Saving
   // a location alone leaves the marker false and adoption open.
   unitsAuto = s.unitsChosen === false
-  settings.value = { ...cleanUnits(s), location: cleanLocation(s.location) }
+  // A blob written before the theme setting existed carries no key, so it
+  // counts as a choice: an upgrade must not darken a dashboard already in use.
+  settings.value = { ...cleanUnits(s), location: cleanLocation(s.location),
+                     theme: 'theme' in s ? cleanTheme(s.theme) : 'system' }
 }
 
 export function saveSettings() {
@@ -272,6 +281,12 @@ export function setCustomField(group, value) {
   if (!CUSTOM_VALUES[group] || !CUSTOM_VALUES[group].has(value)) return
   settings.value = { ...settings.value, custom: { ...settings.value.custom, [group]: value } }
   unitsChanged()
+  saveSettings()
+}
+
+export function setTheme(t) {
+  if (!THEMES.has(t)) return
+  settings.value = { ...settings.value, theme: t }
   saveSettings()
 }
 
