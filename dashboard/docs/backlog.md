@@ -13,6 +13,12 @@
   Widen the media-query cutoff or switch the controls to a flex row at all
   widths.
 
+- `color-mix()` is unsupported on the test iPad (`CSS.supports` returns false on
+  Safari 15.6), so `.card-layer .drop-zone.active`'s
+  `background:color-mix(in srgb, Highlight 25%, transparent)` is dropped there
+  and a card drop zone shows only its outline, no fill. Give the rule a plain
+  translucent fallback ahead of the `color-mix()` declaration.
+
 Work blocked on hardware being attached.
 
 - `test/android-smoke.js` was updated for the gear-panel split (dropped the dead

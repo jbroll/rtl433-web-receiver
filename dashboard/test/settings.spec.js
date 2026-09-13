@@ -166,3 +166,29 @@ test("the theme select shows and changes the theme", async ({ page }) => {
   await expect(page.locator("#status")).toHaveText(/^live/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
+
+// The card label straddles the card border and has to paint the same colour the
+// page paints, or the border shows through its text. Both must come from the
+// same declaration: an engine that resolves a system colour against the OS
+// appearance rather than color-scheme leaves the label light on a dark page.
+async function maskColors(page) {
+  return page.evaluate(() => ({
+    body: getComputedStyle(document.body).backgroundColor,
+    lbl: getComputedStyle(document.querySelector(".card .lbl")).backgroundColor,
+    status: getComputedStyle(document.getElementById("status")).backgroundColor,
+  }));
+}
+
+for (const theme of ["dark", "light"]) {
+  test(`the card label paints the page background in the ${theme} theme`, async ({ page }) => {
+    await open(page, [ACURITE]);
+    await openSettingsPane(page);
+    await page.evaluate(t => setTheme(t), theme);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+
+    const c = await maskColors(page);
+    expect(c.body).not.toBe("rgba(0, 0, 0, 0)");
+    expect(c.lbl).toBe(c.body);
+    expect(c.status).toBe(c.body);
+  });
+}

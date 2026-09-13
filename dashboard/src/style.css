@@ -1,26 +1,33 @@
-:root { color-scheme: light dark; --line:#8883; --err:#c9252c; scrollbar-gutter: stable; }
-@media (prefers-color-scheme: dark) { :root { --err:#ff6369; } }
+/* --bg and --fg are the page's own colours, not the Canvas/CanvasText system
+   colours. An element that masks the page (the card label over its border, the
+   settings panel) has to paint exactly what the page paints, and a system
+   colour only matches the painted canvas if the engine resolves it against
+   color-scheme rather than the OS appearance. Declaring both from one value
+   removes the coincidence. color-scheme stays for form controls and scrollbars. */
+:root { color-scheme: light dark; --line:#8883; --err:#c9252c; --bg:#fff; --fg:#000;
+        scrollbar-gutter: stable; }
+@media (prefers-color-scheme: dark) { :root { --err:#ff6369; --bg:#121212; --fg:#fff; } }
 /* A colour with distinct light and dark values, like --err, needs a line in
    all four places: this rule, the media query above, and both rules below. */
-:root[data-theme=light] { color-scheme: light; --err:#c9252c; }
-:root[data-theme=dark] { color-scheme: dark; --err:#ff6369; }
-body { margin:0; font:14px/1.4 system-ui,sans-serif; }
+:root[data-theme=light] { color-scheme: light; --err:#c9252c; --bg:#fff; --fg:#000; }
+:root[data-theme=dark] { color-scheme: dark; --err:#ff6369; --bg:#121212; --fg:#fff; }
+body { margin:0; font:14px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
 nav button { font:inherit; padding:.3rem .8rem; border:1px solid var(--line); background:none; color:inherit; cursor:pointer; }
 nav button[aria-selected=true] { background:#8882; font-weight:600; }
 #status { position:fixed; left:1rem; bottom:1rem; z-index:2; font-size:.8rem;
-          background:Canvas; border:1px solid var(--line); border-radius:1.2rem;
+          background:var(--bg); border:1px solid var(--line); border-radius:1.2rem;
           padding:.3rem .7rem; opacity:.8; }
 #status.ok { display:none; }
 .gear { position:fixed; right:1rem; bottom:1rem; z-index:2; width:2.4rem; height:2.4rem;
         font-size:1.05rem; line-height:1; border:1px solid var(--line); border-radius:50%;
-        background:Canvas; color:inherit; cursor:pointer; }
+        background:var(--bg); color:inherit; cursor:pointer; }
 .gear[aria-selected=true] { background:#8882; }
 button:not(:disabled) { transition:filter .12s ease, transform .05s ease; }
 button:not(:disabled):hover { filter:brightness(1.18); }
 button:not(:disabled):focus-visible { outline:2px solid Highlight; outline-offset:1px; }
 button:not(:disabled):active { filter:brightness(.85); transform:scale(.96); }
 #toast { position:fixed; left:50%; bottom:1.2rem; transform:translateX(-50%); z-index:20;
-         background:Canvas; border:1px solid var(--line); border-radius:.6rem;
+         background:var(--bg); border:1px solid var(--line); border-radius:.6rem;
          padding:.5rem 1rem; font-size:.85rem; box-shadow:0 4px 12px #0004;
          animation:toast-in .15s ease-out; }
 @keyframes toast-in { from { opacity:0; transform:translate(-50%, .4rem); } to { opacity:1; transform:translate(-50%, 0); } }
@@ -32,7 +39,7 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
 @keyframes flash { from { background:rgba(255,215,0,.16); } to { background:transparent; } }
 #devices input, #devices select, #grid-size input, #edit-cards, #forget-cards,
 #save-layout, #load-layout,
-.card .lbl input, .card .cx { font:inherit; background:Canvas; color:inherit;
+.card .lbl input, .card .cx { font:inherit; background:var(--bg); color:inherit;
                               border:1px solid var(--line); }
 #devices input[type=text] { font-size:.85rem; width:8rem; padding:.1rem .3rem; }
 #devices select { font-size:.8rem; }
@@ -64,7 +71,7 @@ section[hidden] { display:none; }
 .card.err { border-color:var(--err); }
 .card .val.err .fn, .card .val.err .fv { color:var(--err); }
 .card .lbl { position:absolute; top:-.65em; right:.7rem; max-width:calc(100% - 1.4rem);
-             padding:0 .4rem; background:Canvas; font-size:.75rem;
+             padding:0 .4rem; background:var(--bg); font-size:.75rem;
              display:flex; align-items:baseline; overflow:hidden;
              pointer-events:auto; z-index:1; }
 .card .lbl .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;
@@ -182,9 +189,9 @@ section[hidden] { display:none; }
                             border-radius:.3rem; cursor:pointer; }
 #source-form { display:flex; gap:.35rem; }
 #source-url { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
-              background:Canvas; color:inherit; border:1px solid var(--line); }
+              background:var(--bg); color:inherit; border:1px solid var(--line); }
 #source-url[aria-invalid=true] { border-color:#c44; }
-#source-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
+#source-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:var(--bg);
               color:inherit; border:1px solid var(--line); cursor:pointer; }
 
 #settings-bridges { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);
@@ -203,24 +210,24 @@ section[hidden] { display:none; }
                             border-radius:.3rem; cursor:pointer; }
 #bridge-form { display:flex; gap:.35rem; }
 #bridge-url { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
-              background:Canvas; color:inherit; border:1px solid var(--line); }
+              background:var(--bg); color:inherit; border:1px solid var(--line); }
 #bridge-url[aria-invalid=true] { border-color:#c44; }
 #bridge-token { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
-                background:Canvas; color:inherit; border:1px solid var(--line); }
-#bridge-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
+                background:var(--bg); color:inherit; border:1px solid var(--line); }
+#bridge-add { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:var(--bg);
               color:inherit; border:1px solid var(--line); cursor:pointer; }
 
 #settings-auth { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line);
                   min-width:18rem; }
 #auth-form { display:flex; gap:.35rem; }
 #settings-token { flex:1 1 auto; font:inherit; font-size:.8rem; padding:.2rem .35rem;
-                   background:Canvas; color:inherit; border:1px solid var(--line); }
-#settings-token-save { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:Canvas;
+                   background:var(--bg); color:inherit; border:1px solid var(--line); }
+#settings-token-save { font:inherit; font-size:.8rem; padding:.2rem .6rem; background:var(--bg);
                         color:inherit; border:1px solid var(--line); cursor:pointer; }
 
 #mdns-scan { margin:0 0 .5rem; }
 #mdns-scan button[type=button] { font:inherit; font-size:.8rem; padding:.2rem .6rem;
-                                 background:Canvas; color:inherit; border:1px solid var(--line);
+                                 background:var(--bg); color:inherit; border:1px solid var(--line);
                                  border-radius:.3rem; cursor:pointer; }
 #mdns-scan .hint { font-size:.75rem; opacity:.7; margin:.3rem 0; }
 #mdns-results { list-style:none; margin:0 0 .5rem; padding:0; }
@@ -229,7 +236,7 @@ section[hidden] { display:none; }
 #mdns-results li .url { flex:1 1 auto; overflow:hidden; text-overflow:ellipsis;
                         white-space:nowrap; }
 #mdns-results li button { font:inherit; font-size:.75rem; padding:.1rem .5rem;
-                          background:Canvas; color:inherit; border:1px solid var(--line);
+                          background:var(--bg); color:inherit; border:1px solid var(--line);
                           border-radius:.3rem; cursor:pointer; }
 #mdns-results li button:disabled { opacity:.5; cursor:default; }
 
@@ -249,7 +256,7 @@ section[hidden] { display:none; }
 }
 
 .ghostcard { position:fixed; z-index:5; pointer-events:none; opacity:.85; margin:0;
-             border:1px solid var(--line); border-radius:.7rem; background:Canvas;
+             border:1px solid var(--line); border-radius:.7rem; background:var(--bg);
              box-shadow:0 4px 12px #0003; }
 
 #git-hash { display:block; font-size:.7rem; opacity:.5; padding:.4rem 1rem 0; }
@@ -258,7 +265,7 @@ section[hidden] { display:none; }
 #pane-settings, #pane-devices, #pane-log { padding-top:.2rem; }
 #settings { padding:.6rem 1rem; }
 #settings label { margin-right:1rem; white-space:nowrap; }
-#settings select { font:inherit; background:Canvas; color:inherit; border:1px solid var(--line); }
+#settings select { font:inherit; background:var(--bg); color:inherit; border:1px solid var(--line); }
 /* A rich value draws its own cell. grid.js's observeCval publishes the cell's
    measured box as --cvh/--cvw, and type scales against those instead of
    joining the page-wide font fit that .fv values share. The 0px seed holds the
@@ -280,10 +287,10 @@ section[hidden] { display:none; }
 #settings-location { margin-top:.6rem; padding-top:.6rem; border-top:1px solid var(--line); }
 #settings-location .row { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem 0;
                           margin-bottom:.35rem; }
-#settings-location input { font:inherit; font-size:.85rem; padding:.1rem .3rem; background:Canvas;
+#settings-location input { font:inherit; font-size:.85rem; padding:.1rem .3rem; background:var(--bg);
                            color:inherit; border:1px solid var(--line); margin-left:.35rem; }
 #settings-location input[type=number] { width:7rem; }
-#settings-location button { font:inherit; font-size:.8rem; padding:.15rem .6rem; background:Canvas;
+#settings-location button { font:inherit; font-size:.8rem; padding:.15rem .6rem; background:var(--bg);
                             color:inherit; border:1px solid var(--line); cursor:pointer;
                             margin-right:.5rem; }
 #settings-place-results { list-style:none; margin:.2rem 0 .5rem; padding:0; max-width:34rem; }

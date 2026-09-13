@@ -661,13 +661,30 @@ being silently origin-gated today.
 ## Theme
 
 `color-scheme` on `:root` carries the whole theme. Every colour in the
-stylesheet is a system colour, a grey with alpha that composites against
-whatever is behind it, or a saturated status colour that reads under both
-themes, so flipping `color-scheme` flips the dashboard. `--err` is the only
-value with a distinct light and dark form, and it is set in four places: the
+stylesheet is `--bg`/`--fg`, a grey with alpha that composites against whatever
+is behind it, or a saturated status colour that reads under both themes, so
+flipping the theme flips the dashboard. `--err`, `--bg` and `--fg` are the
+values with a distinct light and dark form, and each is set in four places: the
 base `:root` rule, the `prefers-color-scheme` media query for the System
 setting, and the `[data-theme=light]` and `[data-theme=dark]` rules for the
 rest.
+
+`--bg` exists because `background:Canvas` was not safe. The page background is
+painted by the browser from `color-scheme` and is not declared anywhere, so an
+element that has to mask the page — the card label straddling its card border,
+the status pill, the gear, the toast, the drag ghost — only matched it if the
+engine resolved the `Canvas` system colour against `color-scheme` rather than
+the OS appearance. Chromium does, so the suite never caught it. Safari 15.6 does
+not: measured on the iPad with the page forced to `data-theme=dark` while the
+device itself was in Light, a chip with `background:Canvas` computed to
+`rgb(255, 255, 255)` with a `color` of `rgb(255, 255, 255)`, white text on a
+white chip, while the same page resolved `var(--bg)` to `rgb(18, 18, 18)`. The
+default text colour follows `color-scheme` on that engine; only the system
+colour keyword does not. `body` now declares `background:var(--bg)` and
+`color:var(--fg)`, and every masking surface uses the same token, so the two
+come from one value instead of agreeing by coincidence. `color-scheme` stays
+for form controls and scrollbars. `settings.spec.js` asserts the label and the
+status pill equal the body background under both themes.
 
 The Auto setting tests the sun's altitude against −6° at the moment of render
 rather than comparing the clock against the day's `civilDusk` and `civilDawn`.
